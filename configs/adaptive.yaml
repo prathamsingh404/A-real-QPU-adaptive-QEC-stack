@@ -1,0 +1,56 @@
+# ==========================================================================
+# AdaptiveQEC — Adaptive Experiment Configuration
+# ==========================================================================
+# Extended configuration for the full adaptive QEC pipeline.
+# Includes bandit, SPRT, scheduling, DEM calibration, and budget settings.
+# Import default.yaml first, then overlay these adaptive-specific sections.
+# ==========================================================================
+
+# Inherit base config
+_extends: default.yaml
+
+# -----------------------------------------------------------------------
+# Bandit Controller Hyperparameters
+# -----------------------------------------------------------------------
+bandit:
+  # Exp3 family
+  exp3:
+    gamma: 0.1              # Exploration mixing rate γ ∈ (0, 1)
+    eta: null               # Learning rate (null = auto: sqrt(2·ln(K)/T))
+    temperature: 1.0        # Softmax temperature
+
+  # Exp3.P (high-probability variant)
+  exp3p:
+    gamma: 0.1
+    beta: 0.05              # Bias term for confidence bound
+    delta: 0.01             # Failure probability
+
+  # DA-SE (Drift-Aware Successive Elimination)
+  dase:
+    exploration_bonus: 1.0  # UCB confidence scaling ξ
+    drift_window: 50        # Sliding window for drift detection
+    drift_threshold: 0.02   # ΔR threshold to trigger arm reactivation
+    min_pulls: 10           # Forced exploration per arm
+
+  # Arm definitions: each arm = (decoder, dd_sequence, schedule)
+  arms:
+    - {decoder: mwpm,       dd_sequence: none, schedule: balanced}
+    - {decoder: mwpm,       dd_sequence: xy4,  schedule: balanced}
+    - {decoder: mwpm,       dd_sequence: xy8,  schedule: balanced}
+    - {decoder: union_find, dd_sequence: none, schedule: balanced}
+    - {decoder: union_find, dd_sequence: xy4,  schedule: balanced}
+    - {decoder: union_find, dd_sequence: xy8,  schedule: balanced}
+
+# -----------------------------------------------------------------------
+# SPRT (Sequential Probability Ratio Test) Parameters
+# -----------------------------------------------------------------------
+sprt:
+  alpha: 0.01               # Type-I error bound
+  beta: 0.01                # Type-II error bound
+  delta: 0.005              # Minimum detectable LER difference
+  p0: 0.03                  # Null hypothesis LER
+  p1: 0.035                 # Alternative hypothesis LER
+  min_observations: 50      # Min observations before trigger
+  cooldown_rounds: 30       # Min rounds between switches
+
+# -----------------------------------------------------------------------

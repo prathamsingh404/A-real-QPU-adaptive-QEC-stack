@@ -54,3 +54,58 @@ sprt:
   cooldown_rounds: 30       # Min rounds between switches
 
 # -----------------------------------------------------------------------
+# Adaptive Scheduling Parameters
+# -----------------------------------------------------------------------
+scheduling:
+  enabled: true
+  ewma_alpha: 0.05          # EWMA smoothing factor
+  theta_enter: 0.15         # Imbalance threshold to trigger change
+  theta_exit: 0.05          # Imbalance threshold to revert to balanced
+  min_rounds_before_switch: 20
+  initial_schedule: balanced
+  window_size: 100
+
+# -----------------------------------------------------------------------
+# DEM Calibration Parameters
+# -----------------------------------------------------------------------
+dem_calibration:
+  enabled: true
+  update_interval: 50       # Rounds between DEM updates
+  smoothing_factor: 0.1     # EWMA smoothing for noise estimates
+  min_edge_probability: 1.0e-6
+  max_edge_probability: 0.4999
+  fallback_to_nominal: true
+
+# -----------------------------------------------------------------------
+# Hardware Runtime
+# -----------------------------------------------------------------------
+hardware_runtime:
+  shots_per_batch: 1000
+  max_batches: 100
+  max_total_shots: 200000
+  session_timeout_s: 7200
+  warmup_batches: 5
+  convergence_threshold: 0.001
+  convergence_window: 10
+  dry_run: true              # Set false for real hardware
+
+# -----------------------------------------------------------------------
+# Shot Budget
+# -----------------------------------------------------------------------
+budget:
+  max_total_shots: 200000
+  max_session_shots: 100000
+  warning_threshold: 0.80
+  safety_margin: 5000
+
+# -----------------------------------------------------------------------
+# Adaptive Experiment Harness
+# -----------------------------------------------------------------------
+adaptive_experiment:
+  shots_per_window: 2000
+  windows: 50
+  warmup_windows: 5
+  seed: 42
+  output_dir: experiments/adaptive_results
+  save_syndromes: false
+  save_telemetry: true

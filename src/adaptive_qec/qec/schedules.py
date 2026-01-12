@@ -82,3 +82,88 @@ class StabilizerSchedule:
     @property
     def period(self) -> int:
         """Number of rounds before the schedule repeats."""
+        return len(self.pattern)
+
+    @property
+    def ratio_xz(self) -> float:
+        """X:Z ratio. Returns float('inf') if no Z rounds."""
+        z_count = self.pattern.count("Z")
+        if z_count == 0:
+            return float("inf")
+        return self.pattern.count("X") / z_count
+
+    def round_type(self, round_idx: int) -> str:
+        """
+        Get the stabilizer type for a given round index.
+
+        Args:
+            round_idx: Zero-based round index.
+
+        Returns:
+            'X' or 'Z'
+        """
+        return self.pattern[round_idx % len(self.pattern)]
+
+    def generate_sequence(self, n_rounds: int) -> list[str]:
+        """
+        Generate a concrete sequence of round types.
+
+        Args:
+            n_rounds: Number of QEC rounds.
+
+        Returns:
+            List of 'X' and 'Z' strings, one per round.
+        """
+        return [self.round_type(i) for i in range(n_rounds)]
+
+    def iter_rounds(self) -> Iterator[str]:
+        """Infinite iterator over round types."""
+        idx = 0
+        while True:
+            yield self.pattern[idx % len(self.pattern)]
+            idx += 1
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary."""
+        return {
+            "pattern": self.pattern,
+            "schedule_type": self.schedule_type.value,
+            "x_fraction": round(self.x_fraction, 4),
+            "z_fraction": round(self.z_fraction, 4),
+            "period": self.period,
+            "ratio_xz": round(self.ratio_xz, 4)
+            if self.ratio_xz != float("inf")
+            else "inf",
+        }
+
+    def __repr__(self) -> str:
+        return (
+            f"StabilizerSchedule(pattern='{self.pattern}', "
+            f"type={self.schedule_type.value}, "
+            f"X:Z={self.ratio_xz:.2f})"
+        )
+
+
+# -----------------------------------------------------------------------
+# Predefined schedule library
+# -----------------------------------------------------------------------
+
+PREDEFINED_SCHEDULES: dict[ScheduleType, StabilizerSchedule] = {
+    ScheduleType.BALANCED: StabilizerSchedule(
+        pattern="XZ",
+        schedule_type=ScheduleType.BALANCED,
+    ),
+    ScheduleType.X_HEAVY: StabilizerSchedule(
+        pattern="XZX",
+        schedule_type=ScheduleType.X_HEAVY,
+    ),
+    ScheduleType.Z_HEAVY: StabilizerSchedule(
+        pattern="ZXZ",
+        schedule_type=ScheduleType.Z_HEAVY,
+    ),
+    ScheduleType.EXTREME_X: StabilizerSchedule(
+        pattern="XZXX",
+        schedule_type=ScheduleType.EXTREME_X,
+    ),
+    ScheduleType.EXTREME_Z: StabilizerSchedule(
+        pattern="ZXZZ",

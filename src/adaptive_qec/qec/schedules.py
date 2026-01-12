@@ -167,3 +167,75 @@ PREDEFINED_SCHEDULES: dict[ScheduleType, StabilizerSchedule] = {
     ),
     ScheduleType.EXTREME_Z: StabilizerSchedule(
         pattern="ZXZZ",
+        schedule_type=ScheduleType.EXTREME_Z,
+    ),
+}
+
+
+def get_schedule(schedule_type: ScheduleType) -> StabilizerSchedule:
+    """
+    Retrieve a predefined stabilizer schedule.
+
+    Args:
+        schedule_type: The schedule classification.
+
+    Returns:
+        The corresponding StabilizerSchedule.
+
+    Raises:
+        ValueError: If schedule_type is CUSTOM (use create_custom_schedule).
+    """
+    if schedule_type == ScheduleType.CUSTOM:
+        raise ValueError(
+            "CUSTOM schedules must be created with create_custom_schedule()"
+        )
+    return PREDEFINED_SCHEDULES[schedule_type]
+
+
+def create_custom_schedule(pattern: str) -> StabilizerSchedule:
+    """
+    Create a custom stabilizer schedule from an arbitrary X/Z pattern.
+
+    Args:
+        pattern: String of 'X' and 'Z' characters defining the
+                 repeating measurement sequence.
+
+    Returns:
+        A StabilizerSchedule with schedule_type=CUSTOM.
+    """
+    return StabilizerSchedule(
+        pattern=pattern.upper(),
+        schedule_type=ScheduleType.CUSTOM,
+    )
+
+
+def schedule_for_bias(eta: float) -> StabilizerSchedule:
+    """
+    Automatically select a schedule based on observed noise bias.
+
+    The noise bias η = p_Z / p_X quantifies the asymmetry:
+        η ≈ 1.0  → isotropic noise       → BALANCED
+        η > 3.0  → dephasing-dominated    → X_HEAVY (more X stabilizers)
+        η > 10.0 → extreme dephasing      → EXTREME_X
+        η < 0.33 → relaxation-dominated   → Z_HEAVY (more Z stabilizers)
+        η < 0.1  → extreme relaxation     → EXTREME_Z
+
+    Args:
+        eta: Noise bias ratio p_Z / p_X.
+
+    Returns:
+        Appropriate StabilizerSchedule for the observed bias.
+    """
+    if eta <= 0:
+        raise ValueError(f"Noise bias must be positive, got {eta}")
+
+    if eta > 10.0:
+        return get_schedule(ScheduleType.EXTREME_X)
+    elif eta > 3.0:
+        return get_schedule(ScheduleType.X_HEAVY)
+    elif eta < 0.1:
+        return get_schedule(ScheduleType.EXTREME_Z)
+    elif eta < 0.33:
+        return get_schedule(ScheduleType.Z_HEAVY)
+    else:
+        return get_schedule(ScheduleType.BALANCED)

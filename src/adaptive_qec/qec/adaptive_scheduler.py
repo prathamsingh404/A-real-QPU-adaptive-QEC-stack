@@ -87,3 +87,92 @@ class AdaptiveSchedulerConfig:
         if self.theta_exit >= self.theta_enter:
             raise ValueError(
                 f"theta_exit ({self.theta_exit}) must be strictly less than "
+                f"theta_enter ({self.theta_enter}) for hysteresis"
+            )
+        if self.min_rounds_before_switch < 1:
+            raise ValueError(
+                f"min_rounds_before_switch must be >= 1, "
+                f"got {self.min_rounds_before_switch}"
+            )
+        if self.window_size < 10:
+            raise ValueError(
+                f"window_size must be >= 10, got {self.window_size}"
+            )
+
+
+# -----------------------------------------------------------------------
+# Defect observation record
+# -----------------------------------------------------------------------
+
+@dataclass
+class DefectObservation:
+    """
+    Syndrome defect counts from a single QEC round.
+
+    Attributes:
+        round_idx: QEC round index.
+        x_defects: Number of X-type stabilizer defects detected.
+        z_defects: Number of Z-type stabilizer defects detected.
+        total_x_stabilizers: Total X-type stabilizers measured.
+        total_z_stabilizers: Total Z-type stabilizers measured.
+    """
+
+    round_idx: int
+    x_defects: int
+    z_defects: int
+    total_x_stabilizers: int
+    total_z_stabilizers: int
+
+    @property
+    def x_defect_rate(self) -> float:
+        """X defect rate normalized by stabilizer count."""
+        if self.total_x_stabilizers == 0:
+            return 0.0
+        return self.x_defects / self.total_x_stabilizers
+
+    @property
+    def z_defect_rate(self) -> float:
+        """Z defect rate normalized by stabilizer count."""
+        if self.total_z_stabilizers == 0:
+            return 0.0
+        return self.z_defects / self.total_z_stabilizers
+
+
+# -----------------------------------------------------------------------
+# Adaptive scheduler
+# -----------------------------------------------------------------------
+
+class AdaptiveXZScheduler:
+    """
+    Online adaptive scheduler for X/Z stabilizer measurement frequency.
+
+    Observes syndrome defect rates in real time and adjusts the
+    measurement schedule to allocate more rounds to the stabilizer
+    type that is detecting more errors. Uses EWMA smoothing and
+    dual-threshold hysteresis to avoid boundary chattering.
+
+    Usage:
+        scheduler = AdaptiveXZScheduler(config)
+        for round_idx, syndromes in enumerate(syndrome_stream):
+            obs = DefectObservation(
+                round_idx=round_idx,
+                x_defects=count_x_defects(syndromes),
+                z_defects=count_z_defects(syndromes),
+                total_x_stabilizers=n_x,
+                total_z_stabilizers=n_z,
+            )
+            schedule = scheduler.update(obs)
+            # Use schedule.round_type(round_idx) for next circuit
+    """
+
+    def __init__(
+        self,
+        config: Optional[AdaptiveSchedulerConfig] = None,
+    ) -> None:
+        self._config = config or AdaptiveSchedulerConfig()
+        self._config.validate()
+
+        # State
+        self._ewma_x: float = 0.0
+        self._ewma_z: float = 0.0
+        self._imbalance: float = 0.0

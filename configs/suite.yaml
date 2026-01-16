@@ -1,0 +1,29 @@
+# Confirmatory Simulation Benchmark Suite Specification
+# Governed by frozen Analysis Plan (docs/ANALYSIS_PLAN.md)
+experiment:
+  name: "adaptive_qec_confirmatory_suite"
+  version: "2.0.0"
+  provenance: "simulation"
+
+noise_regime:
+  base_physical_error: 0.004 # Below threshold (surface code threshold ~0.01)
+  distances: [3, 5]
+
+scenarios:
+  - id: "stationary_noise"
+    label: "Stationary Baseline"
+    type: "confirmatory_control"
+    description: "Nominal physical noise (negative control, optimal policy is STAY)"
+    drift_type: "stationary"
+    p_base: 0.004
+    drift_p: 0.004
+    hotspot_qubit: null
+
+  - id: "uniform_drift"
+    label: "Uniform Global Drift"
+    type: "confirmatory_control"
+    description: "All error rates scale globally to 0.007 (negative control, delta <= 1.7%, optimal policy is STAY)"
+    drift_type: "uniform_ramp"
+    p_base: 0.004
+    drift_p: 0.007
+    hotspot_qubit: null

@@ -1,0 +1,28 @@
+# ============================================================================
+# AdaptiveQEC — Default Configuration
+# ============================================================================
+# This is the master configuration template. Copy and customize per experiment.
+#
+# Credentials are loaded from .env file (see .env.example).
+#
+# Environment variable overrides:
+#   AQEC_HARDWARE__PROVIDER=ibm
+#   AQEC_HARDWARE__BACKEND=ibm_marrakesh
+#   AQEC_QEC__DISTANCE=5
+# ============================================================================
+
+hardware:
+  provider: ibm                    # ibm | iqm | quantinuum | simulator
+  backend: ibm_marrakesh           # specific backend name
+  qubits: 156                     # programmable qubits on device (Heron r2)
+  topology: heavy_hex             # heavy_hex | square | other
+  api_token_env: IBM_QUANTUM_TOKEN  # env var holding the API token
+  channel: ibm_cloud               # ibm_cloud (CRN) | ibm_quantum (legacy)
+  instance_env: IBM_QUANTUM_INSTANCE  # env var holding the CRN/instance
+
+qec:
+  code: surface                   # repetition | surface | color | qldpc
+  distance: 3                     # code distance: 3, 5, 7, ...
+  rounds: 3                      # QEC rounds: 1, 3, 5, 10, ...
+  logical_basis: Z                # Z | X
+  boundary: planar               # planar | toric

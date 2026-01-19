@@ -176,3 +176,92 @@ class AdaptiveXZScheduler:
         self._ewma_x: float = 0.0
         self._ewma_z: float = 0.0
         self._imbalance: float = 0.0
+        self._current_schedule = get_schedule(self._config.initial_schedule)
+        self._rounds_in_current: int = 0
+        self._total_rounds: int = 0
+
+        # History for analysis
+        self._history: deque[dict[str, Any]] = deque(
+            maxlen=self._config.window_size * 2
+        )
+        self._switch_log: list[dict[str, Any]] = []
+
+    @property
+    def current_schedule(self) -> StabilizerSchedule:
+        """The currently active measurement schedule."""
+        return self._current_schedule
+
+    @property
+    def imbalance(self) -> float:
+        """Current syndrome imbalance metric ΔXZ ∈ [-1, 1]."""
+        return self._imbalance
+
+    @property
+    def ewma_x(self) -> float:
+        """Current EWMA estimate of X defect rate."""
+        return self._ewma_x
+
+    @property
+    def ewma_z(self) -> float:
+        """Current EWMA estimate of Z defect rate."""
+        return self._ewma_z
+
+    @property
+    def switch_count(self) -> int:
+        """Number of schedule switches so far."""
+        return len(self._switch_log)
+
+    def update(self, observation: DefectObservation) -> StabilizerSchedule:
+        """
+        Process a new defect observation and potentially update schedule.
+
+        Args:
+            observation: Defect counts from the latest QEC round.
+
+        Returns:
+            The (possibly updated) measurement schedule to use.
+        """
+        alpha = self._config.ewma_alpha
+
+        # Update EWMA estimates
+        self._ewma_x = (
+            alpha * observation.x_defect_rate
+            + (1 - alpha) * self._ewma_x
+        )
+        self._ewma_z = (
+            alpha * observation.z_defect_rate
+            + (1 - alpha) * self._ewma_z
+        )
+
+        # Compute imbalance metric ΔXZ ∈ [-1, 1]
+        total_rate = self._ewma_x + self._ewma_z
+        eps = 1e-10
+        self._imbalance = (self._ewma_x - self._ewma_z) / (total_rate + eps)
+
+        self._total_rounds += 1
+        self._rounds_in_current += 1
+
+        # Record history
+        self._history.append({
+            "round": observation.round_idx,
+            "ewma_x": self._ewma_x,
+            "ewma_z": self._ewma_z,
+            "imbalance": self._imbalance,
+            "schedule": self._current_schedule.schedule_type.value,
+        })
+
+        # Check if we can switch (anti-chattering guard)
+        if self._rounds_in_current < self._config.min_rounds_before_switch:
+            return self._current_schedule
+
+        # Hysteresis decision logic
+        new_schedule = self._decide_schedule()
+        if new_schedule.schedule_type != self._current_schedule.schedule_type:
+            self._switch_log.append({
+                "round": observation.round_idx,
+                "total_round": self._total_rounds,
+                "from": self._current_schedule.schedule_type.value,
+                "to": new_schedule.schedule_type.value,
+                "imbalance": self._imbalance,
+                "ewma_x": self._ewma_x,
+                "ewma_z": self._ewma_z,

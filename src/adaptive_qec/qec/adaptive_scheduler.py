@@ -265,3 +265,92 @@ class AdaptiveXZScheduler:
                 "imbalance": self._imbalance,
                 "ewma_x": self._ewma_x,
                 "ewma_z": self._ewma_z,
+            })
+            logger.info(
+                f"Schedule switch at round {observation.round_idx}: "
+                f"{self._current_schedule.schedule_type.value} → "
+                f"{new_schedule.schedule_type.value} "
+                f"(ΔXZ={self._imbalance:.4f})"
+            )
+            self._current_schedule = new_schedule
+            self._rounds_in_current = 0
+
+        return self._current_schedule
+
+    def _decide_schedule(self) -> StabilizerSchedule:
+        """
+        Apply dual-threshold hysteresis to decide the schedule.
+
+        The logic is:
+          - If currently BALANCED:
+              * ΔXZ > θ_enter → X_HEAVY (X defects dominating)
+              * ΔXZ < -θ_enter → Z_HEAVY (Z defects dominating)
+          - If currently X_HEAVY:
+              * |ΔXZ| < θ_exit → BALANCED (imbalance resolved)
+              * ΔXZ > 0.4 → EXTREME_X (very strong X dominance)
+          - If currently Z_HEAVY:
+              * |ΔXZ| < θ_exit → BALANCED
+              * ΔXZ < -0.4 → EXTREME_Z
+
+        Returns:
+            The schedule to use.
+        """
+        theta_enter = self._config.theta_enter
+        theta_exit = self._config.theta_exit
+        current_type = self._current_schedule.schedule_type
+
+        if current_type == ScheduleType.BALANCED:
+            if self._imbalance > theta_enter:
+                return get_schedule(ScheduleType.X_HEAVY)
+            elif self._imbalance < -theta_enter:
+                return get_schedule(ScheduleType.Z_HEAVY)
+
+        elif current_type == ScheduleType.X_HEAVY:
+            if abs(self._imbalance) < theta_exit:
+                return get_schedule(ScheduleType.BALANCED)
+            elif self._imbalance > 0.4:
+                return get_schedule(ScheduleType.EXTREME_X)
+
+        elif current_type == ScheduleType.EXTREME_X:
+            if self._imbalance < theta_enter:
+                return get_schedule(ScheduleType.X_HEAVY)
+
+        elif current_type == ScheduleType.Z_HEAVY:
+            if abs(self._imbalance) < theta_exit:
+                return get_schedule(ScheduleType.BALANCED)
+            elif self._imbalance < -0.4:
+                return get_schedule(ScheduleType.EXTREME_Z)
+
+        elif current_type == ScheduleType.EXTREME_Z:
+            if self._imbalance > -theta_enter:
+                return get_schedule(ScheduleType.Z_HEAVY)
+
+        return self._current_schedule
+
+    def reset(self) -> None:
+        """Reset scheduler state to initial configuration."""
+        self._ewma_x = 0.0
+        self._ewma_z = 0.0
+        self._imbalance = 0.0
+        self._current_schedule = get_schedule(self._config.initial_schedule)
+        self._rounds_in_current = 0
+        self._total_rounds = 0
+        self._history.clear()
+        self._switch_log.clear()
+
+    def summary(self) -> dict[str, Any]:
+        """Summary of scheduler state and switch history."""
+        return {
+            "current_schedule": self._current_schedule.to_dict(),
+            "ewma_x": round(self._ewma_x, 6),
+            "ewma_z": round(self._ewma_z, 6),
+            "imbalance": round(self._imbalance, 6),
+            "total_rounds": self._total_rounds,
+            "rounds_in_current": self._rounds_in_current,
+            "total_switches": len(self._switch_log),
+            "switch_log": self._switch_log,
+        }
+
+    def get_history(self) -> list[dict[str, Any]]:
+        """Return recorded history for analysis."""
+        return list(self._history)

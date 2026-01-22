@@ -142,3 +142,75 @@ class TestAdaptiveSchedulerConfig:
 class TestAdaptiveXZScheduler:
     def test_initialization(self):
         scheduler = AdaptiveXZScheduler()
+        assert scheduler.current_schedule.schedule_type == ScheduleType.BALANCED
+        assert scheduler.imbalance == 0.0
+
+    def test_stays_balanced_under_isotropic_noise(self):
+        """Under equal X and Z defect rates, should stay BALANCED."""
+        scheduler = AdaptiveXZScheduler()
+
+        for i in range(100):
+            obs = DefectObservation(
+                round_idx=i,
+                x_defects=5,
+                z_defects=5,
+                total_x_stabilizers=100,
+                total_z_stabilizers=100,
+            )
+            scheduler.update(obs)
+
+        assert scheduler.current_schedule.schedule_type == ScheduleType.BALANCED
+        assert scheduler.switch_count == 0
+
+    def test_switches_to_x_heavy_under_x_dominant_noise(self):
+        """Strong X defect dominance should trigger X_HEAVY schedule."""
+        scheduler = AdaptiveXZScheduler(
+            AdaptiveSchedulerConfig(
+                theta_enter=0.15,
+                theta_exit=0.05,
+                min_rounds_before_switch=5,
+                ewma_alpha=0.2,
+            )
+        )
+
+        for i in range(60):
+            obs = DefectObservation(
+                round_idx=i,
+                x_defects=20,   # X defects dominate
+                z_defects=2,
+                total_x_stabilizers=100,
+                total_z_stabilizers=100,
+            )
+            scheduler.update(obs)
+
+        assert scheduler.current_schedule.schedule_type in (
+            ScheduleType.X_HEAVY, ScheduleType.EXTREME_X
+        )
+        assert scheduler.switch_count >= 1
+
+    def test_switches_to_z_heavy_under_z_dominant_noise(self):
+        """Strong Z defect dominance should trigger Z_HEAVY schedule."""
+        scheduler = AdaptiveXZScheduler(
+            AdaptiveSchedulerConfig(
+                theta_enter=0.15,
+                theta_exit=0.05,
+                min_rounds_before_switch=5,
+                ewma_alpha=0.2,
+            )
+        )
+
+        for i in range(60):
+            obs = DefectObservation(
+                round_idx=i,
+                x_defects=2,
+                z_defects=20,   # Z defects dominate
+                total_x_stabilizers=100,
+                total_z_stabilizers=100,
+            )
+            scheduler.update(obs)
+
+        assert scheduler.current_schedule.schedule_type in (
+            ScheduleType.Z_HEAVY, ScheduleType.EXTREME_Z
+        )
+
+    def test_hysteresis_prevents_chattering(self):

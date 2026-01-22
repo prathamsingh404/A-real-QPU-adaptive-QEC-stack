@@ -70,3 +70,75 @@ class TestStabilizerSchedule:
         assert sched.x_fraction == 0.5
         assert sched.period == 4
 
+    def test_invalid_pattern_raises(self):
+        with pytest.raises(ValueError, match="invalid characters"):
+            StabilizerSchedule(pattern="XYZ", schedule_type=ScheduleType.CUSTOM)
+
+    def test_empty_pattern_raises(self):
+        with pytest.raises(ValueError, match="non-empty"):
+            StabilizerSchedule(pattern="", schedule_type=ScheduleType.CUSTOM)
+
+    def test_to_dict(self):
+        sched = get_schedule(ScheduleType.BALANCED)
+        d = sched.to_dict()
+        assert d["pattern"] == "XZ"
+        assert d["period"] == 2
+
+
+# -----------------------------------------------------------------------
+# schedule_for_bias tests
+# -----------------------------------------------------------------------
+
+class TestScheduleForBias:
+    def test_isotropic_returns_balanced(self):
+        sched = schedule_for_bias(1.0)
+        assert sched.schedule_type == ScheduleType.BALANCED
+
+    def test_high_dephasing_returns_x_heavy(self):
+        sched = schedule_for_bias(5.0)
+        assert sched.schedule_type == ScheduleType.X_HEAVY
+
+    def test_extreme_dephasing_returns_extreme_x(self):
+        sched = schedule_for_bias(50.0)
+        assert sched.schedule_type == ScheduleType.EXTREME_X
+
+    def test_high_relaxation_returns_z_heavy(self):
+        sched = schedule_for_bias(0.2)
+        assert sched.schedule_type == ScheduleType.Z_HEAVY
+
+    def test_extreme_relaxation_returns_extreme_z(self):
+        sched = schedule_for_bias(0.05)
+        assert sched.schedule_type == ScheduleType.EXTREME_Z
+
+    def test_negative_bias_raises(self):
+        with pytest.raises(ValueError):
+            schedule_for_bias(-1.0)
+
+
+# -----------------------------------------------------------------------
+# AdaptiveSchedulerConfig tests
+# -----------------------------------------------------------------------
+
+class TestAdaptiveSchedulerConfig:
+    def test_valid_config(self):
+        config = AdaptiveSchedulerConfig()
+        config.validate()  # Should not raise
+
+    def test_invalid_ewma_alpha(self):
+        config = AdaptiveSchedulerConfig(ewma_alpha=0.0)
+        with pytest.raises(ValueError, match="ewma_alpha"):
+            config.validate()
+
+    def test_invalid_thresholds(self):
+        config = AdaptiveSchedulerConfig(theta_enter=0.05, theta_exit=0.15)
+        with pytest.raises(ValueError, match="theta_exit"):
+            config.validate()
+
+
+# -----------------------------------------------------------------------
+# AdaptiveXZScheduler tests
+# -----------------------------------------------------------------------
+
+class TestAdaptiveXZScheduler:
+    def test_initialization(self):
+        scheduler = AdaptiveXZScheduler()

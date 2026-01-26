@@ -214,3 +214,75 @@ class TestAdaptiveXZScheduler:
         )
 
     def test_hysteresis_prevents_chattering(self):
+        """Noise near the threshold boundary should not cause rapid switching."""
+        scheduler = AdaptiveXZScheduler(
+            AdaptiveSchedulerConfig(
+                theta_enter=0.15,
+                theta_exit=0.05,
+                min_rounds_before_switch=10,
+                ewma_alpha=0.05,
+            )
+        )
+
+        # Oscillate near the boundary
+        for i in range(200):
+            if i % 2 == 0:
+                x, z = 12, 8
+            else:
+                x, z = 8, 12
+            obs = DefectObservation(
+                round_idx=i,
+                x_defects=x,
+                z_defects=z,
+                total_x_stabilizers=100,
+                total_z_stabilizers=100,
+            )
+            scheduler.update(obs)
+
+        # Should have very few switches due to EWMA smoothing + hysteresis
+        assert scheduler.switch_count <= 3
+
+    def test_anti_chattering_guard(self):
+        """Cannot switch within min_rounds_before_switch of last switch."""
+        scheduler = AdaptiveXZScheduler(
+            AdaptiveSchedulerConfig(
+                min_rounds_before_switch=50,
+                ewma_alpha=0.5,
+                theta_enter=0.1,
+            )
+        )
+
+        for i in range(100):
+            obs = DefectObservation(
+                round_idx=i,
+                x_defects=50 if i < 30 else 5,
+                z_defects=5 if i < 30 else 50,
+                total_x_stabilizers=100,
+                total_z_stabilizers=100,
+            )
+            scheduler.update(obs)
+
+        # With min_rounds=50, can't switch more than twice in 100 rounds
+        assert scheduler.switch_count <= 2
+
+    def test_reset(self):
+        scheduler = AdaptiveXZScheduler()
+        for i in range(50):
+            obs = DefectObservation(i, 20, 2, 100, 100)
+            scheduler.update(obs)
+
+        scheduler.reset()
+        assert scheduler.current_schedule.schedule_type == ScheduleType.BALANCED
+        assert scheduler.imbalance == 0.0
+        assert scheduler.switch_count == 0
+
+    def test_summary_contains_expected_fields(self):
+        scheduler = AdaptiveXZScheduler()
+        obs = DefectObservation(0, 10, 10, 100, 100)
+        scheduler.update(obs)
+
+        summary = scheduler.summary()
+        assert "current_schedule" in summary
+        assert "imbalance" in summary
+        assert "total_rounds" in summary
+        assert "total_switches" in summary

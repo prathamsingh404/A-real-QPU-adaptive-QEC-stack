@@ -102,3 +102,106 @@ class ShotBudgetManager:
         self._config.validate()
 
         self._total_used: int = 0
+        self._session_used: int = 0
+        self._allocation_log: list[AllocationRecord] = []
+        self._session_start: Optional[float] = None
+        self._warnings_issued: int = 0
+
+    @property
+    def total_used(self) -> int:
+        """Total shots consumed across all sessions."""
+        return self._total_used
+
+    @property
+    def session_used(self) -> int:
+        """Shots consumed in the current session."""
+        return self._session_used
+
+    @property
+    def total_remaining(self) -> int:
+        """Shots remaining in the total budget."""
+        effective_limit = (
+            self._config.max_total_shots - self._config.safety_margin
+        )
+        return max(0, effective_limit - self._total_used)
+
+    @property
+    def session_remaining(self) -> int:
+        """Shots remaining in the current session budget."""
+        return max(0, self._config.max_session_shots - self._session_used)
+
+    @property
+    def utilization(self) -> float:
+        """Fraction of total budget consumed."""
+        if self._config.max_total_shots == 0:
+            return 1.0
+        return self._total_used / self._config.max_total_shots
+
+    @property
+    def estimated_cost(self) -> float:
+        """Estimated total cost of shots consumed."""
+        return self._total_used * self._config.cost_per_shot
+
+    @property
+    def estimated_remaining_time_s(self) -> float:
+        """Estimated wall-clock time for remaining budget."""
+        return self.total_remaining * self._config.estimated_shot_time_s
+
+    def can_submit(self, shots: int) -> bool:
+        """
+        Check if a shot allocation is within budget.
+
+        Args:
+            shots: Number of shots to submit.
+
+        Returns:
+            True if the allocation is approved.
+        """
+        if shots <= 0:
+            return False
+
+        # Check total budget
+        if self._total_used + shots > (
+            self._config.max_total_shots - self._config.safety_margin
+        ):
+            logger.error(
+                f"BUDGET EXCEEDED: requested {shots} shots, "
+                f"only {self.total_remaining} remaining "
+                f"(total used: {self._total_used}/"
+                f"{self._config.max_total_shots})"
+            )
+            return False
+
+        # Check session budget
+        if self._session_used + shots > self._config.max_session_shots:
+            logger.error(
+                f"SESSION BUDGET EXCEEDED: requested {shots} shots, "
+                f"only {self.session_remaining} remaining in session"
+            )
+            return False
+
+        # Issue warning if approaching threshold
+        new_util = (self._total_used + shots) / self._config.max_total_shots
+        if new_util >= self._config.warning_threshold:
+            if self._warnings_issued == 0 or new_util >= 0.95:
+                logger.warning(
+                    f"BUDGET WARNING: {new_util:.1%} of total budget used "
+                    f"({self._total_used + shots}/{self._config.max_total_shots})"
+                )
+                self._warnings_issued += 1
+
+        return True
+
+    def record_usage(
+        self,
+        shots: int,
+        source: str = "unknown",
+    ) -> AllocationRecord:
+        """
+        Record a shot allocation after successful execution.
+
+        Args:
+            shots: Number of shots actually executed.
+            source: Identifier for the requesting experiment/batch.
+
+        Returns:

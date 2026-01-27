@@ -1,0 +1,83 @@
+"""
+MWPM decoder using PyMatching.
+
+This is the fundamental baseline decoder. Measures:
+    - logical error rate
+    - latency (per shot, P50, P95, P99, P999)
+    - throughput (shots/second)
+    - memory usage
+    - scaling with distance
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+import tracemalloc
+from typing import Any, Optional
+
+import numpy as np
+import pymatching
+import stim
+
+from adaptive_qec.decoders.base import Correction, Decoder, DecoderMetrics
+
+logger = logging.getLogger(__name__)
+
+
+class MWPMDecoder(Decoder):
+    """
+    Minimum Weight Perfect Matching decoder via PyMatching.
+
+    Constructs a Matching object from a Stim DetectorErrorModel,
+    then decodes syndromes to predicted observable corrections.
+    """
+
+    def __init__(self) -> None:
+        self._matching: Optional[pymatching.Matching] = None
+        self._num_detectors: int = 0
+        self._num_observables: int = 0
+
+    @property
+    def name(self) -> str:
+        return "mwpm"
+
+    def configure(self, **kwargs: Any) -> None:
+        """
+        Configure with a DetectorErrorModel or Stim Circuit.
+
+        Args:
+            dem: stim.DetectorErrorModel
+            circuit: stim.Circuit (will extract DEM automatically)
+        """
+        dem = kwargs.get("dem")
+        circuit = kwargs.get("circuit")
+        matching = kwargs.get("matching")
+
+        if matching is not None:
+            self._matching = matching
+            self._num_detectors = kwargs.get("num_detectors", getattr(matching, "num_detectors", 0))
+            self._num_observables = kwargs.get("num_observables", 1)
+            return
+
+        if dem is None and circuit is not None:
+            dem = circuit.detector_error_model(decompose_errors=True)
+
+        if dem is None:
+            raise ValueError("Must provide 'dem', 'circuit', or 'matching' to configure MWPM decoder")
+
+        self._matching = pymatching.Matching.from_detector_error_model(dem)
+        self._num_detectors = dem.num_detectors
+        self._num_observables = dem.num_observables
+
+        logger.info(
+            f"MWPM decoder configured: {self._num_detectors} detectors, "
+            f"{self._num_observables} observables"
+        )
+
+    def decode(self, syndrome: np.ndarray) -> Correction:
+        """
+        Decode a single syndrome or batch.
+
+        Args:
+            syndrome: shape (num_detectors,) or (batch, num_detectors)

@@ -205,3 +205,92 @@ class ShotBudgetManager:
             source: Identifier for the requesting experiment/batch.
 
         Returns:
+            AllocationRecord for the transaction.
+        """
+        self._total_used += shots
+        self._session_used += shots
+
+        record = AllocationRecord(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            shots_requested=shots,
+            shots_approved=shots,
+            cumulative_shots=self._total_used,
+            budget_remaining=self.total_remaining,
+            source=source,
+        )
+        self._allocation_log.append(record)
+
+        logger.debug(
+            f"Shot allocation: {shots} from '{source}', "
+            f"cumulative={self._total_used}, "
+            f"remaining={self.total_remaining}"
+        )
+
+        return record
+
+    def new_session(self) -> None:
+        """Reset session counter for a new Runtime session."""
+        self._session_used = 0
+        self._session_start = time.time()
+        logger.info(
+            f"New session started. "
+            f"Session budget: {self._config.max_session_shots}. "
+            f"Total remaining: {self.total_remaining}"
+        )
+
+    def summary(self) -> dict[str, Any]:
+        """Return budget summary."""
+        return {
+            "total_used": self._total_used,
+            "total_budget": self._config.max_total_shots,
+            "total_remaining": self.total_remaining,
+            "utilization": round(self.utilization, 4),
+            "session_used": self._session_used,
+            "session_budget": self._config.max_session_shots,
+            "session_remaining": self.session_remaining,
+            "estimated_cost": round(self.estimated_cost, 4),
+            "estimated_remaining_time_s": round(
+                self.estimated_remaining_time_s, 1
+            ),
+            "allocations": len(self._allocation_log),
+            "warnings_issued": self._warnings_issued,
+        }
+
+    def export_log(self, path: Optional[str] = None) -> str:
+        """
+        Export allocation log to JSON.
+
+        Args:
+            path: File path to write. If None, returns JSON string.
+
+        Returns:
+            JSON string of the allocation log.
+        """
+        log_data = {
+            "budget_config": {
+                "max_total_shots": self._config.max_total_shots,
+                "max_session_shots": self._config.max_session_shots,
+                "safety_margin": self._config.safety_margin,
+            },
+            "summary": self.summary(),
+            "allocations": [
+                {
+                    "timestamp": r.timestamp,
+                    "shots": r.shots_approved,
+                    "cumulative": r.cumulative_shots,
+                    "remaining": r.budget_remaining,
+                    "source": r.source,
+                }
+                for r in self._allocation_log
+            ],
+        }
+
+        json_str = json.dumps(log_data, indent=2)
+
+        if path is not None:
+            output = Path(path)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(json_str)
+            logger.info(f"Budget log exported to {path}")
+
+        return json_str

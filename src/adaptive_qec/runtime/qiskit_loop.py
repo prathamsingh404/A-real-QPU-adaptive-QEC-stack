@@ -222,3 +222,112 @@ class QiskitRuntimeLoop:
                 f"{self._config.backend_name}"
             )
             self._backend = self._create_fake_backend()
+            return
+
+        try:
+            from qiskit_ibm_runtime import (
+                QiskitRuntimeService,
+                SamplerV2,
+                Session,
+            )
+
+            service = QiskitRuntimeService()
+            self._backend = service.backend(self._config.backend_name)
+
+            logger.info(
+                f"Connected to {self._config.backend_name} "
+                f"({self._backend.num_qubits} qubits)"
+            )
+
+        except ImportError:
+            raise RuntimeError(
+                "qiskit-ibm-runtime not installed. Install with: "
+                "pip install qiskit-ibm-runtime"
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to connect to {self._config.backend_name}: {e}"
+            )
+
+    def open_session(self) -> None:
+        """
+        Open a Qiskit Runtime Session.
+
+        Sessions hold a dedicated QPU reservation window, minimizing
+        queue wait time between consecutive batches.
+        """
+        if self._config.dry_run:
+            logger.info("DRY RUN: skipping session open")
+            return
+
+        try:
+            from qiskit_ibm_runtime import Session
+
+            self._session = Session(
+                backend=self._backend,
+                max_time=self._config.session_timeout_s,
+            )
+            logger.info(
+                f"Opened session on {self._config.backend_name} "
+                f"(timeout={self._config.session_timeout_s}s)"
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to open session: {e}")
+
+    def run(
+        self,
+        circuit_builder: Any = None,
+        decoder: Any = None,
+    ) -> list[BatchResult]:
+        """
+        Execute the full closed-loop experiment.
+
+        Args:
+            circuit_builder: Callable that produces a Stim/Qiskit circuit
+                given the current controller action.
+            decoder: Decoder instance (MWPM or Union-Find) for
+                syndrome processing.
+
+        Returns:
+            List of BatchResult objects from all executed batches.
+        """
+        self._is_running = True
+        self._start_time = time.time()
+
+        logger.info(
+            f"Starting runtime loop {self._run_id}: "
+            f"max_batches={self._config.max_batches}, "
+            f"shots_per_batch={self._config.shots_per_batch}, "
+            f"max_total_shots={self._config.max_total_shots}"
+        )
+
+        try:
+            for batch_idx in range(self._config.max_batches):
+                # Check budget
+                if self._budget_manager is not None:
+                    if not self._budget_manager.can_submit(
+                        self._config.shots_per_batch
+                    ):
+                        logger.warning(
+                            f"Shot budget exhausted at batch {batch_idx}. "
+                            f"Total shots: {self._total_shots}"
+                        )
+                        break
+
+                if self._total_shots + self._config.shots_per_batch > \
+                        self._config.max_total_shots:
+                    logger.warning(
+                        f"Would exceed max_total_shots at batch {batch_idx}. "
+                        f"Stopping."
+                    )
+                    break
+
+                # Execute batch
+                result = self._execute_batch(
+                    batch_idx=batch_idx,
+                    circuit_builder=circuit_builder,
+                    decoder=decoder,
+                )
+                self._batch_results.append(result)
+                self._total_shots += result.shots
+                self._total_errors += result.logical_errors

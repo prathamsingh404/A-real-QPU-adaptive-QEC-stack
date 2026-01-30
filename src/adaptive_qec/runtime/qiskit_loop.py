@@ -113,3 +113,112 @@ class BatchResult:
     """
 
     batch_idx: int
+    shots: int
+    syndromes: Optional[np.ndarray] = None
+    observables: Optional[np.ndarray] = None
+    logical_errors: int = 0
+    logical_error_rate: float = 0.0
+    controller_action: Optional[dict[str, Any]] = None
+    calibration_snapshot: Optional[dict[str, Any]] = None
+    execution_time_s: float = 0.0
+    timestamp: str = ""
+    job_id: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary (without large arrays)."""
+        return {
+            "batch_idx": self.batch_idx,
+            "shots": self.shots,
+            "logical_errors": self.logical_errors,
+            "logical_error_rate": self.logical_error_rate,
+            "controller_action": self.controller_action,
+            "execution_time_s": round(self.execution_time_s, 3),
+            "timestamp": self.timestamp,
+            "job_id": self.job_id,
+        }
+
+
+# -----------------------------------------------------------------------
+# Runtime loop
+# -----------------------------------------------------------------------
+
+class QiskitRuntimeLoop:
+    """
+    Closed-loop batched Qiskit Runtime session driver.
+
+    Orchestrates the full adaptive QEC feedback loop on real hardware:
+    circuit submission → syndrome retrieval → controller update →
+    circuit/decoder adjustment → next submission.
+
+    This class handles:
+    - Session management (open, keepalive, close)
+    - Batched circuit transpilation and submission
+    - Syndrome extraction from SamplerV2 results
+    - Controller and DEM calibrator integration
+    - Shot budget enforcement
+    - Provenance-tagged artifact serialization
+    """
+
+    def __init__(
+        self,
+        config: RuntimeLoopConfig,
+        controller: Any = None,
+        dem_calibrator: Any = None,
+        scheduler: Any = None,
+        budget_manager: Any = None,
+    ) -> None:
+        config.validate()
+        self._config = config
+        self._controller = controller
+        self._dem_calibrator = dem_calibrator
+        self._scheduler = scheduler
+        self._budget_manager = budget_manager
+
+        # Session state
+        self._session: Any = None
+        self._sampler: Any = None
+        self._backend: Any = None
+
+        # Execution state
+        self._run_id = str(uuid.uuid4())[:8]
+        self._batch_results: list[BatchResult] = []
+        self._total_shots: int = 0
+        self._total_errors: int = 0
+        self._is_running: bool = False
+        self._start_time: Optional[float] = None
+
+    @property
+    def run_id(self) -> str:
+        """Unique identifier for this experiment run."""
+        return self._run_id
+
+    @property
+    def total_shots(self) -> int:
+        """Total shots executed so far."""
+        return self._total_shots
+
+    @property
+    def total_batches(self) -> int:
+        """Number of batches completed."""
+        return len(self._batch_results)
+
+    @property
+    def overall_ler(self) -> float:
+        """Overall logical error rate across all batches."""
+        if self._total_shots == 0:
+            return 0.0
+        return self._total_errors / self._total_shots
+
+    def connect(self) -> None:
+        """
+        Establish connection to IBM Quantum backend.
+
+        Opens a Qiskit Runtime Session for the configured backend.
+        In dry_run mode, uses a fake backend for testing.
+        """
+        if self._config.dry_run:
+            logger.info(
+                "DRY RUN mode: using local simulator instead of "
+                f"{self._config.backend_name}"
+            )
+            self._backend = self._create_fake_backend()

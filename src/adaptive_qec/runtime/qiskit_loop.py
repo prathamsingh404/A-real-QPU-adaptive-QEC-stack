@@ -331,3 +331,118 @@ class QiskitRuntimeLoop:
                 self._batch_results.append(result)
                 self._total_shots += result.shots
                 self._total_errors += result.logical_errors
+
+                if self._budget_manager is not None:
+                    self._budget_manager.record_usage(result.shots)
+
+                # Log progress
+                logger.info(
+                    f"Batch {batch_idx + 1}/{self._config.max_batches}: "
+                    f"LER={result.logical_error_rate:.6f}, "
+                    f"shots={self._total_shots}/{self._config.max_total_shots}"
+                )
+
+                # Check convergence
+                if batch_idx >= self._config.warmup_batches:
+                    if self._check_convergence():
+                        logger.info(
+                            f"Convergence detected at batch {batch_idx}. "
+                            f"Stopping early."
+                        )
+                        break
+
+        finally:
+            self._is_running = False
+            self._save_results()
+            if self._session is not None:
+                try:
+                    self._session.close()
+                    logger.info("Session closed")
+                except Exception:
+                    pass
+
+        elapsed = time.time() - self._start_time
+        logger.info(
+            f"Runtime loop {self._run_id} complete: "
+            f"{len(self._batch_results)} batches, "
+            f"{self._total_shots} total shots, "
+            f"overall LER={self.overall_ler:.6f}, "
+            f"elapsed={elapsed:.1f}s"
+        )
+
+        return self._batch_results
+
+    def _execute_batch(
+        self,
+        batch_idx: int,
+        circuit_builder: Any = None,
+        decoder: Any = None,
+    ) -> BatchResult:
+        """
+        Execute a single batch of shots.
+
+        Steps:
+        1. Get controller action (if available)
+        2. Build circuit with current parameters
+        3. Submit to hardware (or simulate in dry run)
+        4. Extract syndromes and decode
+        5. Update controller with reward
+        6. Update DEM calibrator with new noise estimates
+
+        Returns:
+            BatchResult with all execution metadata.
+        """
+        t_start = time.time()
+
+        # Get controller decision
+        action_dict: Optional[dict[str, Any]] = None
+        if self._controller is not None:
+            try:
+                action = self._controller.decide()
+                action_dict = {
+                    "decoder": action.decoder if hasattr(action, "decoder") else "mwpm",
+                    "dd_sequence": action.dd_sequence if hasattr(action, "dd_sequence") else "none",
+                    "schedule": action.schedule if hasattr(action, "schedule") else "balanced",
+                }
+            except Exception as e:
+                logger.warning(f"Controller decide failed: {e}")
+
+        # Build and execute circuit
+        shots = self._config.shots_per_batch
+        syndromes, observables = self._run_circuit(
+            shots=shots,
+            circuit_builder=circuit_builder,
+        )
+
+        # Decode and count errors
+        logical_errors = 0
+        if decoder is not None and syndromes is not None:
+            try:
+                predictions = decoder.decode_batch(syndromes)
+                if observables is not None:
+                    logical_errors = int(
+                        np.sum(predictions != observables)
+                    )
+            except Exception as e:
+                logger.warning(f"Decoding failed: {e}")
+                logical_errors = 0
+        elif observables is not None:
+            # Fallback: count non-zero observables as errors
+            logical_errors = int(np.sum(observables != 0))
+
+        ler = logical_errors / shots if shots > 0 else 0.0
+
+        # Update controller with reward
+        if self._controller is not None:
+            reward = 1.0 - ler  # Higher reward for lower error rate
+            try:
+                self._controller.update(reward)
+            except Exception as e:
+                logger.warning(f"Controller update failed: {e}")
+
+        # Update scheduler if available
+        if self._scheduler is not None and syndromes is not None:
+            try:
+                from adaptive_qec.qec.adaptive_scheduler import DefectObservation
+                x_defects = int(np.sum(syndromes[:, :syndromes.shape[1] // 2]))
+                z_defects = int(np.sum(syndromes[:, syndromes.shape[1] // 2:]))

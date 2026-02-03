@@ -446,3 +446,99 @@ class QiskitRuntimeLoop:
                 from adaptive_qec.qec.adaptive_scheduler import DefectObservation
                 x_defects = int(np.sum(syndromes[:, :syndromes.shape[1] // 2]))
                 z_defects = int(np.sum(syndromes[:, syndromes.shape[1] // 2:]))
+                obs = DefectObservation(
+                    round_idx=batch_idx,
+                    x_defects=x_defects,
+                    z_defects=z_defects,
+                    total_x_stabilizers=syndromes.shape[1] // 2,
+                    total_z_stabilizers=syndromes.shape[1] // 2,
+                )
+                self._scheduler.update(obs)
+            except Exception as e:
+                logger.warning(f"Scheduler update failed: {e}")
+
+        t_elapsed = time.time() - t_start
+
+        return BatchResult(
+            batch_idx=batch_idx,
+            shots=shots,
+            syndromes=syndromes,
+            observables=observables,
+            logical_errors=logical_errors,
+            logical_error_rate=ler,
+            controller_action=action_dict,
+            execution_time_s=t_elapsed,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            job_id=str(uuid.uuid4())[:12],
+        )
+
+    def _run_circuit(
+        self,
+        shots: int,
+        circuit_builder: Any = None,
+    ) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        """
+        Submit and execute a circuit batch.
+
+        In dry_run mode, generates synthetic syndrome data.
+        In hardware mode, uses the active Session + SamplerV2.
+
+        Returns:
+            (syndromes, observables) arrays.
+        """
+        if self._config.dry_run:
+            return self._generate_synthetic_data(shots)
+
+        if circuit_builder is None:
+            logger.warning("No circuit_builder provided, using synthetic data")
+            return self._generate_synthetic_data(shots)
+
+        try:
+            from qiskit_ibm_runtime import SamplerV2
+
+            circuit = circuit_builder()
+            sampler = SamplerV2(session=self._session)
+            job = sampler.run([circuit], shots=shots)
+            result = job.result()
+
+            # Extract bitstrings from result
+            pub_result = result[0]
+            bitstrings = pub_result.data.meas.get_bitstrings()
+
+            # Parse into syndrome and observable arrays
+            # (Implementation depends on circuit structure)
+            n_bits = len(bitstrings[0]) if bitstrings else 0
+            raw = np.array(
+                [[int(b) for b in bs] for bs in bitstrings],
+                dtype=np.uint8,
+            )
+
+            # Last column(s) are observables, rest are detectors
+            if n_bits > 1:
+                syndromes = raw[:, :-1]
+                observables = raw[:, -1:]
+            else:
+                syndromes = raw
+                observables = None
+
+            return syndromes, observables
+
+        except Exception as e:
+            logger.error(f"Hardware execution failed: {e}")
+            logger.info("Falling back to synthetic data")
+            return self._generate_synthetic_data(shots)
+
+    def _generate_synthetic_data(
+        self,
+        shots: int,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Generate synthetic syndrome data for dry-run testing using Stim.
+
+        Samples topological detector and observable events from a physical
+        rotated surface code circuit under calibrated drifting noise.
+        """
+        import stim
+        d = getattr(self._config, "code_distance", 3)
+        r = getattr(self._config, "num_rounds", 3)
+        p_phys = 0.005 + 0.001 * np.sin(

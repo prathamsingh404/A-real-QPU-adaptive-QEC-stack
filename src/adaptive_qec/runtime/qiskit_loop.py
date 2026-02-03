@@ -542,3 +542,99 @@ class QiskitRuntimeLoop:
         d = getattr(self._config, "code_distance", 3)
         r = getattr(self._config, "num_rounds", 3)
         p_phys = 0.005 + 0.001 * np.sin(
+            2 * np.pi * self.total_batches / 50
+        )
+
+        circuit = stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=d,
+            rounds=r,
+            after_clifford_depolarization=p_phys,
+            before_round_data_depolarization=p_phys,
+            before_measure_flip_probability=p_phys * 1.5,
+            after_reset_flip_probability=p_phys * 0.5,
+        )
+        sampler = circuit.compile_detector_sampler()
+        detection_events, observable_flips = sampler.sample(
+            shots=shots,
+            separate_observables=True,
+        )
+        return detection_events.astype(np.uint8), observable_flips.astype(np.uint8)
+
+
+    def _create_fake_backend(self) -> Any:
+        """Create a fake backend for dry-run testing."""
+        logger.info("Creating fake backend for dry-run")
+        return None
+
+    def _check_convergence(self) -> bool:
+        """
+        Check if the experiment has converged.
+
+        Convergence is detected when the running LER change over
+        the last convergence_window batches is below threshold.
+        """
+        window = self._config.convergence_window
+        if len(self._batch_results) < window:
+            return False
+
+        recent = self._batch_results[-window:]
+        lers = [r.logical_error_rate for r in recent]
+
+        # Check if variance in LER is below threshold
+        ler_std = np.std(lers)
+        ler_range = max(lers) - min(lers)
+
+        return ler_range < self._config.convergence_threshold
+
+    def _save_results(self) -> None:
+        """Save experiment results to disk."""
+        output_dir = Path(self._config.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        result_file = output_dir / f"run_{self._run_id}.json"
+
+        elapsed = (
+            time.time() - self._start_time
+            if self._start_time is not None
+            else 0.0
+        )
+
+        result = {
+            "run_id": self._run_id,
+            "config": {
+                "backend_name": self._config.backend_name,
+                "shots_per_batch": self._config.shots_per_batch,
+                "max_batches": self._config.max_batches,
+                "max_total_shots": self._config.max_total_shots,
+                "dry_run": self._config.dry_run,
+            },
+            "summary": {
+                "total_batches": len(self._batch_results),
+                "total_shots": self._total_shots,
+                "total_errors": self._total_errors,
+                "overall_ler": self.overall_ler,
+                "elapsed_s": round(elapsed, 2),
+            },
+            "batches": [r.to_dict() for r in self._batch_results],
+        }
+
+        with open(result_file, "w") as f:
+            json.dump(result, f, indent=2)
+
+        logger.info(f"Results saved to {result_file}")
+
+    def get_results(self) -> list[BatchResult]:
+        """Return all batch results."""
+        return list(self._batch_results)
+
+    def summary(self) -> dict[str, Any]:
+        """Return experiment summary."""
+        return {
+            "run_id": self._run_id,
+            "total_batches": len(self._batch_results),
+            "total_shots": self._total_shots,
+            "total_errors": self._total_errors,
+            "overall_ler": round(self.overall_ler, 6),
+            "is_running": self._is_running,
+        }

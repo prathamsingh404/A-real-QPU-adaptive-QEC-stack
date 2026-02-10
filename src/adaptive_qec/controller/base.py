@@ -129,42 +129,32 @@ class BaseController(ABC):
 
     # -- lifecycle -----------------------------------------------------------
 
-    def step(self, state: HardwareState) -> ControlAction:
-        """Convenience: observe + decide in one call, with telemetry.
-
-        Returns the selected ControlAction.  Call update() separately
-        once the window's decoding result is available.
-        """
-        t0 = time.perf_counter_ns()
-
-        self.observe(state)
-        action = self.decide()
-
-        t1 = time.perf_counter_ns()
-        latency_us = (t1 - t0) / 1_000.0
-
-        self._current_state = state
-        self._current_action = action
-
-        # build telemetry
+    def _record_action(self, action: ControlAction, latency_us: float = 0.0) -> None:
+        """Record decision telemetry for this step."""
+        state = self._current_state
+        state_dict: dict[str, Any] = {}
+        if state is not None:
+            state_dict = {
+                "defect_rate": getattr(state, "defect_rate", 0.0),
+                "drift_magnitude": getattr(state, "drift_magnitude", 0.0),
+                "drift_status": state.drift_status.value if hasattr(getattr(state, "drift_status", None), "value") else str(getattr(state, "drift_status", "")),
+                "burst_active": getattr(state, "burst_active", False),
+                "leakage_fraction": getattr(state, "leakage_fraction", 0.0),
+                "t1_mean_us": getattr(state, "t1_mean_us", 0.0),
+                "t2_mean_us": getattr(state, "t2_mean_us", 0.0),
+                "p_2q": getattr(state, "p_2q", 0.0),
+                "p_ro": getattr(state, "p_ro", 0.0),
+                "code_distance": getattr(state, "code_distance", 3),
+            }
+        dec_val = action.decoder.value if hasattr(action.decoder, "value") else str(action.decoder)
+        dd_val = action.dd_policy.value if hasattr(action.dd_policy, "value") else str(action.dd_policy)
         record = TelemetryRecord(
             step=self._step,
-            timestamp_ns=t0,
-            hardware_state={
-                "defect_rate": state.defect_rate,
-                "drift_magnitude": state.drift_magnitude,
-                "drift_status": state.drift_status.value,
-                "burst_active": state.burst_active,
-                "leakage_fraction": state.leakage_fraction,
-                "t1_mean_us": state.t1_mean_us,
-                "t2_mean_us": state.t2_mean_us,
-                "p_2q": state.p_2q,
-                "p_ro": state.p_ro,
-                "code_distance": state.code_distance,
-            },
+            timestamp_ns=time.perf_counter_ns(),
+            hardware_state=state_dict,
             action_taken={
-                "decoder": action.decoder.value,
-                "dd_policy": action.dd_policy.value,
+                "decoder": dec_val,
+                "dd_policy": dd_val,
                 "burst_mitigation": action.burst_mitigation,
                 "request_recalibration": action.request_recalibration,
             },
@@ -175,7 +165,31 @@ class BaseController(ABC):
         self._telemetry.append(record)
         self._step += 1
 
+    def step(self, state: HardwareState) -> ControlAction:
+        """Convenience: observe + decide in one call, with telemetry.
+
+        Returns the selected ControlAction. Call update() separately
+        once the window's decoding result is available.
+        """
+        t0 = time.perf_counter_ns()
+
+        self.observe(state)
+        len_before = len(self._telemetry)
+        action = self.decide()
+
+        t1 = time.perf_counter_ns()
+        latency_us = (t1 - t0) / 1_000.0
+
+        self._current_state = state
+        self._current_action = action
+
+        if len(self._telemetry) > len_before:
+            self._telemetry[-1].decision_latency_us = latency_us
+        else:
+            self._record_action(action, latency_us)
+
         return action
+
 
     def reset(self) -> None:
         """Reset controller state for a new experiment run."""

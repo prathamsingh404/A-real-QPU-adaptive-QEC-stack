@@ -55,7 +55,7 @@ class DecoderChoice(str, Enum):
     UNION_FIND = "union_find"
 
 
-@dataclass(frozen=True)
+@dataclass
 class HardwareState:
     """s_t = estimated hardware state vector at time step t.
 
@@ -63,23 +63,61 @@ class HardwareState:
     All values are normalized or in standard physical units.
     """
     # Syndrome-derived metrics (updated each window)
-    defect_rate: float              # R_D: average detector firing rate
-    drift_magnitude: float          # EWMA z-score magnitude
-    drift_status: DriftStatus       # categorical drift classification
-    burst_active: bool              # True if BurstDetector flagged a burst
-    leakage_fraction: float         # estimated fraction of leaked qubits
+    defect_rate: float = 0.05         # R_D: average detector firing rate
+    drift_magnitude: float = 0.0     # EWMA z-score magnitude
+    drift_status: DriftStatus = DriftStatus.STABLE  # categorical drift classification
+    burst_active: bool = False       # True if BurstDetector flagged a burst
+    leakage_fraction: float = 0.0    # estimated fraction of leaked qubits
 
     # Calibration-derived metrics (updated less frequently)
-    t1_mean_us: float = 0.0        # mean T1 of active patch
-    t2_mean_us: float = 0.0        # mean T2 of active patch
-    p_1q: float = 0.0              # single-qubit gate error
-    p_2q: float = 0.0              # two-qubit gate error
-    p_ro: float = 0.0              # readout error
+    t1_mean_us: float = 0.0          # mean T1 of active patch
+    t2_mean_us: float = 0.0          # mean T2 of active patch
+    p_1q: float = 0.0                # single-qubit gate error
+    p_2q: float = 0.0                # two-qubit gate error
+    p_ro: float = 0.0                # readout error
 
     # Topology context
     code_distance: int = 3
     num_data_qubits: int = 9
     num_detectors: int = 8
+
+    # Aliases for backwards compatibility with tests and callers
+    error_rate: float = 0.0
+    t1_us: float = 0.0
+    t2_us: float = 0.0
+    readout_error: float = 0.0
+    gate_error_1q: float = 0.0
+    gate_error_2q: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.error_rate > 0.0 and self.p_2q == 0.0:
+            object.__setattr__(self, "defect_rate", self.error_rate)
+            object.__setattr__(self, "p_2q", self.error_rate)
+            object.__setattr__(self, "gate_error_2q", self.error_rate)
+        if self.t1_us > 0.0 and self.t1_mean_us == 0.0:
+            object.__setattr__(self, "t1_mean_us", self.t1_us)
+        elif self.t1_mean_us > 0.0 and self.t1_us == 0.0:
+            object.__setattr__(self, "t1_us", self.t1_mean_us)
+
+        if self.t2_us > 0.0 and self.t2_mean_us == 0.0:
+            object.__setattr__(self, "t2_mean_us", self.t2_us)
+        elif self.t2_mean_us > 0.0 and self.t2_us == 0.0:
+            object.__setattr__(self, "t2_us", self.t2_mean_us)
+
+        if self.gate_error_1q > 0.0 and self.p_1q == 0.0:
+            object.__setattr__(self, "p_1q", self.gate_error_1q)
+        elif self.p_1q > 0.0 and self.gate_error_1q == 0.0:
+            object.__setattr__(self, "gate_error_1q", self.p_1q)
+
+        if self.gate_error_2q > 0.0 and self.p_2q == 0.0:
+            object.__setattr__(self, "p_2q", self.gate_error_2q)
+        elif self.p_2q > 0.0 and self.gate_error_2q == 0.0:
+            object.__setattr__(self, "gate_error_2q", self.p_2q)
+
+        if self.readout_error > 0.0 and self.p_ro == 0.0:
+            object.__setattr__(self, "p_ro", self.readout_error)
+        elif self.p_ro > 0.0 and self.readout_error == 0.0:
+            object.__setattr__(self, "readout_error", self.p_ro)
 
     def to_vector(self) -> np.ndarray:
         """Convert to a numeric feature vector for cost evaluation."""
@@ -97,17 +135,24 @@ class HardwareState:
         ], dtype=np.float64)
 
 
-@dataclass(frozen=True)
+@dataclass
 class ControlAction:
     """a_t = adaptive control action at time step t.
 
     Specifies the full QEC strategy for the current window.
     """
-    decoder: DecoderChoice                   # which decoder to use
-    dd_policy: DDSequenceType                # DD sequence (NONE, CPMG, XY4, XY8)
+    decoder: Any                             # which decoder to use
+    dd_policy: Any = DDSequenceType.NONE     # DD sequence (NONE, CPMG, XY4, XY8)
     burst_mitigation: bool = False           # mask burst-affected syndromes
     request_recalibration: bool = False      # request fresh calibration
     notes: str = ""                          # human-readable rationale
+    dd_sequence: Optional[str] = None
+    schedule: str = "balanced"
+
+    def __post_init__(self) -> None:
+        if self.dd_sequence is None:
+            val = self.dd_policy.value if hasattr(self.dd_policy, "value") else str(self.dd_policy)
+            object.__setattr__(self, "dd_sequence", val)
 
 
 @dataclass
@@ -230,280 +275,3 @@ def estimate_logical_error_rate(
 
 
 def compute_cost(
-    state: HardwareState,
-    action: ControlAction,
-    previous_action: Optional[ControlAction],
-    weights: CostWeights,
-) -> float:
-    """Compute the cost J(a | s) for a candidate action.
-
-    J = P_L + λ₁·L + λ₂·C_DD + λ₃·C_switch + λ₄·C_cal
-
-    Args:
-        state: Current hardware state observation.
-        action: Candidate control action.
-        previous_action: Action taken in the previous window (for switch cost).
-        weights: Cost function weights.
-
-    Returns:
-        Scalar cost value (lower is better).
-    """
-    # 1. Estimated logical error rate
-    p_L = estimate_logical_error_rate(
-        state, action.decoder, action.dd_policy, action.burst_mitigation
-    )
-
-    # 2. Decoder latency cost (normalized: UF ~= 1.0, MWPM ~= 1.5 for small d)
-    latency_cost = 1.5 if action.decoder == DecoderChoice.MWPM else 1.0
-
-    # 3. DD pulse cost (number of pulses normalized)
-    DD_PULSE_COUNTS = {
-        DDSequenceType.NONE: 0,
-        DDSequenceType.CPMG: 2,
-        DDSequenceType.XY4: 4,
-        DDSequenceType.XY8: 8,
-    }
-    dd_cost = DD_PULSE_COUNTS.get(action.dd_policy, 0) / 8.0
-
-    # 4. Mode switch cost (penalize changing decoder or DD policy)
-    switch_cost = 0.0
-    if previous_action is not None:
-        if action.decoder != previous_action.decoder:
-            switch_cost += 1.0
-        if action.dd_policy != previous_action.dd_policy:
-            switch_cost += 0.5
-
-    # 5. Recalibration cost
-    recal_cost = 1.0 if action.request_recalibration else 0.0
-
-    total = (
-        p_L
-        + weights.lambda_latency * latency_cost
-        + weights.lambda_dd_cost * dd_cost
-        + weights.lambda_switch * switch_cost
-        + weights.lambda_recal * recal_cost
-    )
-    return float(total)
-
-
-# ---------------------------------------------------------------------------
-# Hysteresis tracker
-# ---------------------------------------------------------------------------
-
-class HysteresisTracker:
-    """Prevents oscillation between control modes.
-
-    A mode switch is only committed when the target mode has been
-    consistently better for `patience` consecutive windows with
-    a minimum improvement margin of `margin`.
-    """
-
-    def __init__(self, patience: int = 3, margin: float = 0.05) -> None:
-        self.patience = patience
-        self.margin = margin
-        self._consecutive_wins: dict[str, int] = {}
-
-    def should_switch(
-        self,
-        current_mode: str,
-        candidate_mode: str,
-        current_cost: float,
-        candidate_cost: float,
-    ) -> bool:
-        """Return True if the switch should be committed."""
-        if candidate_mode == current_mode:
-            self._consecutive_wins.pop(candidate_mode, None)
-            return False
-
-        improvement = (current_cost - candidate_cost) / max(abs(current_cost), 1e-10)
-
-        if improvement > self.margin:
-            self._consecutive_wins[candidate_mode] = (
-                self._consecutive_wins.get(candidate_mode, 0) + 1
-            )
-        else:
-            self._consecutive_wins[candidate_mode] = 0
-
-        if self._consecutive_wins.get(candidate_mode, 0) >= self.patience:
-            self._consecutive_wins[candidate_mode] = 0
-            return True
-
-        return False
-
-    def reset(self) -> None:
-        """Reset all accumulated evidence."""
-        self._consecutive_wins.clear()
-
-
-# ---------------------------------------------------------------------------
-# Adaptive Controller
-# ---------------------------------------------------------------------------
-
-class AdaptiveController:
-    """
-    Interpretable hardware-state-conditioned QEC controller.
-
-    Core loop (executed once per observation window):
-        1. Observe hardware state s_t from detectors and calibration
-        2. Enumerate candidate actions A = {(decoder, dd, burst_mit, recal)}
-        3. Compute J(a | s_t) for each candidate
-        4. Select a*_t = argmin_a J(a | s_t) subject to hysteresis
-        5. Return the selected action
-
-    The controller is stateful (it tracks history for hysteresis and
-    mode switching), but the cost function is fully explicit and
-    interpretable — no neural network, no black box.
-    """
-
-    def __init__(
-        self,
-        weights: Optional[CostWeights] = None,
-        hysteresis_patience: int = 3,
-        hysteresis_margin: float = 0.05,
-    ) -> None:
-        self.weights = weights or CostWeights()
-        self.hysteresis = HysteresisTracker(
-            patience=hysteresis_patience,
-            margin=hysteresis_margin,
-        )
-        self.metrics = ControllerMetrics()
-
-        self._current_action: Optional[ControlAction] = None
-        self._action_history: list[ControlAction] = []
-        self._cost_history: list[dict[str, float]] = []
-
-    @property
-    def current_action(self) -> Optional[ControlAction]:
-        """The last action selected by the controller."""
-        return self._current_action
-
-    def _enumerate_candidates(self, state: HardwareState) -> list[ControlAction]:
-        """Generate the set of candidate actions for the current state.
-
-        The candidate set is small and interpretable. We enumerate:
-            - 2 decoders (MWPM, UF)
-            - 4 DD policies (NONE, CPMG, XY4, XY8)
-            - burst mitigation (on/off, but only if burst detected)
-
-        Total: up to 2 * 4 * 2 = 16 candidates (much fewer in practice).
-        """
-        candidates = []
-        decoders = [DecoderChoice.MWPM, DecoderChoice.UNION_FIND]
-        dd_options = [DDSequenceType.NONE, DDSequenceType.XY4]
-
-        # Only consider CPMG and XY8 if drift or leakage is significant
-        if state.drift_magnitude > 1.0 or state.leakage_fraction > 0.01:
-            dd_options.extend([DDSequenceType.CPMG, DDSequenceType.XY8])
-
-        burst_options = [False]
-        if state.burst_active:
-            burst_options = [True, False]
-
-        for dec in decoders:
-            for dd in dd_options:
-                for burst_mit in burst_options:
-                    candidates.append(ControlAction(
-                        decoder=dec,
-                        dd_policy=dd,
-                        burst_mitigation=burst_mit,
-                    ))
-
-        return candidates
-
-    def select_action(self, state: HardwareState) -> ControlAction:
-        """Select the optimal control action for the current hardware state.
-
-        This is the main entry point. Call once per observation window.
-
-        Args:
-            state: Current estimated hardware state.
-
-        Returns:
-            The selected ControlAction.
-        """
-        candidates = self._enumerate_candidates(state)
-
-        # Compute cost for each candidate
-        costs: list[tuple[float, ControlAction]] = []
-        for action in candidates:
-            cost = compute_cost(state, action, self._current_action, self.weights)
-            costs.append((cost, action))
-
-        # Sort by cost (lowest first)
-        costs.sort(key=lambda x: x[0])
-        best_cost, best_action = costs[0]
-
-        # Apply hysteresis to prevent oscillation
-        if self._current_action is not None:
-            current_cost = compute_cost(
-                state, self._current_action, self._current_action, self.weights
-            )
-
-            current_mode = f"{self._current_action.decoder.value}:{self._current_action.dd_policy.value}"
-            candidate_mode = f"{best_action.decoder.value}:{best_action.dd_policy.value}"
-
-            if not self.hysteresis.should_switch(
-                current_mode, candidate_mode, current_cost, best_cost
-            ):
-                # Stay with current decoder and DD policy, but keep instantaneous event mitigations
-                best_action = ControlAction(
-                    decoder=self._current_action.decoder,
-                    dd_policy=self._current_action.dd_policy,
-                    burst_mitigation=best_action.burst_mitigation,
-                    request_recalibration=best_action.request_recalibration,
-                    notes=f"Retained {current_mode} via hysteresis",
-                )
-                best_cost = current_cost
-
-        # Check if this is a mode switch
-        if self._current_action is not None:
-            if best_action.decoder != self._current_action.decoder:
-                self.metrics.total_mode_switches += 1
-                logger.info(
-                    f"Controller: mode switch "
-                    f"{self._current_action.decoder.value} -> "
-                    f"{best_action.decoder.value} "
-                    f"(cost: {best_cost:.6f})"
-                )
-
-        # Update state
-        self._current_action = best_action
-        self._action_history.append(best_action)
-
-        # Update metrics
-        self.metrics.total_windows += 1
-        self.metrics.decoder_usage[best_action.decoder.value] = (
-            self.metrics.decoder_usage.get(best_action.decoder.value, 0) + 1
-        )
-        self.metrics.dd_usage[best_action.dd_policy.value] = (
-            self.metrics.dd_usage.get(best_action.dd_policy.value, 0) + 1
-        )
-        if best_action.burst_mitigation:
-            self.metrics.burst_mitigations += 1
-        if best_action.request_recalibration:
-            self.metrics.recalibration_requests += 1
-        self.metrics.cost_history.append(best_cost)
-        self.metrics.action_history.append(
-            f"{best_action.decoder.value}:{best_action.dd_policy.value}"
-        )
-
-        return best_action
-
-    def reset(self) -> None:
-        """Reset controller state (for a new experiment run)."""
-        self._current_action = None
-        self._action_history.clear()
-        self._cost_history.clear()
-        self.hysteresis.reset()
-        self.metrics = ControllerMetrics()
-
-    def summary(self) -> dict[str, Any]:
-        """Return a summary of controller performance."""
-        return {
-            "weights": self.weights.to_dict(),
-            "metrics": self.metrics.to_dict(),
-            "hysteresis": {
-                "patience": self.hysteresis.patience,
-                "margin": self.hysteresis.margin,
-            },
-        }

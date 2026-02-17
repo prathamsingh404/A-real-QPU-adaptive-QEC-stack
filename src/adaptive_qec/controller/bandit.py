@@ -460,3 +460,119 @@ class DASEController(BaseController):
             return False
         half = max(dw // 2, 2)
         recent = self._global_rewards[-half:]
+        older = self._global_rewards[-dw:-half]
+        diff = abs(float(np.mean(recent)) - float(np.mean(older)))
+        se = float(np.std(older)) / math.sqrt(len(older)) + 1e-10
+        return (diff / se > 3.0) or (diff > self._drift_threshold * 10)
+
+    def observe(self, state: HardwareState) -> None:
+        self._current_state = state
+
+    def decide(self) -> ControlAction:
+        t = self._step + 1
+
+        # Check for drift → reactivate all arms
+        if self._detect_drift():
+            logger.info("DA-SE: drift detected — reactivating all arms")
+            self._active[:] = True
+            self._arm_windows = [[] for _ in range(self._K)]
+            self._last_drift_step = self._step
+
+        # Among active arms, pick the one with highest UCB
+        # If any active arm has < min_pulls, force-explore it
+        active_indices = np.where(self._active)[0]
+        if len(active_indices) == 0:
+            # Safety: reactivate all
+            self._active[:] = True
+            active_indices = np.arange(self._K)
+
+        under_explored = [
+            i for i in active_indices
+            if len(self._arm_windows[i]) < self._min_pulls
+        ]
+
+        if under_explored:
+            self._last_arm_idx = int(self._rng.choice(under_explored))
+        else:
+            ucbs = {i: self._arm_ucb(i, t) for i in active_indices}
+            self._last_arm_idx = max(ucbs, key=ucbs.get)  # type: ignore[arg-type]
+
+        arm = self._arms[self._last_arm_idx]
+        burst_mit = (
+            self._current_state is not None
+            and self._current_state.burst_active
+        )
+
+        dd_seq = getattr(arm, "dd_sequence", arm.dd_policy.value if hasattr(arm.dd_policy, "value") else str(arm.dd_policy))
+        sched = getattr(arm, "schedule", "balanced")
+
+        action = ControlAction(
+            decoder=arm.decoder,
+            dd_policy=arm.dd_policy,
+            dd_sequence=dd_seq,
+            schedule=sched,
+            burst_mitigation=burst_mit,
+            request_recalibration=False,
+            notes=f"DA-SE arm={arm.label} active={int(self._active.sum())}/{self._K}",
+        )
+        self._record_action(action)
+        return action
+
+
+    def update(self, reward: float) -> None:
+        # Add reward to the arm's sliding window
+        w = self._arm_windows[self._last_arm_idx]
+        w.append(reward)
+        if len(w) > self._W:
+            w.pop(0)
+
+        self._global_rewards.append(reward)
+        if len(self._global_rewards) > self._W * 2:
+            self._global_rewards.pop(0)
+
+        # Successive elimination: drop arms whose UCB < best LCB
+        t = self._step
+        active_indices = np.where(self._active)[0]
+
+        if len(active_indices) > 1:
+            lcbs = {i: self._arm_lcb(i, t) for i in active_indices}
+            best_lcb_arm = max(lcbs, key=lcbs.get)  # type: ignore[arg-type]
+            best_lcb = lcbs[best_lcb_arm]
+
+            for i in active_indices:
+                if i == best_lcb_arm:
+                    continue
+                if (
+                    len(self._arm_windows[i]) >= self._min_pulls
+                    and self._arm_ucb(i, t) < best_lcb
+                ):
+                    self._active[i] = False
+                    arm = self._arms[i]
+                    logger.info(
+                        f"DA-SE: eliminated arm {arm.label} "
+                        f"(UCB={self._arm_ucb(i, t):.4f} < LCB={best_lcb:.4f})"
+                    )
+
+        if self._telemetry:
+            self._telemetry[-1].cost = -reward
+            self._telemetry[-1].extras["arm_idx"] = self._last_arm_idx
+            self._telemetry[-1].extras["active_arms"] = int(self._active.sum())
+
+    def reset(self) -> None:
+        super().reset()
+        self._arm_windows = [[] for _ in range(self._K)]
+        self._active = np.ones(self._K, dtype=bool)
+        self._global_rewards.clear()
+        self._last_drift_step = 0
+
+    def summary(self) -> dict[str, Any]:
+        base = super().summary()
+        base["window_size"] = self._W
+        base["confidence"] = self._c
+        base["arm_labels"] = [a.label for a in self._arms]
+        base["active_arms"] = [self._arms[i].label for i in range(self._K) if self._active[i]]
+        base["eliminated_arms"] = [self._arms[i].label for i in range(self._K) if not self._active[i]]
+        base["arm_means"] = [self._arm_mean(i) for i in range(self._K)]
+        base["arm_window_sizes"] = [len(self._arm_windows[i]) for i in range(self._K)]
+        return base
+

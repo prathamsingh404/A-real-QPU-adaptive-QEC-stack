@@ -229,3 +229,119 @@ class Exp3PController(BaseController):
     estimate, guaranteeing a *high-probability* regret bound instead
     of an in-expectation bound.
 
+    Parameters
+    ----------
+    arms : list[BanditArm], optional
+        Candidate arm set. Defaults to build_arm_set().
+    gamma : float, optional
+        Exploration mixing parameter.
+    beta : float, optional
+        Bonus parameter. If None, tuned according to Auer et al.
+    delta : float
+        Confidence parameter. With probability ≥ 1 − δ,
+        Regret_T ≤ O(√(K T ln(K/δ))).
+    horizon : int
+        Estimated time horizon T for tuning η and β.
+    weights : CostWeights, optional
+        For telemetry cost tracking only.
+    """
+
+    def __init__(
+        self,
+        arms: Optional[list[BanditArm]] = None,
+        gamma: float = 0.1,
+        beta: Optional[float] = None,
+        delta: float = 0.05,
+        horizon: int = 1000,
+        weights: Optional[CostWeights] = None,
+    ) -> None:
+        super().__init__(weights=weights)
+        self._arms = arms if arms is not None else build_arm_set()
+        self._K = len(self._arms)
+        self._gamma = gamma
+        self._delta = delta
+        self._T = max(horizon, 1)
+
+        # Tuned parameters per Auer et al. Theorem 3.3
+        self._eta = gamma if gamma is not None else math.sqrt(math.log(self._K) / (self._T * self._K))
+        self._beta = beta if beta is not None else math.sqrt(math.log(self._K / delta) / (self._T * self._K))
+
+        self._log_weights = np.zeros(self._K, dtype=np.float64)
+        self._last_arm_idx: int = 0
+        self._rng = np.random.default_rng()
+
+        # Counters
+        self._arm_pull_counts = np.zeros(self._K, dtype=np.int64)
+        self._arm_reward_sums = np.zeros(self._K, dtype=np.float64)
+
+    @property
+    def name(self) -> str:
+        return "exp3p"
+
+    def _compute_probs(self) -> np.ndarray:
+        shifted = self._log_weights - self._log_weights.max()
+        exp_w = np.exp(shifted)
+        raw = exp_w / exp_w.sum()
+        # Mix with uniform: α = η
+        alpha = min(self._eta, 1.0 / self._K)
+        p = (1.0 - self._K * alpha) * raw + alpha
+        p = np.clip(p, 1e-12, None)
+        p /= p.sum()
+        return p
+
+    def observe(self, state: HardwareState) -> None:
+        self._current_state = state
+
+    def decide(self) -> ControlAction:
+        p = self._compute_probs()
+        self._last_arm_idx = int(self._rng.choice(self._K, p=p))
+        arm = self._arms[self._last_arm_idx]
+
+        burst_mit = (
+            self._current_state is not None
+            and self._current_state.burst_active
+        )
+
+        dd_seq = getattr(arm, "dd_sequence", arm.dd_policy.value if hasattr(arm.dd_policy, "value") else str(arm.dd_policy))
+        sched = getattr(arm, "schedule", "balanced")
+        dec_str = arm.decoder.value if hasattr(arm.decoder, "value") else str(arm.decoder)
+
+        action = ControlAction(
+            decoder=arm.decoder,
+            dd_policy=arm.dd_policy,
+            dd_sequence=dd_seq,
+            schedule=sched,
+            burst_mitigation=burst_mit,
+            request_recalibration=False,
+            notes=f"Exp3.P arm={arm.label} p={p[self._last_arm_idx]:.4f}",
+        )
+        self._record_action(action)
+        return action
+
+
+    def update(self, reward: float) -> None:
+        p = self._compute_probs()
+        p_i = p[self._last_arm_idx]
+
+        # Importance-weighted estimate + exploration bonus for ALL arms
+        for i in range(self._K):
+            bonus = self._beta / p[i]
+            if i == self._last_arm_idx:
+                r_hat = reward / p_i + bonus
+            else:
+                r_hat = bonus
+            self._log_weights[i] += self._eta * r_hat
+
+        # Recenter
+        self._log_weights -= self._log_weights.max()
+
+        self._arm_pull_counts[self._last_arm_idx] += 1
+        self._arm_reward_sums[self._last_arm_idx] += reward
+
+        if self._telemetry:
+            self._telemetry[-1].cost = -reward
+            self._telemetry[-1].extras["arm_idx"] = self._last_arm_idx
+
+    def reset(self) -> None:
+        super().reset()
+        self._log_weights = np.zeros(self._K, dtype=np.float64)

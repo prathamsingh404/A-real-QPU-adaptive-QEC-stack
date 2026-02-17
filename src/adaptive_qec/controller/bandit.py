@@ -345,3 +345,118 @@ class Exp3PController(BaseController):
     def reset(self) -> None:
         super().reset()
         self._log_weights = np.zeros(self._K, dtype=np.float64)
+        self._arm_pull_counts = np.zeros(self._K, dtype=np.int64)
+        self._arm_reward_sums = np.zeros(self._K, dtype=np.float64)
+
+    def summary(self) -> dict[str, Any]:
+        base = super().summary()
+        base["eta"] = self._eta
+        base["beta"] = self._beta
+        base["delta"] = self._delta
+        base["arm_labels"] = [a.label for a in self._arms]
+        base["arm_pull_counts"] = self._arm_pull_counts.tolist()
+        base["current_probs"] = self._compute_probs().tolist()
+        return base
+
+
+
+# ---------------------------------------------------------------------------
+# DA-SE (Drift-Aware Successive Elimination)
+# ---------------------------------------------------------------------------
+
+class DASEController(BaseController):
+    """Drift-Aware Successive Elimination bandit controller.
+
+    For non-stationary environments (drifting QPU noise), maintains
+    per-arm sliding-window reward statistics and eliminates arms
+    whose upper confidence bound is below the best arm's lower bound.
+
+    The sliding window length W adapts to the estimated drift rate:
+        W = min(W_max, ceil(1 / estimated_drift_rate))
+
+    Eliminated arms are reactivated when drift is detected (change-point),
+    implementing a "restart on drift" policy.
+
+    Parameters
+    ----------
+    arms : list[BanditArm], optional
+        Candidate arm set. Defaults to build_arm_set().
+    window_size : int
+        Maximum sliding window length W_max.
+    confidence : float
+        UCB confidence parameter (multiplier on √(ln(t)/n)).
+    exploration_bonus : float, optional
+        Alias for confidence multiplier.
+    min_pulls : int
+        Minimum pulls before an arm can be eliminated.
+    drift_window : int, optional
+        Window size for drift detection.
+    drift_threshold : float, optional
+        Threshold for drift detection.
+    weights : CostWeights, optional
+        For telemetry cost tracking only.
+    """
+
+    def __init__(
+        self,
+        arms: Optional[list[BanditArm]] = None,
+        window_size: int = 50,
+        confidence: float = 2.0,
+        exploration_bonus: Optional[float] = None,
+        min_pulls: int = 5,
+        drift_window: Optional[int] = None,
+        drift_threshold: float = 0.01,
+        weights: Optional[CostWeights] = None,
+    ) -> None:
+        super().__init__(weights=weights)
+        self._arms = arms if arms is not None else build_arm_set()
+        self._K = len(self._arms)
+        self._W = window_size
+        self._c = exploration_bonus if exploration_bonus is not None else confidence
+        self._min_pulls = min_pulls
+        self._drift_window = drift_window if drift_window is not None else 20
+        self._drift_threshold = drift_threshold
+        self._rng = np.random.default_rng()
+
+        # Per-arm sliding window of recent rewards
+        self._arm_windows: list[list[float]] = [[] for _ in range(self._K)]
+        self._active: np.ndarray = np.ones(self._K, dtype=bool)
+        self._last_arm_idx: int = 0
+
+        # Drift detection: track global reward moving average
+        self._global_rewards: list[float] = []
+        self._last_drift_step: int = 0
+
+    @property
+    def name(self) -> str:
+        return "dase"
+
+    def _arm_mean(self, i: int) -> float:
+        w = self._arm_windows[i]
+        return float(np.mean(w)) if w else 0.0
+
+    def _arm_ucb(self, i: int, t: int) -> float:
+        w = self._arm_windows[i]
+        n = len(w)
+        if n == 0:
+            return float("inf")
+        mean = float(np.mean(w))
+        bonus = self._c * math.sqrt(math.log(max(t, 2)) / n)
+        return mean + bonus
+
+    def _arm_lcb(self, i: int, t: int) -> float:
+        w = self._arm_windows[i]
+        n = len(w)
+        if n == 0:
+            return float("-inf")
+        mean = float(np.mean(w))
+        bonus = self._c * math.sqrt(math.log(max(t, 2)) / n)
+        return mean - bonus
+
+    def _detect_drift(self) -> bool:
+        """Simple CUSUM-like drift detector on global reward stream."""
+        dw = self._drift_window
+        if len(self._global_rewards) < dw:
+            return False
+        half = max(dw // 2, 2)
+        recent = self._global_rewards[-half:]

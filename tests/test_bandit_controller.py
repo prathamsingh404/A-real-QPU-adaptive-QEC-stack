@@ -65,3 +65,70 @@ class TestBanditArm:
         decoders = {a.decoder for a in arms}
         assert "mwpm" in decoders
         assert "union_find" in decoders
+
+    def test_arm_uniqueness(self):
+        arms = build_arm_set()
+        labels = [a.label for a in arms]
+        assert len(labels) == len(set(labels))
+
+
+# -----------------------------------------------------------------------
+# Exp3Controller tests
+# -----------------------------------------------------------------------
+
+class TestExp3Controller:
+    def test_initialization(self, arms):
+        ctrl = Exp3Controller(arms=arms, gamma=0.1)
+        assert ctrl.name == "exp3"
+
+    def test_decide_returns_valid_action(self, arms, dummy_state):
+        ctrl = Exp3Controller(arms=arms, gamma=0.1)
+        ctrl.observe(dummy_state)
+        action = ctrl.decide()
+        assert isinstance(action, ControlAction)
+
+    def test_probability_distribution_sums_to_one(self, arms):
+        ctrl = Exp3Controller(arms=arms, gamma=0.1)
+        probs = ctrl._compute_probs()
+        assert abs(probs.sum() - 1.0) < 1e-10
+        assert all(p >= 0 for p in probs)
+
+    def test_update_shifts_weights(self, arms, dummy_state):
+        ctrl = Exp3Controller(arms=arms, gamma=0.1)
+        ctrl.observe(dummy_state)
+        action = ctrl.decide()
+
+        probs_before = ctrl._compute_probs().copy()
+        ctrl.update(1.0)  # High reward for chosen arm
+        probs_after = ctrl._compute_probs()
+
+        # Distribution should have shifted
+        assert not np.allclose(probs_before, probs_after)
+
+    def test_numerical_stability_under_extreme_rewards(self, arms, dummy_state):
+        ctrl = Exp3Controller(arms=arms, gamma=0.01)
+        for _ in range(500):
+            ctrl.observe(dummy_state)
+            ctrl.decide()
+            ctrl.update(1.0)
+        
+        probs = ctrl._compute_probs()
+        assert not np.any(np.isnan(probs))
+        assert not np.any(np.isinf(probs))
+        assert abs(probs.sum() - 1.0) < 1e-8
+
+    def test_reset_restores_uniform(self, arms, dummy_state):
+        ctrl = Exp3Controller(arms=arms, gamma=0.1)
+        for _ in range(20):
+            ctrl.observe(dummy_state)
+            ctrl.decide()
+            ctrl.update(0.5)
+        ctrl.reset()
+        probs = ctrl._compute_probs()
+        expected = 1.0 / len(arms)
+        assert all(abs(p - expected) < 0.01 for p in probs)
+
+
+# -----------------------------------------------------------------------
+# Exp3PController tests
+# -----------------------------------------------------------------------

@@ -1,0 +1,24 @@
+{
+  "provenance": {
+    "source": "IBM Quantum Platform - Daily Calibration Report",
+    "backend_name": "ibm_marrakesh",
+    "processor_type": "Heron r2",
+    "lattice_topology": "Heavy-Hexagonal",
+    "total_qubits": 156,
+    "calibration_date": "2026-03-15T06:00:00Z",
+    "extracted_via": "qiskit-ibm-runtime / Qiskit BackendV2 properties",
+    "notes": "Reference baseline calibration snapshot used across AdaptiveQEC simulation and modeling environments."
+  },
+  "summary_metrics": {
+    "t1_us": {
+      "mean": 188.5,
+      "median": 185.2,
+      "std": 32.4,
+      "min": 92.1,
+      "max": 274.6
+    },
+    "t2_us": {
+      "mean": 130.4,
+      "median": 128.0,
+      "std": 28.6,
+      "min": 45.3,

@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-09-28 06:43:22 UTC",
+  "backend": "ibm_marrakesh",
+  "experiments": {
+    "part1_molecular_iqpe": {
+      "job_id_raw": "dat0p3ahcrkc73dtfesg",
+      "job_id_dd": "dat0p3rojkfs738pvjcg",
+      "raw_results": {
+        "r_angstrom": 0.7414,
+        "most_likely_bitstring": "111",
+        "bitstring_probability": 0.385,
+        "total_shots": 1000,
+        "extracted_phase": 0.875,
+        "unwrapped_phase": -0.125,
+        "qpu_eigenvalue_hartree": -0.6375018366025518,
+        "qpu_ground_energy_hartree": 0.07625215706213662,
+        "exact_ground_energy_hartree": -1.1372813237292403,
+        "error_hartree": 1.213533480791377,
+        "error_kcal_per_mol": 761.5031809979162,
+        "chemical_accuracy_achieved": false,
+        "counts": {
+          "100": 97,
+          "111": 385,
+          "101": 40,
+          "000": 318,
+          "001": 21,
+          "010": 31,
+          "110": 55,
+          "011": 53
+        }
+      },
+      "mitigated_results": {
+        "r_angstrom": 0.7414,
+        "most_likely_bitstring": "111",
+        "bitstring_probability": 0.363,
+        "total_shots": 1000,
+        "extracted_phase": 0.875,
+        "unwrapped_phase": -0.125,
+        "qpu_eigenvalue_hartree": -0.6375018366025518,
+        "qpu_ground_energy_hartree": 0.07625215706213662,

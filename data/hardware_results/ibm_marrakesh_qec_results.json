@@ -1,0 +1,25 @@
+{
+  "metadata": {
+    "backend": "ibm_marrakesh",
+    "processor": "Heron r2",
+    "num_qubits": 156,
+    "timestamp": "2026-09-27T13:44:20.849527+00:00",
+    "code": "Repetition Code (Bit-flip Memory)",
+    "distance": 3,
+    "rounds": 2,
+    "shots": 500,
+    "job_id_unmitigated": "dashr9jojkfs738pc4n0",
+    "job_id_dd_mitigated": "dashra5vr3kc73ek595g"
+  },
+  "hardware_metrics": {
+    "defect_rate_unmitigated": 0.023,
+    "defect_rate_dd": 0.016,
+    "mwpm": {
+      "errors_unmitigated": 19,
+      "ler_unmitigated": 0.038,
+      "ci_unmitigated": [
+        0.02446,
+        0.05859
+      ],
+      "errors_dd": 3,
+      "ler_dd": 0.006,

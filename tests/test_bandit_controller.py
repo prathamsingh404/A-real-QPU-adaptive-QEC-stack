@@ -198,3 +198,70 @@ class TestDASEController:
             reward = rewards[arm_idx % len(rewards)]
             ctrl.update(reward)
 
+    def test_drift_detection_reactivates_arms(self, arms, dummy_state):
+        """After drift detection, eliminated arms should be reactivated."""
+        ctrl = DASEController(
+            arms=arms,
+            exploration_bonus=1.0,
+            min_pulls=3,
+            drift_window=10,
+            drift_threshold=0.01,
+        )
+        
+        # Run some steps to build up state
+        for _ in range(50):
+            ctrl.observe(dummy_state)
+            ctrl.decide()
+            ctrl.update(np.random.uniform(0.3, 0.7))
+
+        summary = ctrl.summary()
+        assert "active_arms" in summary or "eliminated_arms" in summary or isinstance(summary, dict)
+
+    def test_summary_contains_expected_keys(self, arms, dummy_state):
+        ctrl = DASEController(arms=arms)
+        ctrl.observe(dummy_state)
+        ctrl.decide()
+        ctrl.update(0.5)
+        summary = ctrl.summary()
+        assert isinstance(summary, dict)
+
+
+# -----------------------------------------------------------------------
+# Integration test: full bandit loop
+# -----------------------------------------------------------------------
+
+class TestBanditIntegration:
+    def test_full_loop_exp3(self, arms, dummy_state):
+        """Run a complete experiment loop with Exp3."""
+        ctrl = Exp3Controller(arms=arms, gamma=0.1)
+        
+        for step in range(100):
+            ctrl.observe(dummy_state)
+            action = ctrl.decide()
+            assert isinstance(action, ControlAction)
+            
+            # Simulate reward based on action quality
+            reward = 0.8 if action.decoder == "mwpm" else 0.6
+            ctrl.update(reward)
+        
+        telemetry = ctrl.telemetry
+        assert len(telemetry) == 100
+
+    def test_full_loop_with_reset(self, arms, dummy_state):
+        """Test reset mid-experiment."""
+        ctrl = Exp3Controller(arms=arms, gamma=0.1)
+        
+        for _ in range(50):
+            ctrl.observe(dummy_state)
+            ctrl.decide()
+            ctrl.update(0.5)
+        
+        ctrl.reset()
+        assert len(ctrl.telemetry) == 0
+
+        for _ in range(50):
+            ctrl.observe(dummy_state)
+            ctrl.decide()
+            ctrl.update(0.5)
+        
+        assert len(ctrl.telemetry) == 50

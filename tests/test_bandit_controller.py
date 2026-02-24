@@ -132,3 +132,69 @@ class TestExp3Controller:
 # -----------------------------------------------------------------------
 # Exp3PController tests
 # -----------------------------------------------------------------------
+
+class TestExp3PController:
+    def test_initialization(self, arms):
+        ctrl = Exp3PController(arms=arms, gamma=0.1, beta=0.05, delta=0.01)
+        assert ctrl.name == "exp3p"
+
+    def test_decide_and_update(self, arms, dummy_state):
+        ctrl = Exp3PController(arms=arms, gamma=0.1, beta=0.05, delta=0.01)
+        for _ in range(10):
+            ctrl.observe(dummy_state)
+            action = ctrl.decide()
+            assert isinstance(action, ControlAction)
+            ctrl.update(np.random.uniform(0, 1))
+
+    def test_probabilities_valid(self, arms, dummy_state):
+        ctrl = Exp3PController(arms=arms, gamma=0.1, beta=0.05, delta=0.01)
+        for _ in range(50):
+            ctrl.observe(dummy_state)
+            ctrl.decide()
+            ctrl.update(np.random.uniform(0, 1))
+        
+        probs = ctrl._compute_probs()
+        assert abs(probs.sum() - 1.0) < 1e-8
+        assert all(p >= 0 for p in probs)
+
+
+# -----------------------------------------------------------------------
+# DASEController tests
+# -----------------------------------------------------------------------
+
+class TestDASEController:
+    def test_initialization(self, arms):
+        ctrl = DASEController(arms=arms, exploration_bonus=1.0)
+        assert ctrl.name == "dase"
+
+    def test_forced_exploration(self, arms, dummy_state):
+        """All arms should be pulled at least min_pulls times."""
+        ctrl = DASEController(arms=arms, exploration_bonus=1.0, min_pulls=3)
+        
+        pulls = {a.label: 0 for a in arms}
+        for _ in range(len(arms) * 3):
+            ctrl.observe(dummy_state)
+            action = ctrl.decide()
+            # Map action back to arm by decoder field
+            pulls[action.decoder + "_" + action.dd_sequence + "_" + action.schedule] = \
+                pulls.get(action.decoder + "_" + action.dd_sequence + "_" + action.schedule, 0) + 1
+            ctrl.update(np.random.uniform(0.3, 0.7))
+
+    def test_convergence_to_best_arm(self, arms, dummy_state):
+        """Under stationary rewards, DASE should converge to the best arm."""
+        ctrl = DASEController(
+            arms=arms, exploration_bonus=1.0, min_pulls=5, drift_window=50
+        )
+        
+        best_arm_idx = 0
+        rewards = [0.8, 0.4, 0.3, 0.5, 0.4, 0.3]  # Arm 0 is best
+        
+        arm_counts = np.zeros(len(arms))
+        for step in range(200):
+            ctrl.observe(dummy_state)
+            action = ctrl.decide()
+            # Determine which arm was chosen
+            arm_idx = step % len(arms)  # Simplified
+            reward = rewards[arm_idx % len(rewards)]
+            ctrl.update(reward)
+

@@ -293,3 +293,101 @@ class SPRTController(BaseController):
             self._cooldown_remaining -= 1
             action = self._make_action(self._current_arm)
 
+        # If in evaluation, alternate between current and challenger
+        elif self._in_eval and self._challenger_arm is not None:
+            if self._sprt_state and self._sprt_state.samples_seen % 2 == 0:
+                action = self._make_action(self._challenger_arm)
+            else:
+                action = self._make_action(self._current_arm)
+
+        # Check if it's time to start a new evaluation
+        elif (
+            self._step > 0
+            and self._step % self._eval_interval == 0
+            and not self._in_eval
+        ):
+            self._challenger_arm = self._next_challenger()
+            challenger_arm = self._arms[self._challenger_arm]
+            lbl = challenger_arm.label if hasattr(challenger_arm, "label") else f"{challenger_arm[0].value}:{challenger_arm[1].value}"
+            self._sprt_state = SPRTState(challenger_label=lbl)
+            self._in_eval = True
+            self._eval_count += 1
+            logger.info(f"SPRT: starting evaluation of challenger {lbl}")
+            action = self._make_action(self._challenger_arm)
+        else:
+            action = self._make_action(self._current_arm)
+
+        self._record_action(action)
+        return action
+
+
+    def update(self, reward: float) -> None:
+        if self._in_eval and self._sprt_state is not None and self._challenger_arm is not None:
+            is_challenger_round = (self._sprt_state.samples_seen % 2 == 0)
+
+            if is_challenger_round:
+                self._sprt_state.challenger_rewards.append(reward)
+            else:
+                self._sprt_state.current_rewards.append(reward)
+
+                if self._sprt_state.challenger_rewards:
+                    challenger_r = self._sprt_state.challenger_rewards[-1]
+                    current_r = reward
+
+                    decision = self._sprt.update(
+                        self._sprt_state, current_reward=current_r, challenger_reward=challenger_r
+                    )
+
+                    if decision == "switch":
+                        old_arm = self._current_arm
+                        self._current_arm = self._challenger_arm
+                        self._in_eval = False
+                        self._challenger_arm = None
+                        self._switch_count += 1
+                        logger.info(
+                            f"SPRT: switching from arm {old_arm} to {self._current_arm} "
+                            f"(LLR={self._sprt_state.log_likelihood_ratio:.3f})"
+                        )
+                    elif decision == "stay":
+                        self._in_eval = False
+                        self._challenger_arm = None
+                        self._cooldown_remaining = self._cooldown
+                        logger.info(
+                            f"SPRT: staying with arm {self._current_arm} "
+                            f"(LLR={self._sprt_state.log_likelihood_ratio:.3f})"
+                        )
+
+            self._sprt_state.samples_seen += 1
+            self._sprt_state.observations = self._sprt_state.samples_seen
+
+        if self._telemetry:
+            self._telemetry[-1].cost = -reward
+            self._telemetry[-1].extras["in_eval"] = self._in_eval
+            self._telemetry[-1].extras["current_arm"] = self._current_arm
+
+    def reset(self) -> None:
+        super().reset()
+        self._current_arm = 0
+        self._challenger_arm = None
+        self._sprt_state = None
+        self._in_eval = False
+        self._cooldown_remaining = 0
+        self._challenger_queue.clear()
+        self._switch_count = 0
+        self._eval_count = 0
+
+    def summary(self) -> dict[str, Any]:
+        base = super().summary()
+        arm = self._arms[self._current_arm]
+        if hasattr(arm, "label"):
+            base["current_arm"] = arm.label
+        else:
+            dec, dd = arm
+            base["current_arm"] = f"{dec.value}:{dd.value}"
+        base["switch_count"] = self._switch_count
+        base["eval_count"] = self._eval_count
+        base["sprt_alpha"] = self._sprt.alpha
+        base["sprt_beta"] = self._sprt.beta
+        base["sprt_delta"] = self._sprt.delta
+        return base
+

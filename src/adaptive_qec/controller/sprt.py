@@ -194,3 +194,102 @@ class SPRTEngine:
 # ---------------------------------------------------------------------------
 
 class SPRTController(BaseController):
+    """SPRT-gated adaptive controller.
+
+    Operates in two phases:
+    1. Exploitation: use the current best arm.
+    2. Evaluation: periodically run a paired comparison (interleaved
+       rounds) between the current arm and a challenger, accumulating
+       SPRT evidence.
+    """
+
+    def __init__(
+        self,
+        arms: Optional[list[Any]] = None,
+        alpha: float = 0.05,
+        beta: float = 0.10,
+        delta: float = 0.01,
+        p0: Optional[float] = None,
+        p1: Optional[float] = None,
+        eval_interval: int = 10,
+        cooldown: int = 20,
+        weights: Optional[CostWeights] = None,
+    ) -> None:
+        super().__init__(weights=weights)
+
+        self._sprt = SPRTEngine(alpha=alpha, beta=beta, delta=delta, p0=p0, p1=p1)
+
+        # Arms
+        if arms is not None:
+            self._arms = arms
+        else:
+            from adaptive_qec.controller.bandit import build_arm_set
+            self._arms = build_arm_set()
+
+        self._current_arm: int = 0
+        self._challenger_arm: Optional[int] = None
+
+        # SPRT state
+        self._sprt_state: Optional[SPRTState] = None
+        self._in_eval: bool = False
+        self._eval_interval = eval_interval
+        self._cooldown = cooldown
+        self._cooldown_remaining: int = 0
+
+        # Round-robin challenger selection
+        self._challenger_queue: list[int] = []
+
+        # Stats
+        self._switch_count: int = 0
+        self._eval_count: int = 0
+
+    @property
+    def name(self) -> str:
+        return "sprt"
+
+    def _make_action(self, arm_idx: int) -> ControlAction:
+        arm = self._arms[arm_idx]
+        if hasattr(arm, "decoder"):
+            dec = arm.decoder
+            dd = arm.dd_policy
+            dd_seq = getattr(arm, "dd_sequence", dd.value if hasattr(dd, "value") else str(dd))
+            sched = getattr(arm, "schedule", "balanced")
+            label = arm.label
+        else:
+            dec, dd = arm
+            dd_seq = dd.value if hasattr(dd, "value") else str(dd)
+            sched = "balanced"
+            label = f"{dec.value}:{dd.value}"
+
+        burst_mit = (
+            self._current_state is not None
+            and self._current_state.burst_active
+        )
+        return ControlAction(
+            decoder=dec,
+            dd_policy=dd,
+            dd_sequence=dd_seq,
+            schedule=sched,
+            burst_mitigation=burst_mit,
+            request_recalibration=False,
+            notes=f"SPRT arm={label}",
+        )
+
+    def _next_challenger(self) -> int:
+        """Pick the next challenger arm to evaluate."""
+        if not self._challenger_queue:
+            self._challenger_queue = [
+                i for i in range(len(self._arms)) if i != self._current_arm
+            ]
+        return self._challenger_queue.pop(0)
+
+    def observe(self, state: HardwareState) -> None:
+        self._current_state = state
+
+    def decide(self) -> ControlAction:
+        action: ControlAction
+        # If in cooldown, just use current arm
+        if self._cooldown_remaining > 0:
+            self._cooldown_remaining -= 1
+            action = self._make_action(self._current_arm)
+

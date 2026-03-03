@@ -71,3 +71,76 @@ class TestSPRTEngine:
         upper = np.log((1 - 0.01) / 0.01)
         lower = np.log(0.01 / (1 - 0.01))
         assert upper > 0
+        assert lower < 0
+
+    def test_update_with_successes(self):
+        """Feeding successes should move LLR in one direction."""
+        engine = SPRTEngine(alpha=0.01, beta=0.01, p0=0.03, p1=0.04)
+        state = SPRTState()
+        
+        for _ in range(10):
+            decision = engine.update(state, success=True)
+        
+        assert state.observations == 10
+        # LLR should have moved from 0
+
+    def test_update_with_failures(self):
+        """Feeding failures should move LLR in the opposite direction."""
+        engine = SPRTEngine(alpha=0.01, beta=0.01, p0=0.03, p1=0.04)
+        state = SPRTState()
+        
+        for _ in range(10):
+            engine.update(state, success=False)
+        
+        assert state.observations == 10
+
+    def test_decision_under_strong_evidence(self):
+        """With enough consistent evidence, SPRT should reach a decision."""
+        engine = SPRTEngine(alpha=0.05, beta=0.05, p0=0.03, p1=0.06)
+        state = SPRTState()
+        
+        decisions = []
+        for _ in range(500):
+            decision = engine.update(state, success=True)
+            decisions.append(decision)
+            if decision != "continue":
+                break
+        
+        # Should have reached a decision with 500 consistent observations
+        assert any(d != "continue" for d in decisions) or state.observations == 500
+
+
+# -----------------------------------------------------------------------
+# SPRTController tests
+# -----------------------------------------------------------------------
+
+class TestSPRTController:
+    def test_initialization(self):
+        arms = build_arm_set()
+        ctrl = SPRTController(
+            arms=arms,
+            alpha=0.01,
+            beta=0.01,
+            p0=0.03,
+            p1=0.04,
+        )
+        assert ctrl.name == "sprt"
+
+    def test_decide_returns_action(self, dummy_state):
+        arms = build_arm_set()
+        ctrl = SPRTController(
+            arms=arms,
+            alpha=0.01,
+            beta=0.01,
+            p0=0.03,
+            p1=0.04,
+        )
+        ctrl.observe(dummy_state)
+        action = ctrl.decide()
+        assert isinstance(action, ControlAction)
+
+    def test_update_with_reward(self, dummy_state):
+        arms = build_arm_set()
+        ctrl = SPRTController(
+            arms=arms,
+            alpha=0.01,

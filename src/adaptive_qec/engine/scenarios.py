@@ -89,3 +89,94 @@ class NoiseSnapshot:
     @property
     def t2_us(self) -> float:
         return self.t2_mean_us
+
+    def to_calibration_dict(self) -> dict[str, float]:
+        return {
+            "p_1q": self.p_1q,
+            "p_2q": self.p_2q,
+            "p_ro": self.p_ro,
+            "t1_mean_us": self.t1_mean_us,
+            "t2_mean_us": self.t2_mean_us,
+            "gate_error_1q": self.p_1q,
+            "gate_error_2q": self.p_2q,
+            "readout_error": self.p_ro,
+            "t1_us": self.t1_mean_us,
+            "t2_us": self.t2_mean_us,
+        }
+
+
+@dataclass
+class ScenarioConfig:
+    """Configuration for a noise scenario.
+
+    Parameters are drawn from real IBM Heron calibration ranges.
+    """
+    scenario_type: ScenarioType
+    total_steps: int
+
+    # Baseline calibration (from real hardware)
+    baseline_p_1q: float = 0.000454
+    baseline_p_2q: float = 0.003021
+    baseline_p_ro: float = 0.01208
+    baseline_t1_us: float = 180.0
+    baseline_t2_us: float = 120.0
+
+    # Drift parameters
+    drift_rate_p2q: float = 0.0001   # per-step increase in p_2q
+    drift_rate_t1: float = -0.5      # per-step decrease in T1 (μs)
+
+    # Sinusoidal parameters
+    amplitude_p2q: float = 0.002     # peak-to-peak variation
+    period_steps: int = 200          # oscillation period
+
+    # Burst parameters
+    burst_start: int = 50            # step when burst begins
+    burst_duration: int = 10         # how many steps the burst lasts
+    burst_multiplier: float = 3.0    # noise multiplier during burst
+    burst_probability: Optional[float] = None
+
+    # Multi-phase timing
+    phase_durations: list[int] = field(default_factory=lambda: [30, 30, 10, 30])
+
+    def validate(self) -> None:
+        """Validate that parameters are in realistic ranges."""
+        if self.total_steps <= 0:
+            raise ValueError(f"total_steps must be positive, got {self.total_steps}")
+        if not (0 < self.baseline_p_1q < 0.05):
+            raise ValueError("p_1q out of IBM Heron range")
+        if not (0 < self.baseline_p_2q < 0.05):
+            raise ValueError("p_2q out of IBM Heron range")
+        if not (0 < self.baseline_p_ro < 0.10):
+            raise ValueError("p_ro out of IBM Heron range")
+        if not (50 <= self.baseline_t1_us <= 500):
+            raise ValueError("T1 out of IBM Heron range")
+        if not (30 <= self.baseline_t2_us <= 400):
+            raise ValueError("T2 out of IBM Heron range")
+
+
+
+class NoiseScenarioFactory:
+    """Factory that generates time-varying noise profiles.
+
+    Usage:
+        factory = NoiseScenarioFactory(ScenarioConfig(
+            scenario_type=ScenarioType.LINEAR_DRIFT,
+            total_steps=100,
+        ))
+        for step in range(100):
+            snapshot = factory.get_noise(step)
+    """
+
+    def __init__(self, config: ScenarioConfig) -> None:
+        config.validate()
+        self._config = config
+        self._generators = {
+            ScenarioType.STATIONARY: self._stationary,
+            ScenarioType.LINEAR_DRIFT: self._linear_drift,
+            ScenarioType.SINUSOIDAL_DRIFT: self._sinusoidal_drift,
+            ScenarioType.BURST: self._burst,
+            ScenarioType.MULTI_PHASE: self._multi_phase,
+        }
+        self._current_step: int = 0
+
+    def step(self) -> NoiseSnapshot:

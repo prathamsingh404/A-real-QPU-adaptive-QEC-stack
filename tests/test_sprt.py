@@ -144,3 +144,66 @@ class TestSPRTController:
         ctrl = SPRTController(
             arms=arms,
             alpha=0.01,
+            beta=0.01,
+            p0=0.03,
+            p1=0.04,
+        )
+        ctrl.observe(dummy_state)
+        ctrl.decide()
+        ctrl.update(0.95)  # High reward
+        
+        assert len(ctrl.telemetry) == 1
+
+    def test_full_loop(self, dummy_state):
+        """Run 100 steps of the SPRT controller loop."""
+        arms = build_arm_set()
+        ctrl = SPRTController(
+            arms=arms,
+            alpha=0.01,
+            beta=0.01,
+            p0=0.03,
+            p1=0.04,
+        )
+        
+        for step in range(100):
+            ctrl.observe(dummy_state)
+            action = ctrl.decide()
+            assert isinstance(action, ControlAction)
+            reward = 0.9 + 0.05 * np.random.randn()
+            ctrl.update(max(0.0, min(1.0, reward)))
+        
+        assert len(ctrl.telemetry) == 100
+
+    def test_reset(self, dummy_state):
+        arms = build_arm_set()
+        ctrl = SPRTController(
+            arms=arms,
+            alpha=0.01,
+            beta=0.01,
+            p0=0.03,
+            p1=0.04,
+        )
+        
+        for _ in range(20):
+            ctrl.observe(dummy_state)
+            ctrl.decide()
+            ctrl.update(0.9)
+        
+        ctrl.reset()
+        assert len(ctrl.telemetry) == 0
+
+    def test_summary(self, dummy_state):
+        arms = build_arm_set()
+        ctrl = SPRTController(
+            arms=arms,
+            alpha=0.01,
+            beta=0.01,
+            p0=0.03,
+            p1=0.04,
+        )
+        ctrl.observe(dummy_state)
+        ctrl.decide()
+        ctrl.update(0.9)
+        
+        summary = ctrl.summary()
+        assert isinstance(summary, dict)

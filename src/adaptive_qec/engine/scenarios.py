@@ -271,3 +271,94 @@ class NoiseScenarioFactory:
 
     def _multi_phase(self, step: int) -> NoiseSnapshot:
         """Concatenation of: stable → linear drift → burst → recovery."""
+        durations = self._config.phase_durations
+        boundaries = np.cumsum(durations)
+
+        if step < boundaries[0]:
+            # Phase 1: stationary
+            return self._stationary(step)
+        elif step < boundaries[1]:
+            # Phase 2: linear drift
+            drift_step = step - boundaries[0]
+            return self._linear_drift(drift_step)
+        elif step < boundaries[2]:
+            # Phase 3: burst
+            burst_config = ScenarioConfig(
+                scenario_type=ScenarioType.BURST,
+                total_steps=durations[2],
+                baseline_p_1q=self._config.baseline_p_1q,
+                baseline_p_2q=self._config.baseline_p_2q * 1.5,  # already degraded
+                baseline_p_ro=self._config.baseline_p_ro,
+                baseline_t1_us=self._config.baseline_t1_us * 0.8,
+                baseline_t2_us=self._config.baseline_t2_us * 0.8,
+                burst_start=0,
+                burst_duration=durations[2],
+                burst_multiplier=self._config.burst_multiplier,
+            )
+            factory = NoiseScenarioFactory(burst_config)
+            snap = factory.get_noise(step - int(boundaries[1]))
+            snap.scenario_label = "multi_phase:burst"
+            return snap
+        else:
+            # Phase 4: recovery (return to stationary)
+            snap = self._stationary(step)
+            snap.scenario_label = "multi_phase:recovery"
+            return snap
+
+
+# ---------------------------------------------------------------------------
+# Convenience constructors
+# ---------------------------------------------------------------------------
+
+def stationary_scenario(total_steps: int = 100) -> NoiseScenarioFactory:
+    """Create a stationary noise scenario with IBM Heron defaults."""
+    return NoiseScenarioFactory(ScenarioConfig(
+        scenario_type=ScenarioType.STATIONARY,
+        total_steps=total_steps,
+    ))
+
+
+def drift_scenario(total_steps: int = 100, rate: float = 0.0001) -> NoiseScenarioFactory:
+    """Create a linear-drift noise scenario."""
+    return NoiseScenarioFactory(ScenarioConfig(
+        scenario_type=ScenarioType.LINEAR_DRIFT,
+        total_steps=total_steps,
+        drift_rate_p2q=rate,
+    ))
+
+
+def burst_scenario(
+    total_steps: int = 100,
+    burst_at: int = 50,
+    duration: int = 10,
+    burst_probability: Optional[float] = None,
+    burst_magnitude: Optional[float] = None,
+) -> NoiseScenarioFactory:
+    """Create a burst-injection noise scenario."""
+    multiplier = burst_magnitude if burst_magnitude is not None else 3.0
+    return NoiseScenarioFactory(ScenarioConfig(
+        scenario_type=ScenarioType.BURST,
+        total_steps=total_steps,
+        burst_start=burst_at,
+        burst_duration=duration,
+        burst_multiplier=multiplier,
+        burst_probability=burst_probability,
+    ))
+
+
+def multi_phase_scenario(
+    phase_durations: Optional[list[int]] = None,
+    total_steps: Optional[int] = None,
+) -> NoiseScenarioFactory:
+    """Create a multi-phase scenario (stable→drift→burst→recovery)."""
+    if total_steps is not None:
+        q = total_steps // 4
+        durations = [q, q, q, total_steps - 3 * q]
+    else:
+        durations = phase_durations or [30, 30, 10, 30]
+    return NoiseScenarioFactory(ScenarioConfig(
+        scenario_type=ScenarioType.MULTI_PHASE,
+        total_steps=sum(durations),
+        phase_durations=durations,
+    ))
+

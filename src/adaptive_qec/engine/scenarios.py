@@ -180,3 +180,94 @@ class NoiseScenarioFactory:
         self._current_step: int = 0
 
     def step(self) -> NoiseSnapshot:
+        """Advance and return the next sequential noise snapshot."""
+        snapshot = self.get_noise(self._current_step)
+        self._current_step += 1
+        return snapshot
+
+    def reset(self) -> None:
+        """Reset the sequential step counter."""
+        self._current_step = 0
+
+    def get_noise(self, step: int) -> NoiseSnapshot:
+        """Get the noise snapshot for the given step."""
+        generator = self._generators.get(self._config.scenario_type)
+        if generator is None:
+            raise ValueError(f"Unknown scenario: {self._config.scenario_type}")
+        return generator(step)
+
+    def _stationary(self, step: int) -> NoiseSnapshot:
+        """Constant noise at baseline calibration values."""
+        return NoiseSnapshot(
+            step=step,
+            p_1q=self._config.baseline_p_1q,
+            p_2q=self._config.baseline_p_2q,
+            p_ro=self._config.baseline_p_ro,
+            t1_mean_us=self._config.baseline_t1_us,
+            t2_mean_us=self._config.baseline_t2_us,
+            scenario_label="stationary",
+        )
+
+    def _linear_drift(self, step: int) -> NoiseSnapshot:
+        """Monotonic degradation of noise parameters."""
+        p_2q = self._config.baseline_p_2q + self._config.drift_rate_p2q * step
+        t1 = max(50.0, self._config.baseline_t1_us + self._config.drift_rate_t1 * step)
+        t2 = max(30.0, min(t1, self._config.baseline_t2_us + self._config.drift_rate_t1 * 0.7 * step))
+
+        return NoiseSnapshot(
+            step=step,
+            p_1q=self._config.baseline_p_1q,
+            p_2q=min(p_2q, 0.05),
+            p_ro=self._config.baseline_p_ro,
+            t1_mean_us=t1,
+            t2_mean_us=t2,
+            scenario_label="linear_drift",
+        )
+
+    def _sinusoidal_drift(self, step: int) -> NoiseSnapshot:
+        """Periodic noise variation (simulates diurnal temperature cycle)."""
+        phase = 2.0 * np.pi * step / self._config.period_steps
+        p_2q = self._config.baseline_p_2q + self._config.amplitude_p2q * np.sin(phase)
+        t1 = self._config.baseline_t1_us + 20.0 * np.cos(phase)
+
+        return NoiseSnapshot(
+            step=step,
+            p_1q=self._config.baseline_p_1q,
+            p_2q=float(np.clip(p_2q, 0.001, 0.05)),
+            p_ro=self._config.baseline_p_ro,
+            t1_mean_us=float(np.clip(t1, 80.0, 300.0)),
+            t2_mean_us=float(np.clip(min(t1, self._config.baseline_t2_us), 50.0, 200.0)),
+            scenario_label="sinusoidal_drift",
+        )
+
+    def _burst(self, step: int) -> NoiseSnapshot:
+        """Sudden TLF-like burst event at a known step or probabilistic."""
+        if self._config.burst_probability is not None:
+            rng = np.random.default_rng(seed=step + 12345)
+            in_burst = bool(rng.random() < self._config.burst_probability)
+        else:
+            in_burst = (
+                self._config.burst_start <= step
+                < self._config.burst_start + self._config.burst_duration
+            )
+
+        if in_burst:
+            p_2q = self._config.baseline_p_2q * self._config.burst_multiplier
+            p_ro = self._config.baseline_p_ro * 1.5
+        else:
+            p_2q = self._config.baseline_p_2q
+            p_ro = self._config.baseline_p_ro
+
+        return NoiseSnapshot(
+            step=step,
+            p_1q=self._config.baseline_p_1q,
+            p_2q=min(p_2q, 0.05),
+            p_ro=min(p_ro, 0.10),
+            t1_mean_us=self._config.baseline_t1_us,
+            t2_mean_us=self._config.baseline_t2_us,
+            burst_active=in_burst,
+            scenario_label="burst",
+        )
+
+    def _multi_phase(self, step: int) -> NoiseSnapshot:
+        """Concatenation of: stable → linear drift → burst → recovery."""

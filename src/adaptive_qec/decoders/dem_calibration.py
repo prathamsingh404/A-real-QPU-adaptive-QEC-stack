@@ -110,3 +110,97 @@ class CalibratedDEM:
 
 
 class DEMCalibrator:
+    """Calibrates DEM edge weights using hardware measurements.
+
+    Parameters
+    ----------
+    circuit : stim.Circuit, optional
+        The QEC circuit (with noise) used to generate the base DEM.
+        Defaults to a distance-3 rotated surface code circuit.
+    scaling_mode : str
+        How to scale edge probabilities:
+        - "proportional": scale by ratio of measured/nominal error rates.
+        - "absolute": replace with measured values directly.
+    min_probability : float
+        Lower clamp bound for probabilities.
+    max_probability : float
+        Upper clamp bound for probabilities.
+    """
+
+    def __init__(
+        self,
+        circuit: Optional[stim.Circuit] = None,
+        scaling_mode: str = "proportional",
+        min_probability: float = 1e-6,
+        max_probability: float = 0.4999,
+    ) -> None:
+        if circuit is None:
+            circuit = stim.Circuit.generated(
+                "surface_code:rotated_memory_z",
+                distance=3,
+                rounds=3,
+                after_clifford_depolarization=0.003,
+            )
+        self._circuit = circuit
+        self._scaling_mode = scaling_mode
+        self._min_probability = min_probability
+        self._max_probability = max_probability
+
+        # Extract base DEM
+        self._base_dem = circuit.detector_error_model(decompose_errors=True)
+        self._base_edges = self._parse_dem(self._base_dem)
+
+        # Store nominal error rates from the circuit
+        self._nominal_p_2q = self._extract_circuit_noise(circuit, "DEPOLARIZE2")
+        self._nominal_p_ro = self._extract_circuit_noise(circuit, "X_ERROR")
+
+
+    def _parse_dem(self, dem: stim.DetectorErrorModel) -> list[DEMEdge]:
+        """Parse a Stim DEM into a list of DEMEdge objects."""
+        edges: list[DEMEdge] = []
+
+        for instruction in dem.flattened():
+            if not isinstance(instruction, stim.DemInstruction):
+                continue
+            if instruction.type != "error":
+                continue
+
+            probability = instruction.args_copy()[0]
+            detectors: list[int] = []
+            observables: list[int] = []
+
+            for target in instruction.targets_copy():
+                if target.is_relative_detector_id():
+                    detectors.append(target.val)
+                elif target.is_logical_observable_id():
+                    observables.append(target.val)
+
+            if len(detectors) == 2:
+                edge = DEMEdge(
+                    detector_a=detectors[0],
+                    detector_b=detectors[1],
+                    probability=probability,
+                    observables=observables,
+                )
+            elif len(detectors) == 1:
+                edge = DEMEdge(
+                    detector_a=detectors[0],
+                    detector_b=-1,
+                    probability=probability,
+                    observables=observables,
+                )
+            elif len(detectors) == 0 and observables:
+                edge = DEMEdge(
+                    detector_a=-1,
+                    detector_b=-1,
+                    probability=probability,
+                    observables=observables,
+                )
+            else:
+                continue
+
+            edge.compute_weight()
+            edges.append(edge)
+
+        return edges
+

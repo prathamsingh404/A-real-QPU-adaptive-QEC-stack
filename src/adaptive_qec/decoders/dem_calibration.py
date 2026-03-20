@@ -298,3 +298,78 @@ class DEMCalibrator:
             Measured readout error rate per physical qubit.
         """
         # For now, fall back to global calibration using the mean rates
+        mean_p_2q = float(np.mean(list(qubit_error_rates.values()))) if qubit_error_rates else self._nominal_p_2q
+        mean_p_ro = float(np.mean(list(readout_error_rates.values()))) if readout_error_rates else self._nominal_p_ro
+
+        return self.calibrate(mean_p_2q, mean_p_ro, calibration_timestamp)
+
+    def calibrate_from_syndromes(
+        self,
+        syndromes: np.ndarray,
+        smoothing: float = 0.3,
+        calibration_timestamp: str = "",
+    ) -> CalibratedDEM:
+        """Reweight DEM edges directly from observed sliding-window syndrome defect data.
+
+        For each graph edge (u, v), estimates the empirical probability of
+        correlated detector firing from the syndrome batch and combines it
+        with the nominal base error probability via EWMA smoothing:
+            p_hat = (1 - alpha) * p_base + alpha * p_empirical
+            w_e = ln((1 - p_hat) / p_hat)
+
+        Parameters
+        ----------
+        syndromes : np.ndarray
+            Binary detection events array of shape (shots, num_detectors).
+        smoothing : float
+            Smoothing weight alpha in [0.0, 1.0] applied to empirical estimates.
+        calibration_timestamp : str
+            Timestamp metadata.
+
+        Returns
+        -------
+        CalibratedDEM
+            Calibrated DEM with updated edge weights.
+        """
+        syndromes = np.asarray(syndromes, dtype=np.uint8)
+        num_shots, num_det = syndromes.shape
+
+        new_edges: list[DEMEdge] = []
+        for edge in self._base_edges:
+            det_a = edge.detector_a
+            det_b = edge.detector_b
+
+            if 0 <= det_a < num_det and 0 <= det_b < num_det:
+                # Pairwise coincidence rate
+                coincidences = np.sum(syndromes[:, det_a] & syndromes[:, det_b])
+                p_emp = float(coincidences / max(num_shots, 1))
+            elif 0 <= det_a < num_det and det_b < 0:
+                # Boundary defect rate
+                detections = np.sum(syndromes[:, det_a])
+                p_emp = float(detections / max(num_shots, 1))
+            else:
+                p_emp = edge.probability
+
+            # Clamp empirical probability
+            p_emp = np.clip(p_emp, self._min_probability, self._max_probability)
+
+            # Smooth with base prior
+            p_updated = (1.0 - smoothing) * edge.probability + smoothing * p_emp
+            p_updated = float(np.clip(p_updated, self._min_probability, self._max_probability))
+
+            new_edge = DEMEdge(
+                detector_a=det_a,
+                detector_b=det_b,
+                probability=p_updated,
+                observables=list(edge.observables),
+            )
+            new_edge.compute_weight()
+            new_edges.append(new_edge)
+
+        return CalibratedDEM(
+            num_detectors=self._base_dem.num_detectors,
+            num_observables=self._base_dem.num_observables,
+            edges=new_edges,
+            calibration_timestamp=calibration_timestamp,
+            source=f"syndrome_ewma(alpha={smoothing:.2f}, shots={num_shots})",
+        )

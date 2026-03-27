@@ -463,3 +463,158 @@ class UnionFindDecoder(Decoder):
         parent = {d: d for d in defects_int}
         parent[boundary] = boundary
         parity = {d: 1 for d in defects_int}
+        parity[boundary] = 0
+        boundary_conn = {d: False for d in defects_int}
+        boundary_conn[boundary] = True
+
+        def find(x: int) -> int:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(x: int, y: int) -> int:
+            rx, ry = find(x), find(y)
+            if rx == ry:
+                return rx
+            parent[ry] = rx
+            parity[rx] += parity[ry]
+            boundary_conn[rx] |= boundary_conn[ry]
+            return rx
+
+        corr = 0
+        active_odd = len(defects_int)
+
+        for w, u, v, o, is_b in events:
+            if active_odd <= 0:
+                break
+            ru = find(u)
+            rv = find(v)
+            if ru == rv:
+                continue
+
+            u_odd = (parity[ru] % 2 == 1) and not boundary_conn[ru]
+            v_odd = (parity[rv] % 2 == 1) and not boundary_conn[rv]
+            u_b = boundary_conn[ru]
+            v_b = boundary_conn[rv]
+
+            if not (u_odd or v_odd):
+                continue
+
+            union(u, v)
+
+            if u_odd and v_odd:
+                corr ^= o
+                active_odd -= 2
+            elif u_odd and v_b:
+                corr ^= o
+                active_odd -= 1
+            elif v_odd and u_b:
+                corr ^= o
+                active_odd -= 1
+
+        res = np.zeros(self._num_observables, dtype=np.uint8)
+        for i in range(self._num_observables):
+            if corr & (1 << i):
+                res[i] = 1
+        return res
+
+    def decode(self, syndrome: np.ndarray) -> Correction:
+        """
+        Decode a single syndrome or batch.
+
+        Args:
+            syndrome: shape (num_detectors,) or (batch, num_detectors)
+
+        Returns:
+            Correction with observable predictions.
+        """
+        if self._graph is None:
+            raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        if syndrome.ndim == 1:
+            corrections = self._decode_single(syndrome.astype(np.uint8))
+            return Correction(observable_corrections=corrections)
+
+        results = np.zeros(
+            (syndrome.shape[0], self._num_observables), dtype=np.uint8
+        )
+        for i in range(syndrome.shape[0]):
+            results[i] = self._decode_single(syndrome[i].astype(np.uint8))
+
+        return Correction(observable_corrections=results)
+
+    def decode_batch(
+        self,
+        syndromes: np.ndarray,
+        observable_flips: Optional[np.ndarray] = None,
+    ) -> Any:
+        """
+        Decode a batch and compute comprehensive metrics, or return predictions array.
+
+        Args:
+            syndromes: shape (shots, num_detectors)
+            observable_flips: optional shape (shots, num_observables). If None,
+                returns predictions array of shape (shots, num_observables).
+
+        Returns:
+            DecoderMetrics if observable_flips is given, else np.ndarray of predictions.
+        """
+        if self._graph is None:
+            raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        shots = syndromes.shape[0]
+        syndromes_u8 = syndromes.astype(np.uint8)
+
+        tracemalloc.start()
+
+        per_shot_times = np.zeros(shots)
+        all_preds = np.zeros(
+            (shots, self._num_observables), dtype=np.uint8
+        )
+
+        t_start = time.perf_counter()
+
+        for i in range(shots):
+            t_shot_start = time.perf_counter()
+            all_preds[i] = self._decode_single(syndromes_u8[i])
+            per_shot_times[i] = time.perf_counter() - t_shot_start
+
+        t_total = time.perf_counter() - t_start
+
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        if observable_flips is None:
+            return all_preds
+
+        logical_errors = np.any(all_preds != observable_flips, axis=1)
+        num_errors = int(logical_errors.sum())
+        error_rate = num_errors / shots
+
+        latency_us = per_shot_times * 1e6
+
+        metrics = DecoderMetrics(
+            total_shots=shots,
+            num_logical_errors=num_errors,
+            logical_error_rate=error_rate,
+            decode_time_s=t_total,
+            per_shot_latency_us=latency_us,
+            latency_mean_us=float(latency_us.mean()),
+            latency_p50_us=float(np.percentile(latency_us, 50)),
+            latency_p95_us=float(np.percentile(latency_us, 95)),
+            latency_p99_us=float(np.percentile(latency_us, 99)),
+            latency_p999_us=float(np.percentile(latency_us, 99.9)),
+            throughput_shots_per_s=shots / t_total if t_total > 0 else 0,
+            peak_memory_mb=peak / (1024 * 1024),
+        )
+
+        logger.info(
+            f"UF decode: {shots} shots, "
+            f"LER={error_rate:.6f} ({num_errors}/{shots}), "
+            f"time={t_total:.3f}s, "
+            f"throughput={metrics.throughput_shots_per_s:.0f} shots/s, "
+            f"P99={metrics.latency_p99_us:.1f}us"
+        )
+        return metrics
+

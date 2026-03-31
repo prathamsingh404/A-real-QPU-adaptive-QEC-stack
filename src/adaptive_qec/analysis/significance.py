@@ -209,3 +209,91 @@ class SignificanceTester:
             test_statistic=float(u_stat),
             p_value=float(p_value),
             significant=float(p_value) < self._alpha,
+            alpha=self._alpha,
+            effect_size=float(r),
+            confidence_interval=(0.0, 0.0),  # not applicable for MWU
+            sample_sizes=(n1, n2),
+            notes="Rank-biserial correlation used as effect size",
+        )
+
+    def bootstrap_ci(
+        self,
+        baseline: Any,
+        treatment: Any,
+    ) -> tuple[float, float]:
+        """Bootstrap confidence interval for the difference in means.
+
+        Returns the (alpha/2, 1-alpha/2) percentile CI.
+        """
+        b = np.asarray(baseline, dtype=np.float64)
+        t = np.asarray(treatment, dtype=np.float64)
+        diffs: list[float] = []
+        n_b, n_t = len(b), len(t)
+
+        for _ in range(self._bootstrap_n):
+            b_sample = self._rng.choice(b, size=n_b, replace=True)
+            t_sample = self._rng.choice(t, size=n_t, replace=True)
+            diffs.append(float(np.mean(b_sample) - np.mean(t_sample)))
+
+        lower = float(np.percentile(diffs, 100 * self._alpha / 2))
+
+        upper = float(np.percentile(diffs, 100 * (1 - self._alpha / 2)))
+        return (lower, upper)
+
+    def compare(
+        self,
+        baseline_rewards: np.ndarray,
+        treatment_rewards: np.ndarray,
+        baseline_name: str = "static",
+        treatment_name: str = "adaptive",
+    ) -> ComparisonReport:
+        """Run full statistical comparison between two controllers.
+
+        Uses error rates (1 - reward) for the comparison since
+        lower error rate = better controller.
+
+        Parameters
+        ----------
+        baseline_rewards : np.ndarray
+            Per-window rewards from the baseline controller.
+        treatment_rewards : np.ndarray
+            Per-window rewards from the treatment controller.
+
+        Returns
+        -------
+        ComparisonReport
+            Complete statistical analysis.
+        """
+        # Convert to error rates for the comparison
+        baseline_errors = 1.0 - baseline_rewards
+        treatment_errors = 1.0 - treatment_rewards
+
+        # Run tests
+        t_test = self.welch_t_test(baseline_errors, treatment_errors)
+        mw_test = self.mann_whitney_test(baseline_errors, treatment_errors)
+        boot_ci = self.bootstrap_ci(baseline_errors, treatment_errors)
+
+        baseline_mean = float(np.mean(baseline_errors))
+        treatment_mean = float(np.mean(treatment_errors))
+        abs_improvement = baseline_mean - treatment_mean
+        rel_improvement = abs_improvement / max(baseline_mean, 1e-10)
+
+        # Conclusion
+        if t_test.significant and mw_test.significant:
+            conclusion = (
+                f"SIGNIFICANT: {treatment_name} achieves a "
+                f"{rel_improvement*100:.2f}% lower error rate than {baseline_name} "
+                f"(Welch p={t_test.p_value:.4f}, MW p={mw_test.p_value:.4f}, "
+                f"Cohen's d={t_test.effect_size:.3f})"
+            )
+        elif t_test.significant or mw_test.significant:
+            conclusion = (
+                f"MIXED: One test is significant, one is not. "
+                f"Welch p={t_test.p_value:.4f}, MW p={mw_test.p_value:.4f}. "
+                f"Collect more data."
+            )
+        else:
+            conclusion = (
+                f"NOT SIGNIFICANT: Cannot conclude {treatment_name} is better "
+                f"than {baseline_name} at α={self._alpha} "
+                f"(Welch p={t_test.p_value:.4f}, MW p={mw_test.p_value:.4f})"

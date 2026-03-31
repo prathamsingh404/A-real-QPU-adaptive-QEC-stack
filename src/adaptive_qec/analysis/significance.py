@@ -297,3 +297,56 @@ class SignificanceTester:
                 f"NOT SIGNIFICANT: Cannot conclude {treatment_name} is better "
                 f"than {baseline_name} at α={self._alpha} "
                 f"(Welch p={t_test.p_value:.4f}, MW p={mw_test.p_value:.4f})"
+            )
+
+        return ComparisonReport(
+            baseline_name=baseline_name,
+            treatment_name=treatment_name,
+            baseline_mean=baseline_mean,
+            treatment_mean=treatment_mean,
+            absolute_improvement=abs_improvement,
+            relative_improvement=rel_improvement,
+            tests=[t_test, mw_test],
+            bootstrap_ci=boot_ci,
+            conclusion=conclusion,
+        )
+
+    @staticmethod
+    def benjamini_hochberg(
+        p_values: list[float],
+        alpha: float = 0.05,
+    ) -> list[bool]:
+        """Benjamini-Hochberg FDR correction for multiple comparisons.
+
+        Returns a boolean mask: True = reject null at controlled FDR.
+        """
+        n = len(p_values)
+        if n == 0:
+            return []
+
+        # Sort p-values
+        sorted_indices = np.argsort(p_values)
+        sorted_p = np.array(p_values)[sorted_indices]
+
+        # BH threshold: p_(k) ≤ (k/n) * α
+        thresholds = np.arange(1, n + 1) / n * alpha
+        rejected = sorted_p <= thresholds
+
+        # Find the largest k such that p_(k) ≤ threshold
+        if not np.any(rejected):
+            return [False] * n
+
+        max_rejected = np.max(np.where(rejected)[0])
+        rejected[:max_rejected + 1] = True
+        rejected[max_rejected + 1:] = False
+
+        # Map back to original order
+        result = [False] * n
+        for i, orig_idx in enumerate(sorted_indices):
+            result[orig_idx] = bool(rejected[i])
+
+        return result
+
+
+benjamini_hochberg = SignificanceTester.benjamini_hochberg
+

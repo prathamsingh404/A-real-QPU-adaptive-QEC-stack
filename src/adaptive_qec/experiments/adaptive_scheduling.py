@@ -123,3 +123,129 @@ class AdaptiveSchedulingExperiment:
             ScheduleType.BALANCED,
             ScheduleType.X_HEAVY,
             ScheduleType.Z_HEAVY,
+        ]
+
+        for eta in cfg.bias_values:
+            logger.info(f"\n--- Bias η = {eta:.2f} ---")
+
+            # Build biased circuit
+            p_x, p_z = self._bias_to_error_rates(
+                cfg.base_error_rate, eta
+            )
+            logger.info(f"  p_X = {p_x:.6f}, p_Z = {p_z:.6f}")
+
+            # Fixed schedules
+            for sched_type in schedules_to_test:
+                result = self._run_fixed_schedule(
+                    eta=eta, p_x=p_x, p_z=p_z, schedule_type=sched_type
+                )
+                self._results.append(result)
+                logger.info(
+                    f"  {sched_type.value}: LER = {result.ler:.6f} "
+                    f"[{result.ci_lower:.6f}, {result.ci_upper:.6f}]"
+                )
+
+            # Adaptive schedule
+            result = self._run_adaptive_schedule(eta=eta, p_x=p_x, p_z=p_z)
+            self._results.append(result)
+            logger.info(
+                f"  adaptive: LER = {result.ler:.6f} "
+                f"[{result.ci_lower:.6f}, {result.ci_upper:.6f}] "
+                f"({result.adaptive_switches} switches)"
+            )
+
+        elapsed = time.time() - t_start
+        logger.info(f"Experiment complete in {elapsed:.1f}s")
+
+        self._save_results()
+        return self._results
+
+    def _bias_to_error_rates(
+        self,
+        p_total: float,
+        eta: float,
+    ) -> tuple[float, float]:
+        """
+        Convert total error rate and bias η to p_X and p_Z.
+
+        Under biased noise model:
+            p_Z = η · p_X
+            p_total = p_X + p_Z + p_Y ≈ p_X + p_Z (ignoring p_Y)
+            p_X = p_total / (1 + η)
+            p_Z = η · p_total / (1 + η)
+        """
+        p_x = p_total / (1 + eta)
+        p_z = eta * p_total / (1 + eta)
+        return p_x, p_z
+
+    def _build_biased_circuit(
+        self,
+        p_x: float,
+        p_z: float,
+        schedule_type: Optional[ScheduleType] = None,
+    ) -> stim.Circuit:
+        """Build a Stim circuit with biased noise and stabilizer schedule."""
+        d = self._config.code_distance
+        r = self._config.num_rounds
+
+        # Model the physical effect of check schedule frequency on error accumulation:
+        # Measuring an observable more frequently shortens idle accumulation time Delta t.
+        # X-heavy schedule measures X-checks twice as often, halving accumulation time for Z errors,
+        # but doubling accumulation time for X errors on Z checks.
+        scale_x = 1.0
+        scale_z = 1.0
+        if schedule_type == ScheduleType.X_HEAVY:
+            scale_z = 0.55
+            scale_x = 1.80
+        elif schedule_type == ScheduleType.Z_HEAVY:
+            scale_x = 0.55
+            scale_z = 1.80
+        elif schedule_type == ScheduleType.EXTREME_X:
+            scale_z = 0.35
+            scale_x = 2.50
+        elif schedule_type == ScheduleType.EXTREME_Z:
+            scale_x = 0.35
+            scale_z = 2.50
+
+        eff_px = min(p_x * scale_x, 0.20)
+        eff_pz = min(p_z * scale_z, 0.20)
+        p_total = eff_px + eff_pz
+
+        circuit = stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=d,
+            rounds=r,
+            after_clifford_depolarization=p_total,
+            before_round_data_depolarization=p_total,
+            before_measure_flip_probability=min(p_total * 1.5, 0.20),
+            after_reset_flip_probability=min(p_total * 0.5, 0.20),
+        )
+        return circuit
+
+    def _run_fixed_schedule(
+        self,
+        eta: float,
+        p_x: float,
+        p_z: float,
+        schedule_type: ScheduleType,
+    ) -> BiasPointResult:
+        """Run experiment with a fixed stabilizer schedule."""
+        circuit = self._build_biased_circuit(p_x, p_z, schedule_type=schedule_type)
+        sampler = circuit.compile_detector_sampler()
+        dem = circuit.detector_error_model(decompose_errors=True)
+
+        import pymatching
+        matcher = pymatching.Matching.from_detector_error_model(dem)
+
+        shots = self._config.shots_per_schedule
+        detection_events, observable_flips = sampler.sample(
+            shots=shots,
+            separate_observables=True,
+        )
+
+        predictions = matcher.decode_batch(detection_events)
+        n_obs = observable_flips.shape[1] if observable_flips.ndim > 1 else 1
+        pred_flat = predictions[:, :n_obs] if predictions.ndim > 1 else predictions.reshape(-1, 1)
+        obs_flat = observable_flips if observable_flips.ndim > 1 else observable_flips.reshape(-1, 1)
+
+        logical_errors = int(np.sum(np.any(pred_flat != obs_flat, axis=1)))

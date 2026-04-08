@@ -170,3 +170,76 @@ class HardwareBaselineExperiment:
                 "overall_ler": total_errors / total_shots if total_shots > 0 else 0.0,
                 "ci_95_lower": ci_low,
                 "ci_95_upper": ci_high,
+            },
+            "ler_statistics": {
+                "mean": float(np.mean(lers)),
+                "std": float(np.std(lers)),
+                "median": float(np.median(lers)),
+                "min": float(np.min(lers)),
+                "max": float(np.max(lers)),
+                "p25": float(np.percentile(lers, 25)),
+                "p75": float(np.percentile(lers, 75)),
+            },
+            "timing": {
+                "mean_batch_time_s": float(np.mean(exec_times)),
+                "p50_batch_time_s": float(np.median(exec_times)),
+                "p95_batch_time_s": float(np.percentile(exec_times, 95)),
+                "p99_batch_time_s": float(np.percentile(exec_times, 99)),
+                "total_time_s": float(np.sum(exec_times)),
+            },
+            "per_batch_ler": [round(l, 6) for l in lers],
+        }
+
+    def _print_summary(self, analysis: dict[str, Any]) -> None:
+        """Print a human-readable summary."""
+        s = analysis.get("summary", {})
+        t = analysis.get("timing", {})
+
+        print(f"\n{'='*50}")
+        print(f"HARDWARE BASELINE RESULTS")
+        print(f"{'='*50}")
+        print(f"Backend:         {analysis['config']['backend']}")
+        print(f"Dry run:         {analysis['config']['dry_run']}")
+        print(f"Total shots:     {s.get('total_shots', 0):,}")
+        print(f"Total errors:    {s.get('total_errors', 0):,}")
+        print(f"Overall LER:     {s.get('overall_ler', 0):.6f}")
+        print(f"95% CI:          [{s.get('ci_95_lower', 0):.6f}, "
+              f"{s.get('ci_95_upper', 0):.6f}]")
+        print(f"Avg batch time:  {t.get('mean_batch_time_s', 0):.3f}s")
+        print(f"Total time:      {analysis['config']['total_elapsed_s']:.1f}s")
+        print(f"{'='*50}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Hardware baseline experiment"
+    )
+    parser.add_argument("--backend", type=str, default="ibm_marrakesh")
+    parser.add_argument("--distance", type=int, default=3)
+    parser.add_argument("--batches", type=int, default=20)
+    parser.add_argument("--shots", type=int, default=1000)
+    parser.add_argument("--dry-run", action="store_true", default=True)
+    parser.add_argument("--output", type=str,
+                        default="experiments/results/hardware_baseline")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    config = HardwareBaselineConfig(
+        backend_name=args.backend,
+        code_distance=args.distance,
+        num_batches=args.batches,
+        shots_per_batch=args.shots,
+        dry_run=args.dry_run,
+        output_dir=args.output,
+    )
+
+    experiment = HardwareBaselineExperiment(config)
+    experiment.run()
+
+
+if __name__ == "__main__":
+    main()

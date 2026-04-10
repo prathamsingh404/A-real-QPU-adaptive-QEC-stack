@@ -249,3 +249,107 @@ class AdaptiveSchedulingExperiment:
         obs_flat = observable_flips if observable_flips.ndim > 1 else observable_flips.reshape(-1, 1)
 
         logical_errors = int(np.sum(np.any(pred_flat != obs_flat, axis=1)))
+        ler = logical_errors / shots
+        ci_low, ci_high = wilson_score_ci(logical_errors, shots)
+
+        return BiasPointResult(
+            bias_eta=eta,
+            schedule_type=schedule_type.value,
+            total_errors=logical_errors,
+            total_shots=shots,
+            ler=ler,
+            ci_lower=ci_low,
+            ci_upper=ci_high,
+        )
+
+    def _run_adaptive_schedule(
+        self,
+        eta: float,
+        p_x: float,
+        p_z: float,
+    ) -> BiasPointResult:
+        """Run experiment with adaptive stabilizer scheduling."""
+        scheduler = AdaptiveXZScheduler(
+            AdaptiveSchedulerConfig(
+                ewma_alpha=self._config.ewma_alpha,
+                theta_enter=self._config.theta_enter,
+                theta_exit=self._config.theta_exit,
+            )
+        )
+
+        shots_per_window = self._config.shots_per_schedule // self._config.num_windows
+        total_errors = 0
+        total_shots = 0
+
+        import pymatching
+
+        for window_idx in range(self._config.num_windows):
+            current_sched = scheduler.current_schedule
+            circuit = self._build_biased_circuit(p_x, p_z, schedule_type=current_sched.schedule_type)
+            dem = circuit.detector_error_model(decompose_errors=True)
+            matcher = pymatching.Matching.from_detector_error_model(dem)
+
+            sampler = circuit.compile_detector_sampler()
+            detection_events, observable_flips = sampler.sample(
+                shots=shots_per_window,
+                separate_observables=True,
+            )
+
+            # Extract detector coordinates to separate X and Z checks correctly
+            n_det = detection_events.shape[1]
+            det_coords = circuit.get_detector_coordinates()
+            x_indices: list[int] = []
+            z_indices: list[int] = []
+
+            for d_id, coords in det_coords.items():
+                if len(coords) >= 2:
+                    if int(round(coords[0] + coords[1])) % 4 == 0:
+                        x_indices.append(d_id)
+                    else:
+                        z_indices.append(d_id)
+
+            if not x_indices or not z_indices:
+                x_indices = list(range(0, n_det, 2))
+                z_indices = list(range(1, n_det, 2))
+
+            x_det = int(np.sum(detection_events[:, x_indices]))
+            z_det = int(np.sum(detection_events[:, z_indices]))
+
+            obs = DefectObservation(
+                round_idx=window_idx,
+                x_defects=x_det,
+                z_defects=z_det,
+                total_x_stabilizers=len(x_indices),
+                total_z_stabilizers=len(z_indices),
+            )
+            scheduler.update(obs)
+
+            # Decode
+            predictions = matcher.decode_batch(detection_events)
+            n_obs = observable_flips.shape[1] if observable_flips.ndim > 1 else 1
+            pred_flat = predictions[:, :n_obs] if predictions.ndim > 1 else predictions.reshape(-1, 1)
+            obs_flat = observable_flips if observable_flips.ndim > 1 else observable_flips.reshape(-1, 1)
+
+            logical_errors = int(np.sum(np.any(pred_flat != obs_flat, axis=1)))
+            total_errors += logical_errors
+            total_shots += shots_per_window
+
+        ler = total_errors / total_shots if total_shots > 0 else 0.0
+        ci_low, ci_high = wilson_score_ci(total_errors, total_shots)
+
+        return BiasPointResult(
+            bias_eta=eta,
+            schedule_type="adaptive",
+            total_errors=total_errors,
+            total_shots=total_shots,
+            ler=ler,
+            ci_lower=ci_low,
+            ci_upper=ci_high,
+            adaptive_switches=scheduler.switch_count,
+        )
+
+
+    def _save_results(self) -> None:
+        """Save experiment results to disk."""
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        output_dir = Path(self._config.output_dir) / timestamp

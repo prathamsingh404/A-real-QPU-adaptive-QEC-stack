@@ -353,3 +353,66 @@ class AdaptiveSchedulingExperiment:
         """Save experiment results to disk."""
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         output_dir = Path(self._config.output_dir) / timestamp
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        results_data = [
+            {
+                "bias_eta": r.bias_eta,
+                "schedule_type": r.schedule_type,
+                "total_errors": r.total_errors,
+                "total_shots": r.total_shots,
+                "ler": r.ler,
+                "ci_lower": r.ci_lower,
+                "ci_upper": r.ci_upper,
+                "adaptive_switches": r.adaptive_switches,
+            }
+            for r in self._results
+        ]
+
+        with open(output_dir / "results.json", "w") as f:
+            json.dump(results_data, f, indent=2)
+
+        logger.info(f"Results saved to {output_dir}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Adaptive scheduling experiment"
+    )
+    parser.add_argument("--distance", type=int, default=3)
+    parser.add_argument("--shots", type=int, default=50000)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--output", type=str,
+                        default="experiments/results/adaptive_scheduling")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    config = SchedulingExperimentConfig(
+        code_distance=args.distance,
+        shots_per_schedule=args.shots,
+        seed=args.seed,
+        output_dir=args.output,
+    )
+
+    experiment = AdaptiveSchedulingExperiment(config)
+    results = experiment.run()
+
+    # Print summary table
+    print(f"\n{'='*70}")
+    print(f"{'Bias eta':>8}  {'Schedule':>12}  {'LER':>10}  {'95% CI':>24}")
+    print(f"{'='*70}")
+    for r in results:
+        print(
+            f"{r.bias_eta:>8.2f}  {r.schedule_type:>12}  "
+            f"{r.ler:>10.6f}  [{r.ci_lower:.6f}, {r.ci_upper:.6f}]"
+        )
+    print(f"{'='*70}")
+
+
+
+if __name__ == "__main__":
+    main()

@@ -253,3 +253,145 @@ class BanditVsStaticExperiment:
             noise = self._noise_scenario.get_noise(window_idx)
 
             # Build noise-injected circuit for this window
+            noisy_circuit = self._inject_noise(circuit, noise)
+
+            # Sample syndromes and observables
+            sampler = noisy_circuit.compile_detector_sampler()
+            detection_events, observable_flips = sampler.sample(
+                shots=cfg.shots_per_window,
+                separate_observables=True,
+            )
+
+            # Build hardware state for controllers
+            hw_state = HardwareState(
+                error_rate=noise.gate_error_2q,
+                t1_us=noise.t1_us,
+                t2_us=noise.t2_us,
+                readout_error=noise.readout_error,
+                gate_error_1q=noise.gate_error_1q,
+                gate_error_2q=noise.gate_error_2q,
+            )
+
+            # Run each controller arm on identical syndrome data
+            for ctrl_name, ctrl in self._controllers.items():
+                t_arm = time.time()
+
+                # Get controller decision
+                ctrl.observe(hw_state)
+                action = ctrl.decide()
+
+                # Dispatch decoder based on arm action
+                dec_str = action.decoder.value if hasattr(action.decoder, "value") else str(action.decoder)
+                if "union" in dec_str.lower() or "uf" in dec_str.lower():
+                    predictions = uf_decoder.decode_batch(detection_events)
+                else:
+                    predictions = mwpm_matcher.decode_batch(detection_events)
+
+                n_obs = observable_flips.shape[1] if observable_flips.ndim > 1 else 1
+                pred_flat = predictions[:, :n_obs] if predictions.ndim > 1 else predictions.reshape(-1, 1)
+                obs_flat = observable_flips if observable_flips.ndim > 1 else observable_flips.reshape(-1, 1)
+                logical_errors = int(np.sum(np.any(pred_flat != obs_flat, axis=1)))
+
+                ler = logical_errors / cfg.shots_per_window
+                ci_low, ci_high = wilson_score_ci(
+                    logical_errors, cfg.shots_per_window
+                )
+
+                # Update controller with reward
+                reward = 1.0 - ler
+                ctrl.update(reward)
+
+                # Record result
+                self._results[ctrl_name].append(ArmWindowResult(
+                    window_idx=window_idx,
+                    arm_name=ctrl_name,
+                    logical_errors=logical_errors,
+                    total_shots=cfg.shots_per_window,
+                    ler=ler,
+                    ci_lower=ci_low,
+                    ci_upper=ci_high,
+                    controller_action={
+                        "decoder": action.decoder,
+                        "dd_sequence": action.dd_sequence,
+                    } if hasattr(action, "decoder") else None,
+                    execution_time_s=time.time() - t_arm,
+                ))
+
+            if (window_idx + 1) % 10 == 0:
+                self._log_progress(window_idx + 1)
+
+        elapsed = time.time() - t_start
+        logger.info(f"Experiment complete in {elapsed:.1f}s")
+
+        # Analyze and save results
+        summary = self._analyze()
+        self._save_results(summary)
+        return summary
+
+    def _build_stim_circuit(self) -> stim.Circuit:
+        """Build base Stim surface code circuit."""
+        d = self._config.code_distance
+        r = self._config.num_rounds
+        p = self._config.physical_error_rate
+
+        circuit = stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=d,
+            rounds=r,
+            after_clifford_depolarization=p,
+            before_round_data_depolarization=p,
+            before_measure_flip_probability=p * 2,
+            after_reset_flip_probability=p * 0.5,
+        )
+        return circuit
+
+    def _inject_noise(
+        self,
+        circuit: stim.Circuit,
+        noise: Any,
+    ) -> stim.Circuit:
+        """
+        Re-generate circuit with noise parameters from the scenario.
+
+        Instead of modifying the circuit in-place, we regenerate it
+        with the current noise levels — this ensures Stim's noise
+        model is correctly applied everywhere.
+        """
+        d = self._config.code_distance
+        r = self._config.num_rounds
+        p = noise.gate_error_2q
+
+        return stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=d,
+            rounds=r,
+            after_clifford_depolarization=p,
+            before_round_data_depolarization=p,
+            before_measure_flip_probability=noise.readout_error,
+            after_reset_flip_probability=p * 0.5,
+        )
+
+    def _log_progress(self, window: int) -> None:
+        """Log progress after a batch of windows."""
+        for name, results in self._results.items():
+            recent = results[-10:]
+            avg_ler = np.mean([r.ler for r in recent])
+            logger.info(f"  {name}: avg LER (last 10) = {avg_ler:.6f}")
+
+    def _analyze(self) -> ExperimentSummary:
+        """
+        Perform statistical analysis of experiment results.
+
+        Compares all arms, identifies best static and adaptive,
+        and tests for statistical significance.
+        """
+        cfg = self._config
+        arm_summaries = {}
+
+        for name, results in self._results.items():
+            lers = [r.ler for r in results]
+            total_errors = sum(r.logical_errors for r in results)
+            total_shots = sum(r.total_shots for r in results)
+            overall_ler = total_errors / total_shots if total_shots > 0 else 0.0
+            ci_low, ci_high = wilson_score_ci(total_errors, total_shots)
+

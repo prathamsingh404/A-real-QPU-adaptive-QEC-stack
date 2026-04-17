@@ -497,3 +497,71 @@ class BanditVsStaticExperiment:
             f"{summary.adaptive_improvement_pct:.1f}% "
             f"(p={summary.p_value:.4f}, "
             f"{'SIGNIFICANT' if summary.significant else 'not significant'})"
+        )
+
+
+# -----------------------------------------------------------------------
+# CLI entry point
+# -----------------------------------------------------------------------
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Bandit vs Static QEC experiment"
+    )
+    parser.add_argument(
+        "--distance", type=int, default=3,
+        help="Code distance (default: 3)",
+    )
+    parser.add_argument(
+        "--windows", type=int, default=50,
+        help="Number of evaluation windows (default: 50)",
+    )
+    parser.add_argument(
+        "--shots", type=int, default=2000,
+        help="Shots per window (default: 2000)",
+    )
+    parser.add_argument(
+        "--scenario", type=str, default="multi_phase",
+        choices=["stationary", "drift", "burst", "multi_phase"],
+        help="Noise scenario (default: multi_phase)",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42,
+        help="Random seed (default: 42)",
+    )
+    parser.add_argument(
+        "--output", type=str, default="experiments/results/bandit_vs_static",
+        help="Output directory",
+    )
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    config = BanditExperimentConfig(
+        code_distance=args.distance,
+        num_windows=args.windows,
+        shots_per_window=args.shots,
+        scenario=args.scenario,
+        seed=args.seed,
+        output_dir=args.output,
+    )
+
+    experiment = BanditVsStaticExperiment(config)
+    summary = experiment.run()
+
+    print(f"\n{'='*60}")
+    print(f"EXPERIMENT COMPLETE")
+    print(f"{'='*60}")
+    print(f"Best static:   {summary.best_static}")
+    print(f"Best adaptive: {summary.best_adaptive}")
+    print(f"Improvement:   {summary.adaptive_improvement_pct:.1f}%")
+    print(f"p-value:       {summary.p_value:.4f}")
+    print(f"Significant:   {summary.significant}")
+    print(f"{'='*60}")
+
+
+if __name__ == "__main__":
+    main()

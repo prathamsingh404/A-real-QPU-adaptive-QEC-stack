@@ -395,3 +395,105 @@ class BanditVsStaticExperiment:
             overall_ler = total_errors / total_shots if total_shots > 0 else 0.0
             ci_low, ci_high = wilson_score_ci(total_errors, total_shots)
 
+            arm_summaries[name] = {
+                "overall_ler": overall_ler,
+                "ci_lower": ci_low,
+                "ci_upper": ci_high,
+                "mean_ler": float(np.mean(lers)),
+                "std_ler": float(np.std(lers)),
+                "median_ler": float(np.median(lers)),
+                "total_errors": total_errors,
+                "total_shots": total_shots,
+            }
+
+        # Identify best static and adaptive
+        static_arms = {k: v for k, v in arm_summaries.items() if k.startswith("static")}
+        adaptive_arms = {k: v for k, v in arm_summaries.items() if not k.startswith("static")}
+
+        best_static_name = min(static_arms, key=lambda k: static_arms[k]["overall_ler"])
+        best_adaptive_name = min(adaptive_arms, key=lambda k: adaptive_arms[k]["overall_ler"])
+
+        best_static_ler = static_arms[best_static_name]["overall_ler"]
+        best_adaptive_ler = adaptive_arms[best_adaptive_name]["overall_ler"]
+
+        improvement = 0.0
+        if best_static_ler > 0:
+            improvement = (best_static_ler - best_adaptive_ler) / best_static_ler * 100
+
+        # Statistical test: adaptive vs best static
+        static_results = self._results[best_static_name]
+        adaptive_results = self._results[best_adaptive_name]
+
+        static_lers = [r.ler for r in static_results]
+        adaptive_lers = [r.ler for r in adaptive_results]
+
+        test_result = welch_t_test(static_lers, adaptive_lers)
+
+        return ExperimentSummary(
+            total_windows=cfg.num_windows,
+            total_shots_per_arm=cfg.shots_per_window * cfg.num_windows,
+            arms=arm_summaries,
+            best_static=best_static_name,
+            best_adaptive=best_adaptive_name,
+            adaptive_improvement_pct=improvement,
+            p_value=test_result.p_value,
+            significant=test_result.significant,
+        )
+
+    def _save_results(self, summary: ExperimentSummary) -> None:
+        """Save experiment results and summary."""
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        output_dir = Path(self._config.output_dir) / timestamp
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save summary
+        summary_dict = {
+            "total_windows": summary.total_windows,
+            "total_shots_per_arm": summary.total_shots_per_arm,
+            "best_static": summary.best_static,
+            "best_adaptive": summary.best_adaptive,
+            "adaptive_improvement_pct": round(summary.adaptive_improvement_pct, 2),
+            "p_value": summary.p_value,
+            "significant": summary.significant,
+            "arms": summary.arms,
+        }
+        with open(output_dir / "summary.json", "w") as f:
+            json.dump(summary_dict, f, indent=2)
+
+        # Save per-window results
+        results_dict = {}
+        for name, results in self._results.items():
+            results_dict[name] = [
+                {
+                    "window": r.window_idx,
+                    "ler": r.ler,
+                    "ci_lower": r.ci_lower,
+                    "ci_upper": r.ci_upper,
+                    "logical_errors": r.logical_errors,
+                    "total_shots": r.total_shots,
+                    "controller_action": r.controller_action,
+                }
+                for r in results
+            ]
+        with open(output_dir / "results.json", "w") as f:
+            json.dump(results_dict, f, indent=2)
+
+        # Save controller telemetry
+        if self._config.save_telemetry:
+            telemetry = {}
+            for name, ctrl in self._controllers.items():
+                if hasattr(ctrl, "telemetry"):
+                    telemetry[name] = [
+                        t.to_dict() if hasattr(t, "to_dict") else str(t)
+                        for t in ctrl.telemetry
+                    ]
+            with open(output_dir / "telemetry.json", "w") as f:
+                json.dump(telemetry, f, indent=2)
+
+        logger.info(f"Results saved to {output_dir}")
+        logger.info(
+            f"RESULT: {summary.best_adaptive} improved over "
+            f"{summary.best_static} by "
+            f"{summary.adaptive_improvement_pct:.1f}% "
+            f"(p={summary.p_value:.4f}, "
+            f"{'SIGNIFICANT' if summary.significant else 'not significant'})"

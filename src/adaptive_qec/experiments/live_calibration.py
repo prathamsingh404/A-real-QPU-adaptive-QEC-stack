@@ -275,3 +275,58 @@ class LiveCalibrationExperiment:
                     "mean_ler": float(np.mean(uf_lers)),
                     "std_ler": float(np.std(uf_lers)),
                 },
+                "comparison": {
+                    "relative_improvement_pct": rel_improvement,
+                    "p_value": t_test_static.p_value,
+                    "statistic": t_test_static.statistic,
+                    "significant_at_05": t_test_static.p_value < 0.05,
+                    "significant_at_01": t_test_static.p_value < 0.01,
+                },
+                "elapsed_s": round(elapsed, 2),
+            },
+            "per_window": [
+                {
+                    "window": r.window_idx,
+                    "p_2q": r.p_2q,
+                    "p_ro": r.p_ro,
+                    "static_ler": r.static_ler,
+                    "calibrated_ler": r.calibrated_ler,
+                    "uf_ler": r.uf_ler,
+                }
+                for r in self._records
+            ],
+        }
+
+    def _save_results(self, results: dict[str, Any]) -> None:
+        """Save results to disk."""
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        output_dir = Path(self._config.output_dir) / timestamp
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(output_dir / "results.json", "w") as f:
+            json.dump(results, f, indent=2, default=str)
+
+        logger.info(f"Results saved to {output_dir}")
+
+    def _print_summary(self, results: dict[str, Any]) -> None:
+        """Print experiment summary to console."""
+        sm = results["summary"]
+        comp = sm["comparison"]
+        print("\n" + "=" * 70)
+        print("LIVE DEM CALIBRATION EXPERIMENT RESULTS")
+        print("=" * 70)
+        print(f"  Code distance:        d={results['config']['code_distance']}")
+        print(f"  Total shots:          {sm['total_shots']:,}")
+        print(f"  Scenario:             {results['config']['scenario']}")
+        print("-" * 70)
+        print(f"  Static Factory MWPM:  LER = {sm['static_mwpm']['overall_ler']:.6f}  95% CI [{sm['static_mwpm']['ci_95'][0]:.6f}, {sm['static_mwpm']['ci_95'][1]:.6f}]")
+        print(f"  Live-Calibrated MWPM: LER = {sm['calibrated_mwpm']['overall_ler']:.6f}  95% CI [{sm['calibrated_mwpm']['ci_95'][0]:.6f}, {sm['calibrated_mwpm']['ci_95'][1]:.6f}]")
+        print(f"  Static Union-Find:    LER = {sm['static_uf']['overall_ler']:.6f}  95% CI [{sm['static_uf']['ci_95'][0]:.6f}, {sm['static_uf']['ci_95'][1]:.6f}]")
+        print("-" * 70)
+        print(f"  Relative Gain:        {comp['relative_improvement_pct']:+.2f}%")
+        print(f"  Welch t-statistic:    {comp['statistic']:.4f}")
+        print(f"  p-value:              {comp['p_value']:.6f}")
+        print(f"  Significant (p < .05): {comp['significant_at_05']}")
+        print(f"  Significant (p < .01): {comp['significant_at_01']}")
+        print(f"  Elapsed:              {sm['elapsed_s']:.1f}s")
+        print("=" * 70 + "\n")

@@ -90,3 +90,95 @@ class LiveCalibrationExperiment:
 
         # Baseline nominal circuit and static factory matcher
         self._nominal_circuit = self._build_circuit(
+            p_2q=config.nominal_error_rate,
+            p_ro=config.nominal_error_rate * 2.0,
+        )
+        self._static_dem = self._nominal_circuit.detector_error_model(decompose_errors=True)
+        self._static_matcher = pymatching.Matching.from_detector_error_model(self._static_dem)
+
+        # DEM Calibrator initialized with nominal circuit
+        self._calibrator = DEMCalibrator(
+            circuit=self._nominal_circuit,
+            min_probability=1e-6,
+            max_probability=0.4999,
+        )
+
+        # Union-Find decoder
+        self._uf_decoder = UnionFindDecoder()
+        self._uf_decoder.configure_from_dem(self._static_dem)
+
+        # Noise scenario
+        self._scenario = self._create_scenario()
+
+        # Telemetry
+        self._records: list[WindowComparison] = []
+
+    def _build_circuit(self, p_2q: float, p_ro: float) -> stim.Circuit:
+        """Construct surface code circuit with specified physical noise rates."""
+        d = self._config.code_distance
+        r = self._config.num_rounds
+        return stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=d,
+            rounds=r,
+            after_clifford_depolarization=p_2q,
+            before_round_data_depolarization=p_2q,
+            before_measure_flip_probability=p_ro,
+            after_reset_flip_probability=p_ro * 0.5,
+        )
+
+    def _create_scenario(self) -> NoiseScenarioFactory:
+        """Create noise scenario based on config."""
+        n = self._config.num_windows
+        scenarios = {
+            "stationary": lambda: stationary_scenario(total_steps=n),
+            "drift": lambda: drift_scenario(total_steps=n, rate=0.0003),
+            "burst": lambda: burst_scenario(total_steps=n),
+            "multi_phase": lambda: multi_phase_scenario(total_steps=n),
+        }
+        factory_fn = scenarios.get(self._config.scenario, scenarios["drift"])
+        return factory_fn()
+
+    def run(self) -> dict[str, Any]:
+        """Execute the live calibration experiment."""
+        logger.info(
+            f"Starting LIVE CALIBRATION experiment: d={self._config.code_distance}, "
+            f"windows={self._config.num_windows}, scenario={self._config.scenario}"
+        )
+        t_start = time.time()
+        cfg = self._config
+
+        for window_idx in range(cfg.num_windows):
+            snapshot: NoiseSnapshot = self._scenario.step()
+            p_2q = snapshot.p_2q
+            p_ro = snapshot.p_ro
+
+            # Generate real drifting circuit and sample syndromes
+            noisy_circuit = self._build_circuit(p_2q=p_2q, p_ro=p_ro)
+            sampler = noisy_circuit.compile_detector_sampler(seed=int(self._rng.integers(0, 2**31)))
+            detection_events, observables = sampler.sample(
+                shots=cfg.shots_per_window,
+                separate_observables=True,
+            )
+
+            obs_flat = observables[:, :1] if observables.ndim > 1 else observables.reshape(-1, 1)
+
+            # 1. Decode with Static Factory MWPM
+            static_preds = self._static_matcher.decode_batch(detection_events)
+            static_flat = static_preds[:, :1] if static_preds.ndim > 1 else static_preds.reshape(-1, 1)
+            static_errs = int(np.sum(np.any(static_flat != obs_flat, axis=1)))
+
+            # 2. Decode with Live-Calibrated MWPM
+            calibrated_dem: CalibratedDEM = self._calibrator.calibrate_from_syndromes(
+                detection_events,
+                smoothing=cfg.smoothing,
+                calibration_timestamp=f"window_{window_idx}",
+            )
+            calibrated_matcher = calibrated_dem.to_matching()
+            cal_preds = calibrated_matcher.decode_batch(detection_events)
+            cal_flat = cal_preds[:, :1] if cal_preds.ndim > 1 else cal_preds.reshape(-1, 1)
+            cal_errs = int(np.sum(np.any(cal_flat != obs_flat, axis=1)))
+
+            # 3. Decode with Static Union-Find
+            uf_preds = self._uf_decoder.decode_batch(detection_events)
+            uf_flat = uf_preds[:, :1] if uf_preds.ndim > 1 else uf_preds.reshape(-1, 1)

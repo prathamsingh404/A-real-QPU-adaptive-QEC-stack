@@ -182,3 +182,96 @@ class LiveCalibrationExperiment:
             # 3. Decode with Static Union-Find
             uf_preds = self._uf_decoder.decode_batch(detection_events)
             uf_flat = uf_preds[:, :1] if uf_preds.ndim > 1 else uf_preds.reshape(-1, 1)
+            uf_errs = int(np.sum(np.any(uf_flat != obs_flat, axis=1)))
+
+            rec = WindowComparison(
+                window_idx=window_idx,
+                p_2q=p_2q,
+                p_ro=p_ro,
+                static_errors=static_errs,
+                calibrated_errors=cal_errs,
+                uf_errors=uf_errs,
+                total_shots=cfg.shots_per_window,
+                static_ler=static_errs / cfg.shots_per_window,
+                calibrated_ler=cal_errs / cfg.shots_per_window,
+                uf_ler=uf_errs / cfg.shots_per_window,
+            )
+            self._records.append(rec)
+
+            if (window_idx + 1) % 10 == 0 or window_idx == cfg.num_windows - 1:
+                logger.info(
+                    f"Window {window_idx + 1:2d}/{cfg.num_windows}: "
+                    f"p_2q={p_2q:.4f}, "
+                    f"Static MWPM LER={rec.static_ler:.4f}, "
+                    f"Calibrated MWPM LER={rec.calibrated_ler:.4f}, "
+                    f"UF LER={rec.uf_ler:.4f}"
+                )
+
+        elapsed = time.time() - t_start
+        results = self._analyze_results(elapsed)
+        self._save_results(results)
+        self._print_summary(results)
+        return results
+
+    def _analyze_results(self, elapsed: float) -> dict[str, Any]:
+        """Compute statistical metrics and hypothesis tests."""
+        cfg = self._config
+        total_shots = sum(r.total_shots for r in self._records)
+
+        static_total_errs = sum(r.static_errors for r in self._records)
+        cal_total_errs = sum(r.calibrated_errors for r in self._records)
+        uf_total_errs = sum(r.uf_errors for r in self._records)
+
+        static_overall_ler = static_total_errs / max(total_shots, 1)
+        cal_overall_ler = cal_total_errs / max(total_shots, 1)
+        uf_overall_ler = uf_total_errs / max(total_shots, 1)
+
+        static_ci = wilson_score_ci(static_total_errs, total_shots)
+        cal_ci = wilson_score_ci(cal_total_errs, total_shots)
+        uf_ci = wilson_score_ci(uf_total_errs, total_shots)
+
+        static_lers = [r.static_ler for r in self._records]
+        cal_lers = [r.calibrated_ler for r in self._records]
+        uf_lers = [r.uf_ler for r in self._records]
+
+        # Hypothesis test: Calibrated vs Static MWPM
+        t_test_static = welch_t_test(static_lers, cal_lers)
+
+        # Relative improvement
+        rel_improvement = 0.0
+        if static_overall_ler > 0:
+            rel_improvement = (static_overall_ler - cal_overall_ler) / static_overall_ler * 100.0
+
+        return {
+            "config": {
+                "code_distance": cfg.code_distance,
+                "num_rounds": cfg.num_rounds,
+                "num_windows": cfg.num_windows,
+                "shots_per_window": cfg.shots_per_window,
+                "scenario": cfg.scenario,
+                "smoothing": cfg.smoothing,
+                "nominal_error_rate": cfg.nominal_error_rate,
+            },
+            "summary": {
+                "total_shots": total_shots,
+                "static_mwpm": {
+                    "errors": static_total_errs,
+                    "overall_ler": static_overall_ler,
+                    "ci_95": list(static_ci),
+                    "mean_ler": float(np.mean(static_lers)),
+                    "std_ler": float(np.std(static_lers)),
+                },
+                "calibrated_mwpm": {
+                    "errors": cal_total_errs,
+                    "overall_ler": cal_overall_ler,
+                    "ci_95": list(cal_ci),
+                    "mean_ler": float(np.mean(cal_lers)),
+                    "std_ler": float(np.std(cal_lers)),
+                },
+                "static_uf": {
+                    "errors": uf_total_errs,
+                    "overall_ler": uf_overall_ler,
+                    "ci_95": list(uf_ci),
+                    "mean_ler": float(np.mean(uf_lers)),
+                    "std_ler": float(np.std(uf_lers)),
+                },

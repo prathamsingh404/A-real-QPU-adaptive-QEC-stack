@@ -330,3 +330,40 @@ class LiveCalibrationExperiment:
         print(f"  Significant (p < .01): {comp['significant_at_01']}")
         print(f"  Elapsed:              {sm['elapsed_s']:.1f}s")
         print("=" * 70 + "\n")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Live DEM Calibration Experiment")
+    parser.add_argument("--distance", type=int, default=3, help="Code distance")
+    parser.add_argument("--rounds", type=int, default=3, help="QEC rounds")
+    parser.add_argument("--windows", type=int, default=30, help="Number of windows")
+    parser.add_argument("--shots", type=int, default=1000, help="Shots per window")
+    parser.add_argument("--scenario", type=str, default="drift", choices=["stationary", "drift", "burst", "multi_phase"])
+    parser.add_argument("--smoothing", type=float, default=0.35, help="EWMA smoothing factor")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--output-dir", type=str, default="experiments/results/live_calibration")
+
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    config = LiveCalibrationConfig(
+        code_distance=args.distance,
+        num_rounds=args.rounds,
+        num_windows=args.windows,
+        shots_per_window=args.shots,
+        scenario=args.scenario,
+        smoothing=args.smoothing,
+        seed=args.seed,
+        output_dir=args.output_dir,
+    )
+
+    experiment = LiveCalibrationExperiment(config)
+    experiment.run()
+
+
+if __name__ == "__main__":
+    main()

@@ -103,3 +103,108 @@ class FullAdaptiveConfig:
     theta_exit: float = 0.05
 
     # Budget
+    max_total_shots: int = 500000
+
+    # Output
+    output_dir: str = "experiments/results/full_adaptive"
+    save_telemetry: bool = True
+
+
+@dataclass
+class WindowRecord:
+    """Complete record of one evaluation window."""
+    window_idx: int
+    ler: float
+    ci_lower: float
+    ci_upper: float
+    logical_errors: int
+    total_shots: int
+    noise_level: float
+    controller_action: dict[str, Any]
+    schedule_type: str
+    imbalance: float
+    execution_time_s: float
+
+
+class FullAdaptiveExperiment:
+    """
+    The unified full-stack adaptive QEC experiment.
+
+    Runs ALL components together:
+    - Bandit controller for strategy selection
+    - Adaptive X/Z scheduler for stabilizer frequency
+    - DEM calibrator for decoder weight updates
+    - Budget manager for shot quota enforcement
+    """
+
+    def __init__(
+        self,
+        config: Optional[FullAdaptiveConfig] = None,
+    ) -> None:
+        self._config = config or FullAdaptiveConfig()
+        self._rng = np.random.default_rng(self._config.seed)
+
+        # Components
+        self._arms = build_arm_set()
+        self._controller = self._init_controller()
+        self._scheduler = self._init_scheduler() if self._config.scheduling_enabled else None
+        self._budget = ShotBudgetManager(BudgetConfig(
+            max_total_shots=self._config.max_total_shots,
+        ))
+        self._regret_analyzer = RegretAnalyzer(num_arms=len(self._arms))
+
+        # Static baselines
+        self._static_mwpm = StaticController(
+            decoder="mwpm", dd_sequence="none", schedule="balanced"
+        )
+        self._static_uf = StaticController(
+            decoder="union_find", dd_sequence="xy4", schedule="balanced"
+        )
+
+        # Results
+        self._adaptive_records: list[WindowRecord] = []
+        self._static_mwpm_lers: list[float] = []
+        self._static_uf_lers: list[float] = []
+
+    def _init_controller(self) -> Any:
+        """Initialize the adaptive controller."""
+        cfg = self._config
+        arms = self._arms
+
+        if cfg.controller_type == "exp3":
+            return Exp3Controller(arms=arms, gamma=cfg.exp3_gamma)
+        elif cfg.controller_type == "dase":
+            return DASEController(
+                arms=arms,
+                exploration_bonus=cfg.dase_exploration_bonus,
+                drift_window=cfg.dase_drift_window,
+            )
+        elif cfg.controller_type == "sprt":
+            return SPRTController(
+                arms=arms,
+                alpha=cfg.sprt_alpha,
+                beta=cfg.sprt_beta,
+                p0=0.03,
+                p1=0.04,
+            )
+        else:
+            raise ValueError(f"Unknown controller: {cfg.controller_type}")
+
+    def _init_scheduler(self) -> AdaptiveXZScheduler:
+        """Initialize the adaptive scheduler."""
+        return AdaptiveXZScheduler(AdaptiveSchedulerConfig(
+            ewma_alpha=self._config.ewma_alpha,
+            theta_enter=self._config.theta_enter,
+            theta_exit=self._config.theta_exit,
+        ))
+
+    def run(self) -> dict[str, Any]:
+        """Execute the full adaptive experiment."""
+        cfg = self._config
+        t_start = time.time()
+
+        logger.info(
+            f"Starting FULL ADAPTIVE experiment: "
+            f"d={cfg.code_distance}, "
+            f"controller={cfg.controller_type}, "
+            f"scheduling={'ON' if cfg.scheduling_enabled else 'OFF'}, "

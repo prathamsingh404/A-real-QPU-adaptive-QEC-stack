@@ -208,3 +208,109 @@ class FullAdaptiveExperiment:
             f"d={cfg.code_distance}, "
             f"controller={cfg.controller_type}, "
             f"scheduling={'ON' if cfg.scheduling_enabled else 'OFF'}, "
+            f"windows={cfg.num_windows}, "
+            f"scenario={cfg.scenario}"
+        )
+
+        # Create noise scenario
+        scenario = self._create_scenario()
+
+        # Build base circuit
+        circuit = self._build_circuit()
+        dem = circuit.detector_error_model(decompose_errors=True)
+
+        import pymatching
+        from adaptive_qec.decoders.union_find import UnionFindDecoder
+        matcher = pymatching.Matching.from_detector_error_model(dem)
+        uf_decoder = UnionFindDecoder()
+        uf_decoder.configure(dem=dem)
+
+        for window_idx in range(cfg.num_windows):
+            # Check budget
+            if not self._budget.can_submit(cfg.shots_per_window):
+                logger.warning(f"Budget exhausted at window {window_idx}")
+                break
+
+            t_window = time.time()
+
+            # Get noise for this window
+            noise = scenario.get_noise(window_idx)
+
+            # Build noise-injected circuit
+            noisy_circuit = stim.Circuit.generated(
+                "surface_code:rotated_memory_z",
+                distance=cfg.code_distance,
+                rounds=cfg.num_rounds,
+                after_clifford_depolarization=noise.gate_error_2q,
+                before_round_data_depolarization=noise.gate_error_2q,
+                before_measure_flip_probability=noise.readout_error,
+                after_reset_flip_probability=noise.gate_error_2q * 0.5,
+            )
+
+            # Sample identical syndrome data for all arms
+            sampler = noisy_circuit.compile_detector_sampler()
+            detection_events, observable_flips = sampler.sample(
+                shots=cfg.shots_per_window,
+                separate_observables=True,
+            )
+
+            # Update adaptive scheduler
+            schedule_type = "balanced"
+            imbalance = 0.0
+            if self._scheduler is not None:
+                n_det = detection_events.shape[1]
+                det_coords = circuit.get_detector_coordinates()
+                x_indices: list[int] = []
+                z_indices: list[int] = []
+                for d_id, coords in det_coords.items():
+                    if len(coords) >= 2:
+                        if int(round(coords[0] + coords[1])) % 4 == 0:
+                            x_indices.append(d_id)
+                        else:
+                            z_indices.append(d_id)
+                if not x_indices or not z_indices:
+                    x_indices = list(range(0, n_det, 2))
+                    z_indices = list(range(1, n_det, 2))
+
+                x_det = int(np.sum(detection_events[:, x_indices]))
+                z_det = int(np.sum(detection_events[:, z_indices]))
+                obs_sched = DefectObservation(
+                    round_idx=window_idx,
+                    x_defects=x_det,
+                    z_defects=z_det,
+                    total_x_stabilizers=len(x_indices),
+                    total_z_stabilizers=len(z_indices),
+                )
+                sched = self._scheduler.update(obs_sched)
+                schedule_type = sched.schedule_type.value
+                imbalance = self._scheduler.imbalance
+
+            # Hardware state for controller
+            hw_state = HardwareState(
+                error_rate=noise.gate_error_2q,
+                t1_us=noise.t1_us,
+                t2_us=noise.t2_us,
+                readout_error=noise.readout_error,
+                gate_error_1q=noise.gate_error_1q,
+                gate_error_2q=noise.gate_error_2q,
+            )
+
+            # Adaptive controller decision
+            self._controller.observe(hw_state)
+            action = self._controller.decide()
+
+            # Decode based on adaptive controller choice
+            dec_str = action.decoder.value if hasattr(action.decoder, "value") else str(action.decoder)
+            if "union" in dec_str.lower() or "uf" in dec_str.lower():
+                predictions = uf_decoder.decode_batch(detection_events)
+            else:
+                predictions = matcher.decode_batch(detection_events)
+
+            n_obs = observable_flips.shape[1] if observable_flips.ndim > 1 else 1
+            pred_flat = predictions[:, :n_obs] if predictions.ndim > 1 else predictions.reshape(-1, 1)
+            obs_flat = observable_flips if observable_flips.ndim > 1 else observable_flips.reshape(-1, 1)
+
+            logical_errors = int(np.sum(np.any(pred_flat != obs_flat, axis=1)))
+            ler = logical_errors / cfg.shots_per_window
+            ci_low, ci_high = wilson_score_ci(logical_errors, cfg.shots_per_window)
+

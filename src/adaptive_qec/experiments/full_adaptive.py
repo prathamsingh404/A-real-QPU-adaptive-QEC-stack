@@ -419,3 +419,66 @@ class FullAdaptiveExperiment:
                 "ci_95_upper": ci_high,
                 "mean_ler": float(np.mean(adaptive_lers)),
                 "std_ler": float(np.std(adaptive_lers)),
+                "elapsed_s": round(elapsed, 2),
+            },
+            "scheduler": self._scheduler.summary() if self._scheduler else None,
+            "budget": self._budget.summary(),
+            "per_window": [
+                {
+                    "window": r.window_idx,
+                    "ler": r.ler,
+                    "ci_lower": r.ci_lower,
+                    "ci_upper": r.ci_upper,
+                    "noise_level": r.noise_level,
+                    "schedule": r.schedule_type,
+                    "imbalance": round(r.imbalance, 4),
+                    "action": r.controller_action,
+                }
+                for r in self._adaptive_records
+            ],
+        }
+
+    def _save_results(self, results: dict[str, Any]) -> None:
+        """Save results to disk."""
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        output_dir = Path(self._config.output_dir) / timestamp
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(output_dir / "results.json", "w") as f:
+            json.dump(results, f, indent=2, default=str)
+
+        if self._config.save_telemetry:
+            telemetry = {
+                "controller": [
+                    t.to_dict() if hasattr(t, "to_dict") else str(t)
+                    for t in self._controller.telemetry
+                ] if hasattr(self._controller, "telemetry") else [],
+                "scheduler_history": (
+                    self._scheduler.get_history()
+                    if self._scheduler else []
+                ),
+            }
+            with open(output_dir / "telemetry.json", "w") as f:
+                json.dump(telemetry, f, indent=2, default=str)
+
+        logger.info(f"Results saved to {output_dir}")
+
+    def _print_summary(self, results: dict[str, Any]) -> None:
+        """Print summary."""
+        s = results["summary"]
+        c = results["config"]
+        sched = results.get("scheduler")
+
+        print(f"\n{'='*60}")
+        print(f"FULL ADAPTIVE QEC EXPERIMENT RESULTS")
+        print(f"{'='*60}")
+        print(f"Controller:      {c['controller']}")
+        print(f"Scheduling:      {'ON' if c['scheduling'] else 'OFF'}")
+        print(f"Scenario:        {c['scenario']}")
+        print(f"Total shots:     {s['total_shots']:,}")
+        print(f"Overall LER:     {s['overall_ler']:.6f}")
+        print(f"95% CI:          [{s['ci_95_lower']:.6f}, {s['ci_95_upper']:.6f}]")
+        print(f"Std(LER):        {s['std_ler']:.6f}")
+        if sched:
+            print(f"Schedule switches: {sched.get('total_switches', 0)}")
+        print(f"Elapsed:         {s['elapsed_s']:.1f}s")

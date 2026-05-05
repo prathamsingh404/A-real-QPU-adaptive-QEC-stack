@@ -314,3 +314,108 @@ class FullAdaptiveExperiment:
             ler = logical_errors / cfg.shots_per_window
             ci_low, ci_high = wilson_score_ci(logical_errors, cfg.shots_per_window)
 
+            # Update controller with reward
+            reward = 1.0 - ler
+            self._controller.update(reward)
+
+            # Record budget usage
+            self._budget.record_usage(
+                cfg.shots_per_window,
+                source=f"window_{window_idx}",
+            )
+
+            # Record results
+            self._adaptive_records.append(WindowRecord(
+                window_idx=window_idx,
+                ler=ler,
+                ci_lower=ci_low,
+                ci_upper=ci_high,
+                logical_errors=logical_errors,
+                total_shots=cfg.shots_per_window,
+                noise_level=noise.gate_error_2q,
+                controller_action={
+                    "decoder": action.decoder if hasattr(action, "decoder") else "mwpm",
+                    "dd_sequence": action.dd_sequence if hasattr(action, "dd_sequence") else "none",
+                },
+                schedule_type=schedule_type,
+                imbalance=imbalance,
+                execution_time_s=time.time() - t_window,
+            ))
+
+            # Genuinely track static baselines on the same syndrome data
+            mwpm_preds = matcher.decode_batch(detection_events)
+            mwpm_flat = mwpm_preds[:, :n_obs] if mwpm_preds.ndim > 1 else mwpm_preds.reshape(-1, 1)
+            mwpm_errs = int(np.sum(np.any(mwpm_flat != obs_flat, axis=1)))
+            self._static_mwpm_lers.append(mwpm_errs / cfg.shots_per_window)
+
+            uf_preds = uf_decoder.decode_batch(detection_events)
+            uf_flat = uf_preds[:, :n_obs] if uf_preds.ndim > 1 else uf_preds.reshape(-1, 1)
+            uf_errs = int(np.sum(np.any(uf_flat != obs_flat, axis=1)))
+            self._static_uf_lers.append(uf_errs / cfg.shots_per_window)
+
+
+            if (window_idx + 1) % 20 == 0:
+                avg_ler = np.mean([r.ler for r in self._adaptive_records[-20:]])
+                logger.info(
+                    f"Window {window_idx + 1}/{cfg.num_windows}: "
+                    f"avg LER (last 20) = {avg_ler:.6f}, "
+                    f"schedule = {schedule_type}"
+                )
+
+        elapsed = time.time() - t_start
+
+        # Compile and save results
+        results = self._compile_results(elapsed)
+        self._save_results(results)
+        self._print_summary(results)
+
+        return results
+
+    def _create_scenario(self) -> NoiseScenarioFactory:
+        """Create noise scenario."""
+        n = self._config.num_windows
+        scenarios = {
+            "stationary": lambda: stationary_scenario(total_steps=n),
+            "drift": lambda: drift_scenario(total_steps=n),
+            "burst": lambda: burst_scenario(total_steps=n),
+            "multi_phase": lambda: multi_phase_scenario(total_steps=n),
+        }
+        return scenarios[self._config.scenario]()
+
+    def _build_circuit(self) -> stim.Circuit:
+        """Build base Stim circuit."""
+        return stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=self._config.code_distance,
+            rounds=self._config.num_rounds,
+            after_clifford_depolarization=self._config.physical_error_rate,
+            before_round_data_depolarization=self._config.physical_error_rate,
+            before_measure_flip_probability=self._config.physical_error_rate * 2,
+            after_reset_flip_probability=self._config.physical_error_rate * 0.5,
+        )
+
+    def _compile_results(self, elapsed: float) -> dict[str, Any]:
+        """Compile all results into a single dictionary."""
+        adaptive_lers = [r.ler for r in self._adaptive_records]
+        total_errors = sum(r.logical_errors for r in self._adaptive_records)
+        total_shots = sum(r.total_shots for r in self._adaptive_records)
+
+        ci_low, ci_high = wilson_score_ci(total_errors, total_shots)
+
+        return {
+            "config": {
+                "code_distance": self._config.code_distance,
+                "controller": self._config.controller_type,
+                "scheduling": self._config.scheduling_enabled,
+                "scenario": self._config.scenario,
+                "num_windows": len(self._adaptive_records),
+                "shots_per_window": self._config.shots_per_window,
+            },
+            "summary": {
+                "total_shots": total_shots,
+                "total_errors": total_errors,
+                "overall_ler": total_errors / total_shots if total_shots > 0 else 0.0,
+                "ci_95_lower": ci_low,
+                "ci_95_upper": ci_high,
+                "mean_ler": float(np.mean(adaptive_lers)),
+                "std_ler": float(np.std(adaptive_lers)),

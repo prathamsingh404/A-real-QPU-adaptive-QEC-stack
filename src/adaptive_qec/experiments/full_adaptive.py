@@ -482,3 +482,45 @@ class FullAdaptiveExperiment:
         if sched:
             print(f"Schedule switches: {sched.get('total_switches', 0)}")
         print(f"Elapsed:         {s['elapsed_s']:.1f}s")
+        print(f"{'='*60}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Full adaptive QEC experiment"
+    )
+    parser.add_argument("--distance", type=int, default=3)
+    parser.add_argument("--windows", type=int, default=100)
+    parser.add_argument("--shots", type=int, default=2000)
+    parser.add_argument("--controller", type=str, default="dase",
+                        choices=["exp3", "dase", "sprt"])
+    parser.add_argument("--scenario", type=str, default="multi_phase",
+                        choices=["stationary", "drift", "burst", "multi_phase"])
+    parser.add_argument("--no-scheduling", action="store_true")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--output", type=str,
+                        default="experiments/results/full_adaptive")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    config = FullAdaptiveConfig(
+        code_distance=args.distance,
+        num_windows=args.windows,
+        shots_per_window=args.shots,
+        controller_type=args.controller,
+        scenario=args.scenario,
+        scheduling_enabled=not args.no_scheduling,
+        seed=args.seed,
+        output_dir=args.output,
+    )
+
+    experiment = FullAdaptiveExperiment(config)
+    experiment.run()
+
+
+if __name__ == "__main__":
+    main()

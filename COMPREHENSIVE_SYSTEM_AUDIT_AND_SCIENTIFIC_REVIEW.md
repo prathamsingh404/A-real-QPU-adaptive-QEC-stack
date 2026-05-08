@@ -92,3 +92,85 @@ ERROR tests/test_sprt.py::TestSPRTController::test_summary - TypeError: Hardware
       drift_magnitude: float
       drift_status: DriftStatus
       burst_active: bool
+      leakage_fraction: float
+      t1_mean_us: float = 0.0
+      t2_mean_us: float = 0.0
+      p_1q: float = 0.0
+      p_2q: float = 0.0
+      p_ro: float = 0.0
+  ```
+  However, `tests/conftest.py` instantiates it using non-existent attributes:
+  ```python
+  HardwareState(
+      error_rate=0.005,
+      t1_us=200.0,
+      t2_us=150.0,
+      readout_error=0.01,
+      gate_error_1q=0.0005,
+      gate_error_2q=0.003,
+  )
+  ```
+- **Impact**: Any test relying on the `dummy_hardware_state`, `dephasing_dominated_state`, or `relaxation_dominated_state` fixtures immediately raises an unhandled exception before reaching the controller execution logic.
+
+#### Bug Category 2: Bandit Controller Arm Initialization Disconnect
+- **Files Affected**: [src/adaptive_qec/controller/bandit.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/controller/bandit.py#L84-L120), [tests/test_bandit_controller.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/tests/test_bandit_controller.py)
+- **Error Types**:
+  1. `TypeError: BanditArm.__init__() got an unexpected keyword argument 'dd_sequence'`
+  2. `TypeError: Exp3Controller.__init__() got an unexpected keyword argument 'arms'`
+  3. `AssertionError: assert 4 == 6`
+- **Root Cause**:
+  - `BanditArm` in `bandit.py` has fields `(decoder, dd_policy, index)`, but test code passes `dd_sequence`.
+  - `Exp3Controller`, `Exp3PController`, and `DASEController` hardcode `self._arms = build_arm_set()` inside their `__init__` and take only `gamma` and `weights`, rejecting any custom `arms` parameter passed by the test suite or caller.
+  - `build_arm_set()` hardcodes 4 arms: $\{ \text{MWPM}, \text{UF} \} \times \{ \text{NONE}, \text{XY4} \}$. The test suite expects 6 arms (including $\text{XY8}$).
+
+#### Bug Category 3: SPRT Implementation and State Inconsistencies
+- **Files Affected**: [src/adaptive_qec/controller/sprt.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/controller/sprt.py#L55-L105), [tests/test_sprt.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/tests/test_sprt.py)
+- **Error Types**:
+  1. `TypeError: SPRTState.__init__() missing 1 required positional argument: 'challenger_label'`
+  2. `TypeError: SPRTEngine.__init__() got an unexpected keyword argument 'p0'`
+  3. `TypeError: SPRTController.__init__() got an unexpected keyword argument 'arms'`
+- **Root Cause**:
+  - `SPRTEngine.__init__` was designed to take `(alpha, beta, delta, max_samples)`. However, `tests/test_sprt.py` attempts to pass standard Bernoulli SPRT parameters `(alpha, beta, p0, p1)`.
+  - `SPRTState` defined `challenger_label: str` as a non-default positional argument, but test fixtures call `SPRTState()` with default construction.
+  - `SPRTController` hardcodes its internal arm list to 4 elements and rejects `arms`.
+
+#### Bug Category 4: Noise Scenario Data Model Semantic Drift
+- **Files Affected**: [src/adaptive_qec/engine/scenarios.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/engine/scenarios.py#L44-L65), [tests/test_scenarios.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/tests/test_scenarios.py)
+- **Error Types**:
+  1. `TypeError: NoiseSnapshot.__init__() got an unexpected keyword argument 'gate_error_1q'`
+  2. `AttributeError: 'NoiseSnapshot' object has no attribute 'gate_error_2q'`
+  3. `AttributeError: 'NoiseSnapshot' object has no attribute 't1_us'`
+  4. `TypeError: burst_scenario() got an unexpected keyword argument 'burst_probability'`
+  5. `TypeError: multi_phase_scenario() got an unexpected keyword argument 'total_steps'`
+- **Root Cause**:
+  - `NoiseSnapshot` defines fields: `step, p_1q, p_2q, p_ro, t1_mean_us, t2_mean_us`.
+  - `tests/test_scenarios.py` was written assuming an older schema: `gate_error_1q, gate_error_2q, t1_us, t2_us`.
+  - `burst_scenario()` accepts `(total_steps, burst_at, duration)`, but tests pass `burst_probability`.
+  - `multi_phase_scenario()` accepts `phase_durations: list[int]`, but tests pass `total_steps: int`.
+
+#### Bug Category 5: DEMCalibrator API Mismatch
+- **Files Affected**: [src/adaptive_qec/decoders/dem_calibration.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/decoders/dem_calibration.py#L110-L135), [tests/test_dem_calibrator.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/tests/test_dem_calibrator.py)
+- **Error Types**:
+  1. `TypeError: DEMCalibrator.__init__() missing 1 required positional argument: 'circuit'`
+  2. `TypeError: DEMCalibrator.__init__() got an unexpected keyword argument 'min_probability'`
+- **Root Cause**: `DEMCalibrator` requires a base `stim.Circuit` as its first argument to parse the baseline DEM and nominal noise rates. The test suite attempts to instantiate it in isolation with `DEMCalibrator(min_probability=1e-6)`.
+
+---
+
+## 2. Experiment Pipeline Execution Audit & Traceback Analysis
+
+All 5 experiment scripts located in `src/adaptive_qec/experiments/` were executed directly within the active environment:
+
+### Experiment 1: `adaptive_vs_static.py`
+- **Execution**: `.venv/Scripts/python -m adaptive_qec.experiments.adaptive_vs_static`
+- **Result**: **SUCCESSFUL EXECUTION (Code 0)**
+- **Empirical Output**:
+  ```
+  ========================================================================
+  ADAPTIVE vs STATIC QEC — EXPERIMENT RESULTS
+  ========================================================================
+    Distance: d=3, Rounds: 3
+    Windows: 50 x 200 shots
+    Total shots per arm: 10,000
+
+    STATIC MWPM:   LER = 0.107500   95% CI [0.101579, 0.113722]

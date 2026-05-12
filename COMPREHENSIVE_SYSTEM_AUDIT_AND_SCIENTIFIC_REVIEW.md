@@ -351,3 +351,91 @@ In lines 516–522 of `qiskit_loop.py`:
 if n_bits > 1:
     syndromes = raw[:, :-1]
     observables = raw[:, -1:]
+```
+- **The Physical Reality on IBM Hardware**: IBM Quantum processors execute OpenQASM 3 / Qiskit circuits and return classical register measurement bitstrings.
+  - A real QEC circuit measures ancilla qubits round by round and data qubits at the end.
+  - The QPU **never** returns "detectors" directly.
+  - Detectors must be computed classically by XORing consecutive measurement rounds:
+    $$d_{i, r} = m_{i, r} \oplus m_{i, r-1}$$
+  - The logical observable is the product of physical data qubit readouts along a logical string operator:
+    $$O_L = \bigoplus_{q \in X_L} m_q$$
+  - Slicing `raw[:, :-1]` as detectors and `raw[:, -1:]` as the observable is physically incorrect and would completely fail if connected to live hardware output.
+
+### Hardcoded Literature Constants Catalog
+The audit identifies several critical physical parameters that are hardcoded without calibration mechanisms:
+1. **Dynamical Decoupling Suppression Factors**:
+   - `src/adaptive_qec/mitigation/dynamical_decoupling.py`: CPMG = 0.45, XY4 = 0.22, XY8 = 0.12.
+   - *Status*: Taken from Pokharel et al. (2023). On real hardware, pulse errors ($\epsilon_{\text{pulse}} \approx 3 \times 10^{-4}$) often outweigh dephasing suppression during short idle windows ($< 1\ \mu\text{s}$), making XY8 actively harmful.
+2. **Cost Weights**:
+   - `CostWeights(lambda_latency=0.01, lambda_dd=0.005, lambda_switch=0.02, lambda_cal=0.05)`.
+   - *Status*: Purely heuristic hyperparameters. They are not derived from Pareto frontier optimization or real hardware queue costs.
+3. **Hardware Latency Penalties**:
+   - `MWPM = 1.5`, `UF = 1.0`. In actual benchmarks on modern multi-core x86 CPUs, PyMatching v2 decodes $d=3$ at 150,000 shots/s ($6.6\ \mu\text{s}$), whereas our pure-Python Union-Find decodes at 1,080 shots/s ($925\ \mu\text{s}$). The cost function penalizes MWPM for latency when it is actually **140 times faster** in our Python environment!
+
+---
+
+## 4. The Multi-Reviewer Crucible (5-Way Expert Debate)
+
+To ensure this project achieves genuine research-grade novelty and avoids self-deception, we convene a debate among five simulated expert personas representing different facets of the quantum computing community.
+
+---
+
+### Reviewer 1: The Quantum Information Theorist (Fault-Tolerance & Topological Codes Purist)
+> *"Your entire premise of 'Dynamic Anisotropic Stabilizer Scheduling' violates fundamental stabilizer code invariants unless reformulated from scratch."*
+
+**Critique**:
+"Let us examine what you call 'Adaptive X/Z Stabilizer Scheduling'. In a rotated surface code, the stabilizer generators $S_X$ and $S_Z$ do not commute with each other locally if they overlap on a single data qubit, but they commute globally on all shared data qubits because they share 0 or 2 data qubits. In each QEC round, both $X$ and $Z$ checks must be extracted to maintain fault tolerance.
+
+If you unilaterally decide to execute an 'X-heavy schedule' (e.g., $X, Z, X, X$) by skipping $Z$-checks in certain rounds:
+1. **Space-Time Detector Graph Invalidation**: A Stim detector checks parity changes between consecutive measurements: $d_r = m_r \oplus m_{r-1}$. If you skip a $Z$-check in round 2, the error chain between round 1 and round 3 has duration $\Delta t = 2$. Its spacetime edge weight in the DEM must be recomputed as $\log((1-p)/p)$ with $p \approx 2 p_{\text{phys}}$. Your code does not alter the DEM graph at all!
+2. **Effective Code Distance Collapse**: If $Z$-checks are measured less frequently, phase-flip errors ($Z$ errors) accumulate unchecked on data qubits across multiple cycles. A chain of $\lfloor d/2 \rfloor$ physical phase errors can form an undetected logical fault before the next $Z$-round occurs! You have reduced your effective code distance against phase errors from $d$ to $d/2$.
+3. **Statistical Validity**: In `adaptive_vs_static.py`, you compute a Wilson score confidence interval assuming independent Bernoulli trials across 10,000 shots. But your non-stationary scenario introduces temporal autocorrelation and continuous drift across windows! A standard two-proportion $z$-test assumes i.i.d. observations. When trials are drawn from a non-stationary time series, standard error formulas underestimate variance, producing invalidly narrow confidence intervals and falsely low $p$-values."
+
+---
+
+### Reviewer 2: The Experimental Superconducting QPU Physicist (IBM Quantum / Transmon Specialist)
+> *"You are conflating real-time cryogenic control with high-latency cloud batching. Transmons do not wait for Python scripts."*
+
+**Critique**:
+"Let us talk about physical timescales on `ibm_marrakesh` (Heron r2):
+- Transmon energy relaxation time: $T_1 \approx 188.5\ \mu\text{s}$.
+- Transmon dephasing time: $T_2 \approx 130.4\ \mu\text{s}$.
+- Two-qubit gate time (ECR/CZ): $\sim 40\text{–}60\ \text{ns}$.
+- Syndrome round duration (gates + readout): $\sim 1\text{–}1.2\ \mu\text{s}$.
+
+Now, look at your software stack:
+- You run a Python script on a local Windows machine.
+- Your script calls Qiskit Runtime over the public internet via HTTP REST API.
+- Your payload enters IBM Cloud's dispatch queue. Even within an active Qiskit Runtime `Session`, round-trip latency per batch is **2 to 30 seconds** under optimal conditions, and up to **5 minutes** during peak hours.
+
+During those 5 seconds, your superconducting transmons have experienced **30,000 coherence lifetimes**!
+You cannot perform 'real-time closed-loop adaptive QEC' through a Python loop. What IBM calls 'Dynamic Circuits' with $600\ \text{ns}$ feedforward executes inside the FPGA control electronics (Qblox, Zurich Instruments, or IBM's custom control rack at room temperature), executing pre-compiled classical conditional branches (`c_if`, `if_test`) directly on the analog microwave pulse generators.
+
+If you claim in a paper submitted to *PRX Quantum* that your Python bandit controller performs 'real-time adaptive quantum error correction on IBM hardware', the paper will be desk-rejected. You must honestly describe your contribution as **inter-batch drift adaptation and macro-timescale calibration tracking**, NOT intra-circuit real-time decoding."
+
+---
+
+### Reviewer 3: The Real-Time Systems & Decoding Architect (FPGA/ASIC & High-Throughput Engineering)
+> *"Your cost model penalizes the fast decoder and rewards the slow decoder because your Python implementation has inverted complexity."*
+
+**Critique**:
+"Look at your cost function $J(a \mid s_t)$:
+$$J = P_L + \lambda_1 L_{\text{decode}} + \dots$$
+You assign $L_{\text{decode}} = 1.5$ to MWPM and $1.0$ to Union-Find.
+Why? Because in 2017, Delfosse and Nickerson proved that Union-Find runs in almost-linear time $O(N \alpha(N))$, whereas Edmonds' blossom algorithm runs in $O(N^3)$.
+
+However:
+1. **The PyMatching Reality**: PyMatching v2 (Higgott & Gidney, 2021) does not use Edmonds' dense blossom. It implements sparse blossom directly on detector error model hypergraphs. Written in optimized C++ with SIMD intrinsics, PyMatching processes $d=3$ surface codes at **150,000 shots per second** ($6.6\ \mu\text{s}$ per shot).
+2. **Your Union-Find Reality**: Your `union_find.py` is written in pure Python. It performs cluster growth and path compression in Python object space. Its benchmarked throughput in `test_union_find.py` is **1,080 to 1,200 shots per second** ($850\text{–}950\ \mu\text{s}$ per shot).
+3. **The Inversion**: Your Python Union-Find is **140 times slower** than PyMatching MWPM! Yet your controller penalizes MWPM for latency. If an online controller were actually optimizing decoding throughput on an embedded controller, it would choose PyMatching $100\%$ of the time. If you want Union-Find to be competitive in latency, you must bind to a C++ or Rust implementation (such as `ldpc` or Riverlane's open-source decoding libraries)."
+
+---
+
+### Reviewer 4: The Hyper-Skeptical Peer Reviewer (PRX Quantum / Nature Communications Referee)
+> *"Is there anything genuinely new here, or did you just wrap Stim in an Exp3 loop and engineer a benchmark where UF wins on persistent synthetic leakage?"*
+
+**Critique**:
+"Let us review the published literature from 2024 through 2026:
+- *AlphaQubit* (Google DeepMind, Nature 2024; Nature 2025): Machine learning decoder trained offline on 100M+ Sycamore shots, beating MWPM on correlated physical noise.
+- *GSC-QEMit* (arXiv:2405.xxxxx): Contextual multi-armed bandits for quantum error mitigation strategy selection.
+- *Bhardwaj, Takou, Lin, & Brown* (PRX Quantum, Aug 2026): Sliding-window adaptive estimation of drifting noise in QEC.

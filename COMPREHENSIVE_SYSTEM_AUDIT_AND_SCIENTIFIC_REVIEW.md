@@ -174,3 +174,92 @@ All 5 experiment scripts located in `src/adaptive_qec/experiments/` were execute
     Total shots per arm: 10,000
 
     STATIC MWPM:   LER = 0.107500   95% CI [0.101579, 0.113722]
+    STATIC UF+XY4: LER = 0.109000   95% CI [0.103041, 0.115259]
+    ADAPTIVE:      LER = 0.106400   95% CI [0.100507, 0.112596]
+
+    Best static arm:  static_mwpm
+    Improvement:      +1.02%
+    z-statistic:      -0.2517
+    p-value:          0.801288
+    Significant (5%): False
+    Mode switches:    1
+  ========================================================================
+  ```
+- **Scientific Critical Evaluation**:
+  - The README and documentation previously claimed a clear, statistically verified advantage for the adaptive controller.
+  - In this verified live run, the adaptive arm achieved an LER of $0.1064$ vs Static MWPM at $0.1075$.
+  - The difference is **11 errors out of 10,000 shots** ($+1.02\%$ relative improvement).
+  - The two-proportion $z$-test yields $p = 0.801288$. The $95\%$ Wilson score confidence intervals completely overlap: $[0.1005, 0.1126]$ vs $[0.1016, 0.1137]$.
+  - **Conclusion**: The adaptive controller's advantage under this synthetic drift model is **statistically indistinguishable from random shot-noise fluctuation**.
+
+---
+
+### Experiment 2: `bandit_vs_static.py`
+- **Execution**: `.venv/Scripts/python -m adaptive_qec.experiments.bandit_vs_static`
+- **Result**: **CRASHED IMMEDIATELY (Code 1)**
+- **Traceback**:
+  ```python
+  Traceback (most recent call last):
+    File "<frozen runpy>", line 198, in _run_module_as_main
+    File "<frozen runpy>", line 88, in _run_code
+    File "D:\Antigravity IDE\A real-QPU adaptive QEC stack\src\adaptive_qec\experiments\bandit_vs_static.py", line 67, in <module>
+      from adaptive_qec.analysis.significance import (
+  ImportError: cannot import name 'StatisticalTestResult' from 'adaptive_qec.analysis.significance'
+  ```
+- **Root Cause**: `significance.py` defines `HypothesisTestResult`, but `bandit_vs_static.py` imports non-existent `StatisticalTestResult` and `wilson_score_ci`.
+
+---
+
+### Experiment 3: `adaptive_scheduling.py`
+- **Execution**: `.venv/Scripts/python -m adaptive_qec.experiments.adaptive_scheduling`
+- **Result**: **CRASHED IMMEDIATELY (Code 1)**
+- **Traceback**:
+  ```python
+  Traceback (most recent call last):
+    File "<frozen runpy>", line 198, in _run_module_as_main
+    File "<frozen runpy>", line 88, in _run_code
+    File "D:\Antigravity IDE\A real-QPU adaptive QEC stack\src\adaptive_qec\experiments\adaptive_scheduling.py", line 49, in <module>
+      from adaptive_qec.analysis.significance import wilson_score_ci
+  ImportError: cannot import name 'wilson_score_ci' from 'adaptive_qec.analysis.significance'
+  ```
+- **Root Cause**: Unverified import name. `wilson_score_ci` is implemented in `adaptive_vs_static.py` as `wilson_ci()` and in `statistics.py` as `confidence_interval(..., method="wilson")`, but was never exported from `significance.py`.
+
+---
+
+### Experiment 4: `hardware_baseline.py`
+- **Execution**: `.venv/Scripts/python -m adaptive_qec.experiments.hardware_baseline`
+- **Result**: **CRASHED DURING ANALYSIS (Code 1)**
+- **Traceback**:
+  ```python
+  2026-09-26 18:04:06,521 [INFO] __main__: Starting hardware baseline: backend=ibm_marrakesh, d=3, dry_run=True
+  2026-09-26 18:04:06,522 [INFO] adaptive_qec.runtime.qiskit_loop: DRY RUN mode: using local simulator instead of ibm_marrakesh
+  2026-09-26 18:04:06,563 [INFO] adaptive_qec.runtime.qiskit_loop: Runtime loop b3ef2fd4 complete: 20 batches, 20000 total shots, overall LER=0.026900, elapsed=0.0s
+  Traceback (most recent call last):
+    File "D:\Antigravity IDE\A real-QPU adaptive QEC stack\src\adaptive_qec\experiments\hardware_baseline.py", line 162, in _analyze
+      from adaptive_qec.analysis.significance import wilson_score_ci
+  ImportError: cannot import name 'wilson_score_ci' from 'adaptive_qec.analysis.significance'
+  ```
+- **Root Cause**: The runtime loop executed 20 batches of synthetic coin flips in 0.04s, but crashed when attempting to calculate confidence intervals due to the missing import.
+
+---
+
+### Experiment 5: `full_adaptive.py`
+- **Execution**: `.venv/Scripts/python -m adaptive_qec.experiments.full_adaptive`
+- **Result**: **CRASHED IMMEDIATELY (Code 1)**
+- **Traceback**:
+  ```python
+  Traceback (most recent call last):
+    File "D:\Antigravity IDE\A real-QPU adaptive QEC stack\src\adaptive_qec\experiments\full_adaptive.py", line 66, in <module>
+      from adaptive_qec.analysis.significance import wilson_score_ci, welch_t_test
+  ImportError: cannot import name 'wilson_score_ci' from 'adaptive_qec.analysis.significance'
+  ```
+- **Root Cause**: Identical import failure of `wilson_score_ci` from `adaptive_qec.analysis.significance`.
+
+---
+
+## 3. Forensic Discovery of Hardcoded, Mocked, Simulated & Phantom Mechanisms
+
+Beyond explicit Python syntax and import errors, an architectural audit of the codebase reveals deep discrepancies between what the documentation claims to accomplish and what the code actually executes:
+
+### Phantom Mechanism 1: Unused Schedules in `adaptive_scheduling.py`
+In [src/adaptive_qec/experiments/adaptive_scheduling.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/experiments/adaptive_scheduling.py#L181-L242):

@@ -263,3 +263,91 @@ Beyond explicit Python syntax and import errors, an architectural audit of the c
 
 ### Phantom Mechanism 1: Unused Schedules in `adaptive_scheduling.py`
 In [src/adaptive_qec/experiments/adaptive_scheduling.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/experiments/adaptive_scheduling.py#L181-L242):
+```python
+def _run_fixed_schedule(
+    self,
+    eta: float,
+    p_x: float,
+    p_z: float,
+    schedule_type: ScheduleType,
+) -> BiasPointResult:
+    """Run experiment with a fixed stabilizer schedule."""
+    circuit = self._build_biased_circuit(p_x, p_z)
+    sampler = circuit.compile_detector_sampler()
+    ...
+```
+- **The Problem**: Notice that `schedule_type` is accepted as an argument, but **never passed to `_build_biased_circuit()`**!
+- Inside `_build_biased_circuit(p_x, p_z)`:
+  ```python
+  p_total = p_x + p_z
+  circuit = stim.Circuit.generated(
+      "surface_code:rotated_memory_z",
+      distance=d,
+      rounds=r,
+      after_clifford_depolarization=p_total,
+      before_round_data_depolarization=p_total,
+      ...
+  )
+  return circuit
+  ```
+- **The Reality**: The Stim built-in `surface_code:rotated_memory_z` generates a fixed, symmetric rotated surface code. The `schedule_type` variable is discarded. The code claimed to benchmark `BALANCED` vs `X_HEAVY` vs `Z_HEAVY`, but was actually simulating the **identical standard circuit four times** with different random seeds.
+
+### Phantom Mechanism 2: Arbitrary Detector Bisection as "X vs Z Defects"
+In `adaptive_scheduling.py` (lines 277–279) and `full_adaptive.py` (lines 258–260):
+```python
+n_det = detection_events.shape[1]
+x_det = int(np.sum(detection_events[:, : n_det // 2]))
+z_det = int(np.sum(detection_events[:, n_det // 2 :]))
+```
+- **The Problem**: The code assumes the first $N/2$ detectors in the Stim circuit are $X$-stabilizers and the remaining $N/2$ are $Z$-stabilizers.
+- **The Physical Reality**: In Stim's rotated surface code generator, detectors are ordered spatially and temporally across rounds. Each round interweaves $X$ and $Z$ checks across the 2D lattice. Bisections across the middle split early rounds from late rounds, or upper spatial coordinates from lower spatial coordinates. The "imbalance ratio" $\Delta_{XZ}$ was calculating spatial/temporal round disparities, not Pauli error bias.
+
+### Phantom Mechanism 3: The Ignored Bandit Action in `bandit_vs_static.py`
+In [src/adaptive_qec/experiments/bandit_vs_static.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/experiments/bandit_vs_static.py#L273-L290):
+```python
+for ctrl_name, ctrl in self._controllers.items():
+    ctrl.observe(hw_state)
+    action = ctrl.decide()
+
+    # Decode using MWPM (both arms use same decoder for now)
+    predictions = mwpm_matcher.decode_batch(detection_events)
+    logical_errors = int(np.sum(np.any(pred_flat != obs_flat, axis=1)))
+```
+- **The Problem**: The bandit controller observes the state and decides an action (e.g. `action.decoder = UNION_FIND`, `action.dd_sequence = XY4`).
+- **The Reality**: The decoder that actually decodes the syndromes is hardcoded to `mwpm_matcher` for **all** arms! Even the static baseline `static_uf_xy4` is evaluated using MWPM. Furthermore, no dynamical decoupling is injected into `noisy_circuit`.
+- **Consequence**: Every single controller receives identical predictions and identical rewards. The bandit is learning over a dummy environment where actions have zero causal effect on rewards.
+
+### Phantom Mechanism 4: Self-Copying Baselines in `full_adaptive.py`
+In [src/adaptive_qec/experiments/full_adaptive.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/experiments/full_adaptive.py#L324-L327):
+```python
+# Track static baselines (same syndrome data)
+self._static_mwpm_lers.append(ler)  # Same decoder, so same LER
+self._static_uf_lers.append(ler)
+```
+- **The Problem**: The experiment claims to demonstrate the superiority of the full adaptive stack over static baselines.
+- **The Reality**: The static baseline arrays (`_static_mwpm_lers` and `_static_uf_lers`) simply append the adaptive arm's LER (`ler`) on every window. A comparative plot between "Adaptive" and "Static MWPM" would show identical, superimposed curves.
+
+### Simulated Mechanism 5: Coin-Flip Syndromes in `qiskit_loop.py`
+In [src/adaptive_qec/runtime/qiskit_loop.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/runtime/qiskit_loop.py#L531-L550):
+```python
+def _generate_synthetic_data(self, shots: int) -> tuple[np.ndarray, np.ndarray]:
+    rng = np.random.default_rng()
+    n_detectors = 24
+    p_phys = 0.005 + 0.001 * np.sin(2 * np.pi * self.total_batches / 50)
+    syndromes = rng.random((shots, n_detectors)) < p_phys
+    observables = rng.random((shots, 1)) < (p_phys * 1.5)
+    return syndromes.astype(np.uint8), observables.astype(np.uint8)
+```
+- **The Problem**: In "dry-run" mode, instead of calling Stim to simulate the circuit and extract topological detector samples, it generates syndromes via independent Bernoulli coin flips ($P = p_{\text{phys}}$).
+- **The Reality**: Independent Bernoulli bits do not satisfy the stabilizer code graph constraints:
+  1. Isolated defects appear without matching partners or boundaries.
+  2. The parity of defects does not match topological homology.
+  3. When PyMatching or Union-Find decodes independent random bits, it performs massive, meaningless matching across the entire lattice, producing artificial logical failure rates that have no physical connection to QEC codes.
+
+### Flawed Hardware Abstraction in `qiskit_loop.py`
+In lines 516–522 of `qiskit_loop.py`:
+```python
+# Last column(s) are observables, rest are detectors
+if n_bits > 1:
+    syndromes = raw[:, :-1]
+    observables = raw[:, -1:]

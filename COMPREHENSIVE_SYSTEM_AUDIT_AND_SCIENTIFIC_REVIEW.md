@@ -515,3 +515,66 @@ def dummy_hardware_state() -> HardwareState:
 ```
 
 #### B. Generalize Bandit Controller Arm Injection
+In `src/adaptive_qec/controller/bandit.py`:
+- Update `Exp3Controller`, `Exp3PController`, and `DASEController` `__init__` signatures to accept an optional `arms: Optional[list[BanditArm]] = None`. If `arms is None`, fall back to `build_arm_set()`.
+- Update `BanditArm` to accept `dd_policy` or alias `dd_sequence` via `__post_init__` for backwards compatibility.
+
+#### C. Align SPRT Interfaces
+In `src/adaptive_qec/controller/sprt.py`:
+- Provide a default `challenger_label: str = "challenger"` in `SPRTState`.
+- Support dual parameterization in `SPRTEngine`: allow either direct error thresholds `(p0, p1)` or relative difference `delta`:
+  $$p_0 = \text{baseline},\quad p_1 = p_0 - \Delta$$
+  $$\log \Lambda_n = n_1 \ln\left(\frac{p_1}{p_0}\right) + (n - n_1) \ln\left(\frac{1 - p_1}{1 - p_0}\right)$$
+
+#### D. Export Missing Statistical Functions
+In `src/adaptive_qec/analysis/significance.py`:
+- Export `wilson_score_ci(n_errors: int, n_total: int, z: float = 1.96) -> tuple[float, float]`.
+- Define or alias `StatisticalTestResult = HypothesisTestResult`.
+
+---
+
+### Solution 2: Eliminating Phantom Schedules with True Asymmetric Surface Codes
+
+To make "Adaptive Stabilizer Scheduling" mathematically and physically valid:
+1. **Never skip checks in symmetric Stim surface codes.**
+2. Instead, implement the **Rectangular Asymmetric Surface Code** ($d_x \times d_z$):
+   - For an anisotropic noise channel where $p_Z \gg p_X$ (dephasing dominates), phase errors occur at rate $p_Z$ and bit errors at rate $p_X$.
+   - The logical error rates scale as:
+     $$P_{L, X} \sim \left(\frac{p_Z}{p_{\text{th}}}\right)^{\frac{d_x + 1}{2}},\quad P_{L, Z} \sim \left(\frac{p_X}{p_{\text{th}}}\right)^{\frac{d_z + 1}{2}}$$
+   - When noise is strongly biased ($\eta = p_Z / p_X \gg 1$), choosing $d_x > d_z$ equalizes the logical error rates while saving physical qubits and reducing circuit depth!
+3. **Dynamic Adaptation Mechanism**:
+   - The controller monitors $\Delta_{XZ}$ from syndrome defect rates.
+   - When dephasing spikes, the controller reconfigures the code geometry from $d=3 \times 3$ to an asymmetric $d_x = 5, d_z = 3$ layout, providing formal topological fault protection without breaking detector graph validity.
+
+---
+
+### Solution 3: Honest Multi-Decoder Evaluation in `bandit_vs_static.py`
+
+Replace lines 280–285 in `bandit_vs_static.py` with genuine, arm-specific decoding:
+```python
+# Genuine decoding dispatch based on controller decision:
+for ctrl_name, ctrl in self._controllers.items():
+    ctrl.observe(hw_state)
+    action = ctrl.decide()
+
+    # Select decoder based on arm action:
+    if action.decoder == DecoderChoice.MWPM:
+        pred = mwpm_matcher.decode_batch(detection_events)
+    elif action.decoder == DecoderChoice.UNION_FIND:
+        pred = uf_decoder.decode_batch(detection_events)
+    else:
+        raise ValueError(f"Unknown decoder: {action.decoder}")
+
+    # Evaluate logical error rate for this specific arm:
+    logical_errors = int(np.sum(np.any(pred != obs_flat, axis=1)))
+    ler = logical_errors / cfg.shots_per_window
+    ctrl.update(1.0 - ler)
+```
+
+---
+
+### Solution 4: Bridging Real QPU Execution in `qiskit_loop.py`
+
+To transform `qiskit_loop.py` from a toy simulator into a production-ready hardware execution harness:
+1. **Classical Parity Convolution**:
+   Replace raw bitstring slicing with automated detector reconstruction:

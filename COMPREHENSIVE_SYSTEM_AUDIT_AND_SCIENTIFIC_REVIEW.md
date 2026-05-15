@@ -578,3 +578,53 @@ for ctrl_name, ctrl in self._controllers.items():
 To transform `qiskit_loop.py` from a toy simulator into a production-ready hardware execution harness:
 1. **Classical Parity Convolution**:
    Replace raw bitstring slicing with automated detector reconstruction:
+   Given measurement register outcomes $M \in \{0, 1\}^{S \times R \times N_a}$ across $S$ shots, $R$ rounds, and $N_a$ ancilla qubits:
+   $$D_{s, r, i} = M_{s, r, i} \oplus M_{s, r-1, i}$$
+   Final round boundary targets:
+   $$D_{s, R, j} = M_{s, R, j} \oplus \bigoplus_{q \in \text{supp}(S_j)} M_{s, \text{data}, q}$$
+2. **Realistic Dry-Run Simulator**:
+   In `_generate_synthetic_data()`, replace `rng.random() < p_phys` with a compiled Stim circuit sampler:
+   ```python
+   def _generate_synthetic_data(self, shots: int):
+       circuit = self._code.generate_circuit(noise=self._noise_config)
+       sampler = circuit.compile_detector_sampler()
+       return sampler.sample(shots=shots, separate_observables=True)
+   ```
+   This guarantees that even in dry-run mode, all generated bitstrings obey exact topological stabilizer physics.
+
+---
+
+## 7. The Unflinching Strategic Roadmap to Real-World Publication
+
+To advance this project from its current state to a peer-reviewed publication in *PRX Quantum* or *IEEE Transactions on Quantum Engineering*, we establish a strict 4-stage execution strategy:
+
+```
+[Stage 1: Interface & Test Suite Restoration]
+- Fix conftest.py fixtures and HardwareState dataclass signatures.
+- Export wilson_score_ci and HypothesisTestResult aliases in significance.py.
+- Align BanditArm and SPRTController constructors with tests.
+- Target: 237 / 237 tests PASSING (100% regression green).
+
+[Stage 2: Algorithmic Honesty & Elimination of Phantom Code]
+- Remove hardcoded MWPM dispatch in bandit_vs_static.py; run genuine UF and MWPM.
+- Fix adaptive_scheduling.py to execute genuine asymmetric Stim circuits.
+- Fix full_adaptive.py to independently evaluate static MWPM and static UF baselines.
+- Replace random Bernoulli coin flips in qiskit_loop.py with compiled Stim detector sampling.
+
+[Stage 3: Live Closed-Loop Online DEM Reweighting]
+- Connect sliding-window syndrome defect frequencies to edge weight updates:
+  w_e = ln((1 - p_e) / p_e)
+- Update PyMatching Matching graph weights in real-time as noise drifts.
+- Demonstrate that dynamic DEM reweighting achieves statistically significant LER suppression
+  over static factory DEM weights (p < 0.001) under severe 1/f and TLF drift.
+
+[Stage 4: IBM Hardware Execution on ibm_marrakesh]
+- Execute pre-flight verification on distance-3 heavy-hex embedding.
+- Run a 20-batch Qiskit Runtime Session across 2 hours of real physical QPU drift.
+- Collect provenance-tagged experimental datasets (raw bitstrings, calibration logs, execution times).
+- Submit paper: "Online Drift-Adaptive Quantum Error Correction Orchestration on Heavy-Hex Superconducting Processors".
+```
+
+---
+
+*Report compiled autonomously via full-stack execution verification, log forensics, literature cross-referencing, and multi-perspective peer review.*

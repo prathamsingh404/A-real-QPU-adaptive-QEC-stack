@@ -26,3 +26,39 @@ qec:
   rounds: 3                      # QEC rounds: 1, 3, 5, 10, ...
   logical_basis: Z                # Z | X
   boundary: planar               # planar | toric
+
+noise:
+  readout:
+    enabled: true
+    p0_given_1: 0.01208           # P(measure 0 | state 1) — modeled from data/calibration/ibm_marrakesh_snapshot.json
+    p1_given_0: 0.01208           # P(measure 1 | state 0) — modeled from data/calibration/ibm_marrakesh_snapshot.json
+  gate:
+    single_qubit: 0.000454        # SX gate error — modeled from data/calibration/ibm_marrakesh_snapshot.json
+    two_qubit: 0.003021           # ECR/CZ gate error — modeled from data/calibration/ibm_marrakesh_snapshot.json
+    model: depolarizing           # depolarizing | pauli | custom
+  correlated:
+    enabled: false
+    spatial_range: 1              # nearest-neighbor range
+    strength: 0.001               # correlation strength
+  leakage:
+    enabled: false
+    rate: 0.001                   # leakage probability per gate
+    seepage: 0.01                 # seepage back probability
+  drift:
+    enabled: true
+    model: linear                 # linear | sinusoidal | random_walk
+    rate: 0.0001                  # drift rate per second
+    monitoring_window: 100        # number of experiments to track
+
+decoder:
+  baseline: mwpm                  # mwpm (PyMatching)
+  ml:
+    enabled: false
+    model: cnn                    # cnn | gnn | transformer
+    checkpoint: null              # path to model weights
+    batch_size: 256
+  adaptive:
+    enabled: false
+    noise_estimation: true
+    routing: false
+    uncertainty: false

@@ -27,3 +27,30 @@ scenarios:
     p_base: 0.004
     drift_p: 0.007
     hotspot_qubit: null
+
+  - id: "localized_hotspot"
+    label: "Localized Hotspot"
+    type: "confirmatory_drift"
+    description: "Central data transmon undergoes 10x localized drift to 0.040 (structural drift where reweighting pays off)"
+    drift_type: "localized_hotspot"
+    p_base: 0.004
+    drift_p: 0.040
+    hotspot_qubit_d3: 10
+    hotspot_qubit_d5: 27
+
+  - id: "structural_anisotropy"
+    label: "Structural Anisotropy Shift"
+    type: "confirmatory_drift"
+    description: "Asymmetric dephasing vs relaxation shift (p_X=0.002, p_Z=0.010)"
+    drift_type: "structural_anisotropy"
+    p_base: 0.004
+    drift_p: 0.010
+    hotspot_qubit: null
+
+window_regimes:
+  - window_size: 200
+    description: "Small window regime demonstrating sample variance penalty (+170% on stationary noise)"
+  - window_size: 1000
+    description: "Intermediate window regime"
+  - window_size: 2000
+    description: "Large window regime where localized drift reweighting pays off"

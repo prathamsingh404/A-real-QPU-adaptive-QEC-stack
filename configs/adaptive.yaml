@@ -31,3 +31,47 @@ bandit:
     drift_window: 50        # Sliding window for drift detection
     drift_threshold: 0.02   # ΔR threshold to trigger arm reactivation
     min_pulls: 10           # Forced exploration per arm
+
+  # Arm definitions: each arm = (decoder, dd_sequence, schedule)
+  arms:
+    - {decoder: mwpm,       dd_sequence: none, schedule: balanced}
+    - {decoder: mwpm,       dd_sequence: xy4,  schedule: balanced}
+    - {decoder: mwpm,       dd_sequence: xy8,  schedule: balanced}
+    - {decoder: union_find, dd_sequence: none, schedule: balanced}
+    - {decoder: union_find, dd_sequence: xy4,  schedule: balanced}
+    - {decoder: union_find, dd_sequence: xy8,  schedule: balanced}
+
+# -----------------------------------------------------------------------
+# SPRT (Sequential Probability Ratio Test) Parameters
+# -----------------------------------------------------------------------
+sprt:
+  alpha: 0.01               # Type-I error bound
+  beta: 0.01                # Type-II error bound
+  delta: 0.005              # Minimum detectable LER difference
+  p0: 0.03                  # Null hypothesis LER
+  p1: 0.035                 # Alternative hypothesis LER
+  min_observations: 50      # Min observations before trigger
+  cooldown_rounds: 30       # Min rounds between switches
+
+# -----------------------------------------------------------------------
+# Adaptive Scheduling Parameters
+# -----------------------------------------------------------------------
+scheduling:
+  enabled: true
+  ewma_alpha: 0.05          # EWMA smoothing factor
+  theta_enter: 0.15         # Imbalance threshold to trigger change
+  theta_exit: 0.05          # Imbalance threshold to revert to balanced
+  min_rounds_before_switch: 20
+  initial_schedule: balanced
+  window_size: 100
+
+# -----------------------------------------------------------------------
+# DEM Calibration Parameters
+# -----------------------------------------------------------------------
+dem_calibration:
+  enabled: true
+  update_interval: 50       # Rounds between DEM updates
+  smoothing_factor: 0.1     # EWMA smoothing for noise estimates
+  min_edge_probability: 1.0e-6
+  max_edge_probability: 0.4999
+  fallback_to_nominal: true

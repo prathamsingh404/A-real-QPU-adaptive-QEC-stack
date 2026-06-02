@@ -131,3 +131,138 @@ class HardwareConfig(BaseModel):
         return os.environ.get(self.api_token_env)
 
     @property
+    def instance(self) -> Optional[str]:
+        """Retrieve CRN/instance from environment variable."""
+        return os.environ.get(self.instance_env)
+
+
+class ReadoutNoiseConfig(BaseModel):
+    """Readout noise parameters.
+    
+    Default baseline values are modeled from the IBM Marrakesh daily calibration
+    snapshot artifact (data/calibration/ibm_marrakesh_snapshot.json).
+    """
+    enabled: bool = True
+    p0_given_1: float = Field(default=0.01208, ge=0.0, le=1.0)
+    p1_given_0: float = Field(default=0.01208, ge=0.0, le=1.0)
+
+
+class GateNoiseConfig(BaseModel):
+    """Gate noise parameters.
+    
+    Default baseline values are modeled from the IBM Marrakesh daily calibration
+    snapshot artifact (data/calibration/ibm_marrakesh_snapshot.json).
+    """
+    single_qubit: float = Field(default=0.000454, ge=0.0, le=1.0)
+    two_qubit: float = Field(default=0.003021, ge=0.0, le=1.0)
+    model: NoiseModel = NoiseModel.DEPOLARIZING
+
+
+class CorrelatedNoiseConfig(BaseModel):
+    """Correlated noise parameters."""
+    enabled: bool = False
+    spatial_range: int = Field(default=1, ge=0)
+    strength: float = Field(default=0.001, ge=0.0, le=1.0)
+
+
+class LeakageConfig(BaseModel):
+    """Leakage noise parameters."""
+    enabled: bool = False
+    rate: float = Field(default=0.001, ge=0.0, le=1.0)
+    seepage: float = Field(default=0.01, ge=0.0, le=1.0)
+
+
+class DriftConfig(BaseModel):
+    """Noise drift parameters."""
+    enabled: bool = True
+    model: DriftModel = DriftModel.LINEAR
+    rate: float = Field(default=0.0001, ge=0.0)
+    monitoring_window: int = Field(default=100, ge=1)
+
+
+class NoiseConfig(BaseModel):
+    """Complete noise configuration."""
+    readout: ReadoutNoiseConfig = Field(default_factory=ReadoutNoiseConfig)
+    gate: GateNoiseConfig = Field(default_factory=GateNoiseConfig)
+    correlated: CorrelatedNoiseConfig = Field(default_factory=CorrelatedNoiseConfig)
+    leakage: LeakageConfig = Field(default_factory=LeakageConfig)
+    drift: DriftConfig = Field(default_factory=DriftConfig)
+
+
+class QECConfig(BaseModel):
+    """QEC experiment configuration."""
+    code: QECCode = QECCode.SURFACE
+    distance: int = Field(default=3, ge=1)
+    rounds: int = Field(default=3, ge=1)
+    logical_basis: LogicalBasis = LogicalBasis.Z
+    boundary: Boundary = Boundary.PLANAR
+
+    @field_validator("distance")
+    @classmethod
+    def distance_must_be_odd(cls, v: int) -> int:
+        if v % 2 == 0:
+            raise ValueError(f"Code distance must be odd, got {v}")
+        return v
+
+
+class MLDecoderConfig(BaseModel):
+    """ML decoder configuration."""
+    enabled: bool = False
+    model: MLModel = MLModel.CNN
+    checkpoint: Optional[str] = None
+    batch_size: int = Field(default=256, ge=1)
+
+
+class AdaptiveDecoderConfig(BaseModel):
+    """Adaptive decoder configuration."""
+    enabled: bool = False
+    noise_estimation: bool = True
+    routing: bool = False
+    uncertainty: bool = False
+
+
+class DecoderConfig(BaseModel):
+    """Complete decoder configuration."""
+    baseline: DecoderType = DecoderType.MWPM
+    ml: MLDecoderConfig = Field(default_factory=MLDecoderConfig)
+    adaptive: AdaptiveDecoderConfig = Field(default_factory=AdaptiveDecoderConfig)
+
+
+class CPUConfig(BaseModel):
+    """CPU runtime configuration."""
+    threads: int = Field(default=4, ge=1)
+    affinity: bool = False
+
+
+class GPUConfig(BaseModel):
+    """GPU runtime configuration."""
+    enabled: bool = False
+    device: int = Field(default=0, ge=0)
+    backend: GPUBackendType = GPUBackendType.PYTORCH
+
+
+class LatencyBudgetConfig(BaseModel):
+    """Latency budget configuration for real-time QEC."""
+    deadline_us: float = Field(default=1000.0, gt=0)
+    warning_threshold: float = Field(default=0.8, gt=0.0, le=1.0)
+    tracking: bool = True
+
+
+class RuntimeConfig(BaseModel):
+    """Complete runtime configuration."""
+    cpu: CPUConfig = Field(default_factory=CPUConfig)
+    gpu: GPUConfig = Field(default_factory=GPUConfig)
+    batch_size: int = Field(default=1000, ge=1)
+    latency_budget: LatencyBudgetConfig = Field(default_factory=LatencyBudgetConfig)
+
+
+class ExperimentConfig(BaseModel):
+    """Experiment management configuration."""
+    output_dir: str = "experiments"
+    shots: int = Field(default=10000, ge=1)
+    repetitions: int = Field(default=1, ge=1)
+    save_raw: bool = True
+    save_circuits: bool = True
+    save_calibration: bool = True
+    save_plots: bool = True
+    name_template: str = "{code}_d{distance}_r{rounds}_{backend}_{timestamp}"

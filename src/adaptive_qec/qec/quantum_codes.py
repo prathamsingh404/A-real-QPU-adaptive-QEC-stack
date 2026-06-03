@@ -61,3 +61,78 @@ def build_422_code_circuit(insert_dd: bool = True) -> QuantumCircuit:
     qc.cx(qr_data[2], qr_anc[0])
     qc.cx(qr_data[3], qr_anc[0])
     qc.measure(qr_anc[0], cr_syn[0])
+
+    # 3. Extract X-stabilizer: S_X = X0 X1 X2 X3 into Ancilla 1
+    qc.reset(qr_anc[1])
+    qc.h(qr_anc[1])
+    qc.cx(qr_anc[1], qr_data[0])
+    qc.cx(qr_anc[1], qr_data[1])
+    qc.cx(qr_anc[1], qr_data[2])
+    qc.cx(qr_anc[1], qr_data[3])
+    qc.h(qr_anc[1])
+    qc.measure(qr_anc[1], cr_syn[1])
+
+    # 4. Transversal Readout
+    qc.barrier()
+    qc.measure(qr_data, cr_data)
+    return qc
+
+
+def build_dynamic_feedforward_circuit(insert_error_probability: float = 0.0) -> QuantumCircuit:
+    """
+    Builds a dynamic circuit using Qiskit OpenQASM 3 `if_test`.
+    Executes real-time sub-microsecond feedforward on IBM QPU controller electronics!
+
+    Logic:
+        1. Entangle data qubits into a Bell state (|00> + |11>)/sqrt(2).
+        2. Measure parity check Z0 Z1 into ancilla.
+        3. Real-time on-chip feedforward: IF syndrome == 1 THEN apply X correction immediately.
+        4. Measure final data fidelity.
+    """
+    qr_data = QuantumRegister(2, name="data")
+    qr_anc = QuantumRegister(1, name="anc")
+    cr_syn = ClassicalRegister(1, name="syn")
+    cr_data = ClassicalRegister(2, name="meas_data")
+
+    qc = QuantumCircuit(qr_data, qr_anc, cr_syn, cr_data)
+
+    # Prepare Bell state |Phi+> on data qubits
+    qc.reset(qr_data)
+    qc.h(qr_data[0])
+    qc.cx(qr_data[0], qr_data[1])
+
+    # Measure parity check Z0 Z1 into ancilla
+    qc.reset(qr_anc[0])
+    qc.cx(qr_data[0], qr_anc[0])
+    qc.cx(qr_data[1], qr_anc[0])
+    qc.measure(qr_anc[0], cr_syn[0])
+
+    # ON-CHIP REAL-TIME ACTIVE FEEDFORWARD (Executed in ~300 ns on cryostat electronics)
+    with qc.if_test((cr_syn[0], 1)):
+        qc.x(qr_data[0])  # Active conditional Pauli correction
+
+    qc.barrier()
+    qc.measure(qr_data, cr_data)
+    return qc
+
+
+def build_multi_round_circuit(
+    distance: int = 3,
+    rounds: int = 2,
+    insert_dd: bool = False,
+) -> QuantumCircuit:
+    """
+    Build a multi-round stabilizer syndrome extraction circuit.
+    Parameterized by distance d and round count R.
+    """
+    qr_data = QuantumRegister(distance, name="data")
+    qr_anc = QuantumRegister(distance - 1, name="anc")
+    cr_syn = [ClassicalRegister(distance - 1, name=f"syn{r}") for r in range(rounds)]
+    cr_data = ClassicalRegister(distance, name="meas_data")
+
+    qc = QuantumCircuit(qr_data, qr_anc, *cr_syn, cr_data)
+    qc.reset(qr_data)
+
+    for r in range(rounds):
+        qc.barrier()
+        qc.reset(qr_anc)

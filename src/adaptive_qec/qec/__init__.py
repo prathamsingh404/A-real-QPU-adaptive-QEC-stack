@@ -15,3 +15,19 @@ from adaptive_qec.qec.schedules import (
     create_custom_schedule,
     schedule_for_bias,
 )
+from adaptive_qec.qec.adaptive_scheduler import (
+    AdaptiveSchedulerConfig,
+    AdaptiveXZScheduler,
+    DefectObservation,
+)
+
+__all__ = [
+    "ScheduleType",
+    "StabilizerSchedule",
+    "get_schedule",
+    "create_custom_schedule",
+    "schedule_for_bias",
+    "AdaptiveSchedulerConfig",
+    "AdaptiveXZScheduler",
+    "DefectObservation",
+]

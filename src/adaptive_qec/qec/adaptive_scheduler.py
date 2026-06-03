@@ -122,3 +122,113 @@ class DefectObservation:
     z_defects: int
     total_x_stabilizers: int
     total_z_stabilizers: int
+
+    @property
+    def x_defect_rate(self) -> float:
+        """X defect rate normalized by stabilizer count."""
+        if self.total_x_stabilizers == 0:
+            return 0.0
+        return self.x_defects / self.total_x_stabilizers
+
+    @property
+    def z_defect_rate(self) -> float:
+        """Z defect rate normalized by stabilizer count."""
+        if self.total_z_stabilizers == 0:
+            return 0.0
+        return self.z_defects / self.total_z_stabilizers
+
+
+# -----------------------------------------------------------------------
+# Adaptive scheduler
+# -----------------------------------------------------------------------
+
+class AdaptiveXZScheduler:
+    """
+    Online adaptive scheduler for X/Z stabilizer measurement frequency.
+
+    Observes syndrome defect rates in real time and adjusts the
+    measurement schedule to allocate more rounds to the stabilizer
+    type that is detecting more errors. Uses EWMA smoothing and
+    dual-threshold hysteresis to avoid boundary chattering.
+
+    Usage:
+        scheduler = AdaptiveXZScheduler(config)
+        for round_idx, syndromes in enumerate(syndrome_stream):
+            obs = DefectObservation(
+                round_idx=round_idx,
+                x_defects=count_x_defects(syndromes),
+                z_defects=count_z_defects(syndromes),
+                total_x_stabilizers=n_x,
+                total_z_stabilizers=n_z,
+            )
+            schedule = scheduler.update(obs)
+            # Use schedule.round_type(round_idx) for next circuit
+    """
+
+    def __init__(
+        self,
+        config: Optional[AdaptiveSchedulerConfig] = None,
+    ) -> None:
+        self._config = config or AdaptiveSchedulerConfig()
+        self._config.validate()
+
+        # State
+        self._ewma_x: float = 0.0
+        self._ewma_z: float = 0.0
+        self._imbalance: float = 0.0
+        self._current_schedule = get_schedule(self._config.initial_schedule)
+        self._rounds_in_current: int = 0
+        self._total_rounds: int = 0
+
+        # History for analysis
+        self._history: deque[dict[str, Any]] = deque(
+            maxlen=self._config.window_size * 2
+        )
+        self._switch_log: list[dict[str, Any]] = []
+
+    @property
+    def current_schedule(self) -> StabilizerSchedule:
+        """The currently active measurement schedule."""
+        return self._current_schedule
+
+    @property
+    def imbalance(self) -> float:
+        """Current syndrome imbalance metric ΔXZ ∈ [-1, 1]."""
+        return self._imbalance
+
+    @property
+    def ewma_x(self) -> float:
+        """Current EWMA estimate of X defect rate."""
+        return self._ewma_x
+
+    @property
+    def ewma_z(self) -> float:
+        """Current EWMA estimate of Z defect rate."""
+        return self._ewma_z
+
+    @property
+    def switch_count(self) -> int:
+        """Number of schedule switches so far."""
+        return len(self._switch_log)
+
+    def update(self, observation: DefectObservation) -> StabilizerSchedule:
+        """
+        Process a new defect observation and potentially update schedule.
+
+        Args:
+            observation: Defect counts from the latest QEC round.
+
+        Returns:
+            The (possibly updated) measurement schedule to use.
+        """
+        alpha = self._config.ewma_alpha
+
+        # Update EWMA estimates
+        self._ewma_x = (
+            alpha * observation.x_defect_rate
+            + (1 - alpha) * self._ewma_x
+        )
+        self._ewma_z = (
+            alpha * observation.z_defect_rate
+            + (1 - alpha) * self._ewma_z
+        )

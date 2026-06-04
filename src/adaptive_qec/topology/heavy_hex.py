@@ -85,3 +85,96 @@ class HeavyHexTopology:
             if (q1, q2) not in seen_edges:
                 seen_edges.add((q1, q2))
                 topo.edges.append((q1, q2))
+
+        # Build adjacency
+        for q1, q2 in topo.edges:
+            topo.adjacency.setdefault(q1, set()).add(q2)
+            topo.adjacency.setdefault(q2, set()).add(q1)
+
+        # Ensure all qubits are in adjacency
+        for q in range(num_qubits):
+            topo.adjacency.setdefault(q, set())
+
+        topo._degree = {q: len(neighbors) for q, neighbors in topo.adjacency.items()}
+        return topo
+
+    @classmethod
+    def from_backend(cls, backend: Any) -> HeavyHexTopology:
+        """Build from an IBM backend object."""
+        try:
+            target = backend.target
+            coupling_map = list(target.operation_names_for_qargs)
+            # Extract from target's two-qubit gate entries
+            edges = []
+            for qargs in target.qargs:
+                if len(qargs) == 2:
+                    edges.append(list(qargs))
+            num_qubits = target.num_qubits
+            return cls.from_coupling_map(edges, num_qubits)
+        except AttributeError:
+            # Fallback: try coupling_map attribute
+            cm = backend.configuration().coupling_map
+            n = backend.configuration().n_qubits
+            return cls.from_coupling_map(cm, n)
+
+    @classmethod
+    def synthetic(cls, rows: int = 5, cols: int = 5) -> HeavyHexTopology:
+        """
+        Generate a synthetic heavy-hex topology.
+
+        Creates a heavy-hex lattice with the specified grid dimensions.
+        Each hex cell has 6 vertices + flag qubits on edges.
+        """
+        topo = cls()
+        edges = []
+        qubit_id = 0
+
+        # Simple heavy-hex: alternating rows of degree-2 and degree-3 qubits
+        # Grid-based generation
+        grid = {}
+        for r in range(rows):
+            for c in range(cols):
+                grid[(r, c)] = qubit_id
+                qubit_id += 1
+
+        topo.num_qubits = qubit_id
+
+        for r in range(rows):
+            for c in range(cols):
+                q = grid[(r, c)]
+                # Horizontal neighbors
+                if c + 1 < cols:
+                    edges.append((q, grid[(r, c + 1)]))
+                # Vertical neighbors (heavy-hex / brickwall alternating pattern:
+                # even rows connect down at c % 4 == 0, odd rows connect down at c % 4 == 2)
+                connect_down = (r % 2 == 0 and c % 4 == 0) or (r % 2 == 1 and c % 4 == 2)
+                if r + 1 < rows and connect_down:
+                    edges.append((q, grid[(r + 1, c)]))
+
+        topo.edges = edges
+        for q1, q2 in edges:
+            topo.adjacency.setdefault(q1, set()).add(q2)
+            topo.adjacency.setdefault(q2, set()).add(q1)
+        for q in range(topo.num_qubits):
+            topo.adjacency.setdefault(q, set())
+        topo._degree = {q: len(n) for q, n in topo.adjacency.items()}
+
+        return topo
+
+    def degree(self, qubit: int) -> int:
+        """Get the degree (number of neighbors) of a qubit."""
+        return self._degree.get(qubit, 0)
+
+    def neighbors(self, qubit: int) -> set[int]:
+        """Get the neighbors of a qubit."""
+        return self.adjacency.get(qubit, set())
+
+    def compute_metrics(self) -> TopologyMetrics:
+        """Compute topology metrics."""
+        degrees = list(self._degree.values())
+        if not degrees:
+            return TopologyMetrics(
+                num_qubits=0, num_edges=0, min_degree=0, max_degree=0,
+                avg_degree=0.0, degree_distribution={}, diameter=0,
+                is_heavy_hex=False,
+            )

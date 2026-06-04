@@ -36,3 +36,38 @@ class LazyMWPMDecoder(Decoder):
         self._uf.configure(**kwargs)
         self._num_detectors = self._mwpm._num_detectors
         self._num_observables = self._mwpm._num_observables
+
+    def is_ambiguous(self, syndrome: np.ndarray) -> bool:
+        """Evaluate whether a syndrome vector exhibits high defect density."""
+        return bool(syndrome.sum() > self.defect_threshold)
+
+    def decode(self, syndrome: np.ndarray) -> Correction:
+        """Decode single shot or batch syndrome using threshold routing."""
+        if syndrome.ndim == 1:
+            if self.is_ambiguous(syndrome):
+                return self._mwpm.decode(syndrome)
+            return self._uf.decode(syndrome)
+
+        defect_counts = syndrome.sum(axis=1)
+        mwpm_mask = defect_counts > self.defect_threshold
+        uf_mask = ~mwpm_mask
+
+        predictions = np.zeros((syndrome.shape[0], self._num_observables), dtype=np.uint8)
+
+        if np.any(mwpm_mask):
+            c_mwpm = self._mwpm.decode(syndrome[mwpm_mask])
+            predictions[mwpm_mask] = c_mwpm.observable_corrections
+        if np.any(uf_mask):
+            c_uf = self._uf.decode(syndrome[uf_mask])
+            predictions[uf_mask] = c_uf.observable_corrections
+
+        return Correction(observable_corrections=predictions)
+
+    def decode_batch(
+        self,
+        syndromes: np.ndarray,
+        observable_flips: np.ndarray,
+    ) -> DecoderMetrics:
+        """Vectorized batch decoding with per-engine latency telemetry."""
+        shots = syndromes.shape[0]
+        t_start = time.perf_counter()

@@ -92,3 +92,101 @@ class SurfaceCodeEmbedding:
 
     def ancilla_qubit_map(self) -> dict[tuple[int, int], int]:
         return self.ancilla_map
+
+    def swap_count(self) -> int:
+        return self._swap_count
+
+    def circuit_depth_overhead(self) -> float:
+        return self._depth_overhead
+
+    def all_physical_qubits(self) -> set[int]:
+        """All physical qubits used by this embedding."""
+        return set(self.data_map.values()) | set(self.ancilla_map.values())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "distance": self.distance,
+            "num_data_qubits": len(self.data_map),
+            "num_ancilla_qubits": len(self.ancilla_map),
+            "total_physical_qubits": len(self.all_physical_qubits()),
+            "swap_count": self._swap_count,
+            "depth_overhead": round(self._depth_overhead, 3),
+            "idle_slots": self._idle_slots,
+        }
+
+
+class EmbeddingFinder:
+    """
+    Find optimal surface code embeddings on hardware topologies.
+
+    Search strategy:
+        1. Generate candidate starting positions
+        2. For each start, greedily assign data qubits using BFS
+        3. Assign ancilla qubits to remaining nearby physical qubits
+        4. Score each embedding by SWAP count + idle time
+        5. Return the best scoring embedding
+    """
+
+    def __init__(self, topology: HeavyHexTopology) -> None:
+        self.topology = topology
+
+    def find_embedding(
+        self,
+        distance: int,
+        max_candidates: int = 20,
+    ) -> SurfaceCodeEmbedding:
+        """
+        Find the best embedding for a surface code of given distance.
+
+        Args:
+            distance: Code distance (3, 5, 7, ...)
+            max_candidates: Maximum starting positions to try.
+
+        Returns:
+            Best SurfaceCodeEmbedding found.
+        """
+        n_data = distance ** 2
+        n_ancilla = (distance - 1) ** 2 + (distance - 1) ** 2
+        total_needed = n_data + n_ancilla
+
+        if total_needed > self.topology.num_qubits:
+            logger.warning(
+                f"Need {total_needed} qubits for d={distance} but topology "
+                f"has only {self.topology.num_qubits}"
+            )
+
+        # Generate candidate starting positions
+        # Prefer high-connectivity qubits as starting points
+        candidates = sorted(
+            range(self.topology.num_qubits),
+            key=lambda q: -self.topology.degree(q),
+        )[:max_candidates]
+
+        best_embedding: Optional[SurfaceCodeEmbedding] = None
+        best_score = float("inf")
+
+        for start_qubit in candidates:
+            embedding = self._try_embedding(distance, start_qubit)
+            if embedding is None:
+                continue
+
+            score = self._score_embedding(embedding)
+            if score.total_score < best_score:
+                best_score = score.total_score
+                best_embedding = embedding
+
+        if best_embedding is None:
+            logger.warning(f"No valid embedding found for d={distance}")
+            return SurfaceCodeEmbedding(distance=distance)
+
+        logger.info(
+            f"Best embedding for d={distance}: "
+            f"{len(best_embedding.all_physical_qubits())} physical qubits, "
+            f"score={best_score:.2f}"
+        )
+        return best_embedding
+
+    def _try_embedding(
+        self, distance: int, start_qubit: int
+    ) -> Optional[SurfaceCodeEmbedding]:
+        """Try to embed a surface code starting from a specific qubit."""

@@ -81,3 +81,88 @@ class MWPMDecoder(Decoder):
 
         Args:
             syndrome: shape (num_detectors,) or (batch, num_detectors)
+
+        Returns:
+            Correction with observable predictions.
+        """
+        if self._matching is None:
+            raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        if syndrome.ndim == 1:
+            prediction = np.asarray(self._matching.decode(syndrome.astype(np.uint8)), dtype=np.uint8)
+            return Correction(
+                observable_corrections=prediction,
+            )
+
+        # Batch decode
+        predictions = np.asarray(self._matching.decode_batch(syndrome.astype(np.uint8)), dtype=np.uint8)
+        return Correction(
+            observable_corrections=predictions,
+        )
+
+    def decode_batch(
+        self,
+        syndromes: np.ndarray,
+        observable_flips: np.ndarray,
+    ) -> DecoderMetrics:
+        """
+        Decode a batch and compute comprehensive metrics.
+
+        Args:
+            syndromes: shape (shots, num_detectors)
+            observable_flips: shape (shots, num_observables) — actual flips
+
+        Returns:
+            DecoderMetrics with error rate, latency distribution, throughput.
+        """
+        if self._matching is None:
+            raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        shots = syndromes.shape[0]
+
+        # Track memory
+        tracemalloc.start()
+
+        # Per-shot timing for latency distribution
+        per_shot_times = np.zeros(shots)
+
+        # Batch decode with timing
+        t_start = time.perf_counter()
+
+        # Decode in mini-batches for latency measurement
+        batch_size = min(1000, shots)
+        all_predictions = []
+
+        for start in range(0, shots, batch_size):
+            end = min(start + batch_size, shots)
+            batch = syndromes[start:end].astype(np.uint8)
+
+            t_batch_start = time.perf_counter()
+            predictions = self._matching.decode_batch(batch)
+            t_batch_end = time.perf_counter()
+
+            all_predictions.append(predictions)
+
+            # Approximate per-shot latency within batch
+            batch_time = (t_batch_end - t_batch_start)
+            batch_shots = end - start
+            per_shot_times[start:end] = batch_time / batch_shots
+
+        t_total = time.perf_counter() - t_start
+
+        # Memory measurement
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        # Combine predictions
+        all_preds = np.vstack(all_predictions).astype(np.uint8)
+
+        # Compute logical errors
+        # A logical error occurs when the predicted correction, combined
+        # with the actual observable flip, results in a logical flip
+        logical_errors = np.any(all_preds != observable_flips, axis=1)
+        num_errors = int(logical_errors.sum())
+        error_rate = num_errors / shots
+
+        # Latency statistics (convert to microseconds)
+        latency_us = per_shot_times * 1e6

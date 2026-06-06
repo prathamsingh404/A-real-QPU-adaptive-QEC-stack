@@ -62,3 +62,72 @@ class OnlineReweightedMWPM(Decoder):
         self._current_matching: Optional[pymatching.Matching] = None
         self._circuit: Optional[stim.Circuit] = None
         self._base_dem: Optional[stim.DetectorErrorModel] = None
+
+        self._num_detectors: int = 0
+        self._num_observables: int = 0
+        self._syndrome_buffer: collections.deque = collections.deque(maxlen=window_size)
+        self._shots_since_update: int = 0
+        self.total_reweights: int = 0
+
+    @property
+    def name(self) -> str:
+        return "reweighted_mwpm"
+
+    def configure(self, **kwargs: Any) -> None:
+        """Configure decoder with circuit or DEM."""
+        circuit = kwargs.get("circuit")
+        dem = kwargs.get("dem")
+
+        if circuit is None and dem is None:
+            raise ValueError("Must provide 'circuit' or 'dem' to configure OnlineReweightedMWPM")
+
+        if circuit is not None:
+            self._circuit = circuit
+            self._calibrator = DEMCalibrator(
+                circuit=circuit,
+                min_probability=self.min_probability,
+                max_probability=self.max_probability,
+            )
+            dem = circuit.detector_error_model(decompose_errors=True)
+        else:
+            self._base_dem = dem
+            # For standalone DEM, construct calibrator with fallback surface circuit or internal edges
+            self._calibrator = DEMCalibrator(
+                min_probability=self.min_probability,
+                max_probability=self.max_probability,
+            )
+
+        self._base_dem = dem
+        self._num_detectors = dem.num_detectors
+        self._num_observables = dem.num_observables
+        self._current_matching = pymatching.Matching.from_detector_error_model(dem)
+        self._syndrome_buffer.clear()
+        self._shots_since_update = 0
+        self.total_reweights = 0
+
+    def update_weights(self, window_syndromes: np.ndarray) -> None:
+        """Trigger graph reweighting from an explicit syndrome window."""
+        if self._calibrator is None:
+            return
+        calibrated: CalibratedDEM = self._calibrator.calibrate_from_syndromes(
+            syndromes=window_syndromes,
+            smoothing=self.smoothing,
+        )
+        self._current_matching = calibrated.to_matching()
+        self.total_reweights += 1
+
+    def decode(self, syndrome: np.ndarray) -> Correction:
+        """Decode single shot or batch while streaming into the sliding window."""
+        if self._current_matching is None:
+            raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        syndrome = np.asarray(syndrome, dtype=np.uint8)
+
+        if syndrome.ndim == 1:
+            self._syndrome_buffer.append(syndrome)
+            self._shots_since_update += 1
+
+            if self._shots_since_update >= self.update_interval and len(self._syndrome_buffer) >= 20:
+                window_arr = np.array(self._syndrome_buffer)
+                self.update_weights(window_arr)
+                self._shots_since_update = 0

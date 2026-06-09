@@ -29,3 +29,38 @@ from adaptive_qec.controller.bandit import (
     Exp3PController,
     build_arm_set,
 )
+from adaptive_qec.controller.sprt import (
+    SPRTController,
+    SPRTEngine,
+    SPRTState,
+)
+from adaptive_qec.controller.cg_ccads import (
+    CGCCADSController,
+    ControllerDecision,
+    ControllerStateVector,
+    AdaptationTax,
+    AdaptationBudget,
+)
+
+
+CONTROLLER_REGISTRY: dict[str, type[BaseController]] = {
+    "static": StaticController,
+    "cost_based": CostBasedController,
+    "exp3": Exp3Controller,
+    "exp3p": Exp3PController,
+    "dase": DASEController,
+    "sprt": SPRTController,
+    "cg_ccads": CGCCADSController,
+}
+
+
+def create_controller(name: str, **kwargs) -> BaseController:
+    """
+    Factory function to create a controller by name.
+
+    Args:
+        name: Controller type name (see CONTROLLER_REGISTRY).
+        **kwargs: Controller-specific configuration.
+
+    Returns:
+        Instantiated controller.

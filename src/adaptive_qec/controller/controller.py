@@ -230,3 +230,248 @@ class ControllerMetrics:
             "recalibration_requests": self.recalibration_requests,
             "mean_cost": float(np.mean(self.cost_history)) if self.cost_history else 0.0,
         }
+
+
+# ---------------------------------------------------------------------------
+# Cost function
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CostWeights:
+    """Configurable weights for the cost function J(a | s).
+
+    All weights are non-negative. Default values produce a policy that
+    prioritizes logical error rate while penalizing excessive switching.
+
+    PROVENANCE: ASSUMED — these weights are hand-tuned defaults. The
+    sensitivity analysis in experiments/adaptive_vs_static.py sweeps
+    over these to find robust operating points.
+    """
+    lambda_latency: float = 0.01       # weight on normalized decoder latency
+    lambda_dd_cost: float = 0.005      # weight on DD pulse overhead
+    lambda_switch: float = 0.02        # weight on mode switching penalty
+    lambda_recal: float = 0.05         # weight on recalibration cost
+
+    def to_dict(self) -> dict[str, float]:
+        return {
+            "lambda_latency": self.lambda_latency,
+            "lambda_dd_cost": self.lambda_dd_cost,
+            "lambda_switch": self.lambda_switch,
+            "lambda_recal": self.lambda_recal,
+        }
+
+
+def estimate_logical_error_rate(
+    state: HardwareState,
+    decoder: DecoderChoice,
+    dd: DDSequenceType,
+    burst_mitigate: bool,
+) -> float:
+    """Estimate P_L for a given (state, action) pair.
+
+    Uses the phenomenological model:
+        P_L ~ A * (p_eff / p_th)^((d+1)/2)
+
+    where p_eff is the effective physical error rate after DD and burst
+    mitigation are applied.
+
+    PROVENANCE: INFERRED — this is a model-based estimate, not a direct
+    measurement. The model coefficients are approximate.
+    """
+    # Base physical decomposition
+    p_base = state.p_2q
+    f_floor = 0.12
+    f_drift = 0.85
+    p_floor = 0.005
+    p_dep = f_floor * min(p_base, p_floor) + f_drift * max(0.0, p_base - p_floor)
+    p_non_dep = max(0.0, p_base - p_dep)
+
+    # DD trade-off: suppression of idle dephasing vs pulse error overhead
+    PULSE_COUNTS = {
+        DDSequenceType.NONE: 0,
+        DDSequenceType.CPMG: 2,
+        DDSequenceType.XY4: 4,
+        DDSequenceType.XY8: 8,
+    }
+    pulses = PULSE_COUNTS.get(dd, 0)
+    pulse_overhead = pulses * state.p_1q
+
+    DD_SUPPRESSION = {
+        DDSequenceType.NONE: 1.0,
+        DDSequenceType.CPMG: 0.40,
+        DDSequenceType.XY4: 0.15,
+        DDSequenceType.XY8: 0.08,
+    }
+    suppression = DD_SUPPRESSION.get(dd, 1.0)
+
+    p_eff = p_non_dep + (p_dep * suppression) + pulse_overhead + state.p_ro / 2.0
+
+    # Add burst contribution (if not mitigated)
+    if state.burst_active and not burst_mitigate:
+        p_eff *= 2.5
+
+    # Decoder accuracy: MWPM is near-optimal for uniform stochastic errors.
+    # Under persistent spatial defects / leakage, Union-Find's cluster
+    # bounding localizes errors, whereas MWPM creates boundary-crossing chains.
+    if decoder == DecoderChoice.UNION_FIND:
+        if state.leakage_fraction > 0.05:
+            p_eff *= 0.70
+        else:
+            p_eff *= 1.12
+
+    # Phenomenological model
+    p_th = 0.01  # approximate threshold
+    d = state.code_distance
+    A = 0.1
+
+    if p_eff < p_th:
+        p_L = A * (p_eff / p_th) ** ((d + 1) / 2)
+    else:
+        p_L = min(0.5, A * (p_eff / p_th))
+
+    return float(np.clip(p_L, 0.0, 0.5))
+
+
+def compute_cost(
+    state: HardwareState,
+    action: ControlAction,
+    previous_action: Optional[ControlAction],
+    weights: CostWeights,
+) -> float:
+    """Compute the cost J(a | s) for a candidate action.
+
+    J = P_L + λ₁·L + λ₂·C_DD + λ₃·C_switch + λ₄·C_cal
+
+    Args:
+        state: Current hardware state observation.
+        action: Candidate control action.
+        previous_action: Action taken in the previous window (for switch cost).
+        weights: Cost function weights.
+
+    Returns:
+        Scalar cost value (lower is better).
+    """
+    # 1. Estimated logical error rate
+    p_L = estimate_logical_error_rate(
+        state, action.decoder, action.dd_policy, action.burst_mitigation
+    )
+
+    # 2. Decoder latency cost (calibrated: C++ MWPM ~= 1.0, Python UF ~= 2.5)
+    latency_cost = 1.0 if action.decoder == DecoderChoice.MWPM else 2.5
+
+    # 3. DD pulse cost (number of pulses normalized)
+    DD_PULSE_COUNTS = {
+        DDSequenceType.NONE: 0,
+        DDSequenceType.CPMG: 2,
+        DDSequenceType.XY4: 4,
+        DDSequenceType.XY8: 8,
+    }
+    dd_cost = DD_PULSE_COUNTS.get(action.dd_policy, 0) / 8.0
+
+    # 4. Mode switch cost (penalize changing decoder or DD policy)
+    switch_cost = 0.0
+    if previous_action is not None:
+        if action.decoder != previous_action.decoder:
+            switch_cost += 1.0
+        if action.dd_policy != previous_action.dd_policy:
+            switch_cost += 0.5
+
+    # 5. Recalibration cost
+    recal_cost = 1.0 if action.request_recalibration else 0.0
+
+    total = (
+        p_L
+        + weights.lambda_latency * latency_cost
+        + weights.lambda_dd_cost * dd_cost
+        + weights.lambda_switch * switch_cost
+        + weights.lambda_recal * recal_cost
+    )
+    return float(total)
+
+
+# ---------------------------------------------------------------------------
+# Hysteresis tracker
+# ---------------------------------------------------------------------------
+
+class HysteresisTracker:
+    """Prevents oscillation between control modes.
+
+    A mode switch is only committed when the target mode has been
+    consistently better for `patience` consecutive windows with
+    a minimum improvement margin of `margin`.
+    """
+
+    def __init__(self, patience: int = 3, margin: float = 0.05) -> None:
+        self.patience = patience
+        self.margin = margin
+        self._consecutive_wins: dict[str, int] = {}
+
+    def should_switch(
+        self,
+        current_mode: str,
+        candidate_mode: str,
+        current_cost: float,
+        candidate_cost: float,
+    ) -> bool:
+        """Return True if the switch should be committed."""
+        if candidate_mode == current_mode:
+            self._consecutive_wins.pop(candidate_mode, None)
+            return False
+
+        improvement = (current_cost - candidate_cost) / max(abs(current_cost), 1e-10)
+
+        if improvement > self.margin:
+            self._consecutive_wins[candidate_mode] = (
+                self._consecutive_wins.get(candidate_mode, 0) + 1
+            )
+        else:
+            self._consecutive_wins[candidate_mode] = 0
+
+        if self._consecutive_wins.get(candidate_mode, 0) >= self.patience:
+            self._consecutive_wins[candidate_mode] = 0
+            return True
+
+        return False
+
+    def reset(self) -> None:
+        """Reset all accumulated evidence."""
+        self._consecutive_wins.clear()
+
+
+# ---------------------------------------------------------------------------
+# Adaptive Controller
+# ---------------------------------------------------------------------------
+
+class AdaptiveController:
+    """
+    Interpretable hardware-state-conditioned QEC controller.
+
+    Core loop (executed once per observation window):
+        1. Observe hardware state s_t from detectors and calibration
+        2. Enumerate candidate actions A = {(decoder, dd, burst_mit, recal)}
+        3. Compute J(a | s_t) for each candidate
+        4. Select a*_t = argmin_a J(a | s_t) subject to hysteresis
+        5. Return the selected action
+
+    The controller is stateful (it tracks history for hysteresis and
+    mode switching), but the cost function is fully explicit and
+    interpretable — no neural network, no black box.
+    """
+
+    def __init__(
+        self,
+        weights: Optional[CostWeights] = None,
+        hysteresis_patience: int = 3,
+        hysteresis_margin: float = 0.05,
+        leakage_threshold: float = 0.15,
+        distance_crossover: int = 5,
+    ) -> None:
+        self.weights = weights or CostWeights()
+        self.hysteresis = HysteresisTracker(
+            patience=hysteresis_patience,
+            margin=hysteresis_margin,
+        )
+        self.metrics = ControllerMetrics()
+        self.leakage_threshold = leakage_threshold
+        self.distance_crossover = distance_crossover
+        self.fast_path_count = 0

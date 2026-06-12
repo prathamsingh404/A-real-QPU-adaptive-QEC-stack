@@ -132,3 +132,117 @@ class SPRTEngine:
             else:
                 llr_incr = math.log((1.0 - p1) / (1.0 - p0))
             state.log_likelihood_ratio += llr_incr
+
+            if state.log_likelihood_ratio >= self._upper:
+                state.decision = "switch"
+                return "switch"
+            elif state.log_likelihood_ratio <= self._lower:
+                state.decision = "stay"
+                return "stay"
+            elif state.observations >= self.max_samples:
+                state.decision = "switch" if state.log_likelihood_ratio > 0 else "stay"
+                return state.decision
+            return "continue"
+
+        if current_reward is None or challenger_reward is None:
+            return "continue"
+
+        state.current_rewards.append(current_reward)
+        state.challenger_rewards.append(challenger_reward)
+        state.samples_seen += 1
+        state.observations = state.samples_seen
+
+        # Empirical survival probabilities (bounded away from 0/1)
+        p0 = np.clip(np.mean(state.current_rewards), 0.01, 0.99)
+        p1 = np.clip(np.mean(state.challenger_rewards), 0.01, 0.99)
+
+        challenger_won = float(challenger_reward > current_reward)
+        p1_effective = min(p1, 0.99)
+        p0_effective = max(p0, 0.01)
+
+        if challenger_won > 0.5:
+            llr_increment = math.log(
+                max(p1_effective, 1e-10) / max(p0_effective, 1e-10)
+            )
+        else:
+            llr_increment = math.log(
+                max(1 - p1_effective, 1e-10) / max(1 - p0_effective, 1e-10)
+            )
+
+        state.log_likelihood_ratio += llr_increment
+
+        # Check boundaries
+        if state.log_likelihood_ratio >= self._upper:
+            state.decision = "switch"
+            return "switch"
+        elif state.log_likelihood_ratio <= self._lower:
+            state.decision = "stay"
+            return "stay"
+        elif state.samples_seen >= self.max_samples:
+            if state.log_likelihood_ratio > 0:
+                state.decision = "switch"
+                return "switch"
+            else:
+                state.decision = "stay"
+                return "stay"
+
+        return "continue"
+
+
+# ---------------------------------------------------------------------------
+# SPRT Controller
+# ---------------------------------------------------------------------------
+
+class SPRTController(BaseController):
+    """SPRT-gated adaptive controller.
+
+    Operates in two phases:
+    1. Exploitation: use the current best arm.
+    2. Evaluation: periodically run a paired comparison (interleaved
+       rounds) between the current arm and a challenger, accumulating
+       SPRT evidence.
+    """
+
+    def __init__(
+        self,
+        arms: Optional[list[Any]] = None,
+        alpha: float = 0.05,
+        beta: float = 0.10,
+        delta: float = 0.01,
+        p0: Optional[float] = None,
+        p1: Optional[float] = None,
+        eval_interval: int = 10,
+        cooldown: int = 20,
+        weights: Optional[CostWeights] = None,
+    ) -> None:
+        super().__init__(weights=weights)
+
+        self._sprt = SPRTEngine(alpha=alpha, beta=beta, delta=delta, p0=p0, p1=p1)
+
+        # Arms
+        if arms is not None:
+            self._arms = arms
+        else:
+            from adaptive_qec.controller.bandit import build_arm_set
+            self._arms = build_arm_set()
+
+        self._current_arm: int = 0
+        self._challenger_arm: Optional[int] = None
+
+        # SPRT state
+        self._sprt_state: Optional[SPRTState] = None
+        self._in_eval: bool = False
+        self._eval_interval = eval_interval
+        self._cooldown = cooldown
+        self._cooldown_remaining: int = 0
+
+        # Round-robin challenger selection
+        self._challenger_queue: list[int] = []
+
+        # Stats
+        self._switch_count: int = 0
+        self._eval_count: int = 0
+
+    @property
+    def name(self) -> str:
+        return "sprt"

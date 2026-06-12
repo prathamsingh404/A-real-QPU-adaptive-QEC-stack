@@ -25,3 +25,27 @@ class CostBasedController(BaseController):
     This is the deterministic cost-enumeration policy that evaluates
     J(a|s) for every candidate action and picks the minimum subject
     to hysteresis.  It serves as the "adaptive but not bandit" arm.
+
+    Parameters
+    ----------
+    weights : CostWeights, optional
+        Weights for the multi-objective cost J(a|s).
+    hysteresis_patience : int
+        Consecutive windows the candidate must dominate before switch.
+    hysteresis_margin : float
+        Minimum fractional improvement to count as a "win".
+    """
+
+    def __init__(
+        self,
+        weights: Optional[CostWeights] = None,
+        hysteresis_patience: int = 3,
+        hysteresis_margin: float = 0.05,
+    ) -> None:
+        super().__init__(weights=weights)
+        self._inner = AdaptiveController(
+            weights=self._weights,
+            hysteresis_patience=hysteresis_patience,
+            hysteresis_margin=hysteresis_margin,
+        )
+        self._last_action: Optional[ControlAction] = None

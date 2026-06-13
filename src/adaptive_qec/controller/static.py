@@ -35,3 +35,30 @@ class StaticController(BaseController):
     weights : CostWeights, optional
         Cost weights (used only for telemetry cost tracking).
     """
+
+    def __init__(
+        self,
+        decoder: Any = DecoderChoice.UNION_FIND,
+        dd_policy: Any = DDSequenceType.NONE,
+        dd_sequence: Optional[Any] = None,
+        schedule: str = "balanced",
+        weights: Optional[CostWeights] = None,
+    ) -> None:
+        super().__init__(weights=weights)
+        if isinstance(decoder, str):
+            decoder = DecoderChoice.MWPM if "mwpm" in decoder.lower() else DecoderChoice.UNION_FIND
+        self._decoder = decoder
+
+        effective_dd = dd_sequence if dd_sequence is not None else dd_policy
+        if isinstance(effective_dd, str):
+            dd_lower = effective_dd.lower()
+            if "xy4" in dd_lower:
+                effective_dd = DDSequenceType.XY4
+            elif "xy8" in dd_lower:
+                effective_dd = DDSequenceType.XY8
+            elif "cpmg" in dd_lower:
+                effective_dd = DDSequenceType.CPMG
+            else:
+                effective_dd = DDSequenceType.NONE
+        self._dd_policy = effective_dd
+        self._schedule = schedule

@@ -48,3 +48,74 @@ class ExperimentRecord:
     def create_timestamp() -> str:
         """Create ISO 8601 timestamp in UTC."""
         return datetime.now(timezone.utc).isoformat()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to JSON-serializable dictionary."""
+        d = {
+            "experiment_id": self.experiment_id,
+            "timestamp": self.timestamp,
+            "backend": self.backend,
+            "provider": self.provider,
+            "qubit_mapping": self.qubit_mapping,
+            "circuit_qasm": self.circuit_qasm,
+            "shots": self.shots,
+            "num_qubits_measured": self.num_qubits_measured,
+            "counts": self.counts,
+            "calibration_snapshot": self.calibration_snapshot,
+            "software_versions": self.software_versions,
+            "compiler_config": self.compiler_config,
+            "config_snapshot": self.config_snapshot,
+            "git_commit": self.git_commit,
+            "execution_time_s": self.execution_time_s,
+            "job_id": self.job_id,
+            "metadata": self.metadata,
+        }
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ExperimentRecord:
+        """Reconstruct from dictionary. measurement_outcomes loaded separately."""
+        return cls(
+            experiment_id=data["experiment_id"],
+            timestamp=data["timestamp"],
+            backend=data["backend"],
+            provider=data["provider"],
+            qubit_mapping=data.get("qubit_mapping"),
+            circuit_qasm=data["circuit_qasm"],
+            shots=data["shots"],
+            num_qubits_measured=data["num_qubits_measured"],
+            measurement_outcomes=np.array([]),  # loaded from .npy
+            counts=data["counts"],
+            calibration_snapshot=data["calibration_snapshot"],
+            software_versions=data["software_versions"],
+            compiler_config=data["compiler_config"],
+            config_snapshot=data["config_snapshot"],
+            git_commit=data.get("git_commit"),
+            execution_time_s=data.get("execution_time_s"),
+            job_id=data.get("job_id"),
+            metadata=data.get("metadata", {}),
+        )
+
+
+@dataclass
+class DetectorRecord:
+    """Detector extraction results for an experiment."""
+    experiment_id: str
+    num_rounds: int
+    num_detectors: int
+    syndrome_tensor: np.ndarray       # (shots, rounds * detectors) or (shots, R, Nd)
+    observable_flips: np.ndarray      # (shots, num_observables)
+    detector_coordinates: Optional[np.ndarray] = None  # (num_detectors, ndim)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Metadata only — arrays saved separately."""
+        return {
+            "experiment_id": self.experiment_id,
+            "num_rounds": self.num_rounds,
+            "num_detectors": self.num_detectors,
+            "syndrome_shape": list(self.syndrome_tensor.shape),
+            "observable_shape": list(self.observable_flips.shape),
+        }
+
+
+@dataclass

@@ -222,3 +222,231 @@ class QiskitRuntimeLoop:
     def connect(self) -> None:
         """
         Establish connection to IBM Quantum backend.
+
+        Opens a Qiskit Runtime Session for the configured backend.
+        In dry_run mode, uses a fake backend for testing.
+        """
+        if self._config.dry_run:
+            logger.info(
+                "DRY RUN mode: using local simulator instead of "
+                f"{self._config.backend_name}"
+            )
+            self._backend = self._create_fake_backend()
+            return
+
+        try:
+            import os
+            from dotenv import load_dotenv
+            from qiskit_ibm_runtime import (
+                QiskitRuntimeService,
+                SamplerV2,
+                Session,
+            )
+
+            load_dotenv(".env")
+            channel = os.getenv("IBM_QUANTUM_CHANNEL", "ibm_cloud")
+            token = os.getenv("IBM_QUANTUM_TOKEN")
+            instance = os.getenv("IBM_QUANTUM_INSTANCE")
+
+            if token and instance:
+                service = QiskitRuntimeService(channel=channel, token=token, instance=instance)
+            elif token:
+                service = QiskitRuntimeService(channel=channel, token=token)
+            else:
+                service = QiskitRuntimeService()
+
+            self._backend = service.backend(self._config.backend_name)
+
+            logger.info(
+                f"Connected to {self._config.backend_name} "
+                f"({self._backend.num_qubits} qubits)"
+            )
+
+        except ImportError:
+            raise RuntimeError(
+                "qiskit-ibm-runtime not installed. Install with: "
+                "pip install qiskit-ibm-runtime"
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to connect to {self._config.backend_name}: {e}"
+            )
+
+    def open_session(self) -> None:
+        """
+        Open a Qiskit Runtime Session.
+
+        Sessions hold a dedicated QPU reservation window, minimizing
+        queue wait time between consecutive batches.
+        """
+        if self._config.dry_run:
+            logger.info("DRY RUN: skipping session open")
+            return
+
+        try:
+            from qiskit_ibm_runtime import Session
+
+            self._session = Session(
+                backend=self._backend,
+                max_time=self._config.session_timeout_s,
+            )
+            logger.info(
+                f"Opened session on {self._config.backend_name} "
+                f"(timeout={self._config.session_timeout_s}s)"
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to open session: {e}")
+
+    def run(
+        self,
+        circuit_builder: Any = None,
+        decoder: Any = None,
+    ) -> list[BatchResult]:
+        """
+        Execute the full closed-loop experiment.
+
+        Args:
+            circuit_builder: Callable that produces a Stim/Qiskit circuit
+                given the current controller action.
+            decoder: Decoder instance (MWPM or Union-Find) for
+                syndrome processing.
+
+        Returns:
+            List of BatchResult objects from all executed batches.
+        """
+        self._is_running = True
+        self._start_time = time.time()
+
+        logger.info(
+            f"Starting runtime loop {self._run_id}: "
+            f"max_batches={self._config.max_batches}, "
+            f"shots_per_batch={self._config.shots_per_batch}, "
+            f"max_total_shots={self._config.max_total_shots}"
+        )
+
+        try:
+            for batch_idx in range(self._config.max_batches):
+                # Check budget
+                if self._budget_manager is not None:
+                    if not self._budget_manager.can_submit(
+                        self._config.shots_per_batch
+                    ):
+                        logger.warning(
+                            f"Shot budget exhausted at batch {batch_idx}. "
+                            f"Total shots: {self._total_shots}"
+                        )
+                        break
+
+                if self._total_shots + self._config.shots_per_batch > \
+                        self._config.max_total_shots:
+                    logger.warning(
+                        f"Would exceed max_total_shots at batch {batch_idx}. "
+                        f"Stopping."
+                    )
+                    break
+
+                # Execute batch
+                result = self._execute_batch(
+                    batch_idx=batch_idx,
+                    circuit_builder=circuit_builder,
+                    decoder=decoder,
+                )
+                self._batch_results.append(result)
+                self._total_shots += result.shots
+                self._total_errors += result.logical_errors
+
+                if self._budget_manager is not None:
+                    self._budget_manager.record_usage(result.shots)
+
+                # Log progress
+                logger.info(
+                    f"Batch {batch_idx + 1}/{self._config.max_batches}: "
+                    f"LER={result.logical_error_rate:.6f}, "
+                    f"shots={self._total_shots}/{self._config.max_total_shots}"
+                )
+
+                # Check convergence
+                if batch_idx >= self._config.warmup_batches:
+                    if self._check_convergence():
+                        logger.info(
+                            f"Convergence detected at batch {batch_idx}. "
+                            f"Stopping early."
+                        )
+                        break
+
+        finally:
+            self._is_running = False
+            self._save_results()
+            if self._session is not None:
+                try:
+                    self._session.close()
+                    logger.info("Session closed")
+                except Exception:
+                    pass
+
+        elapsed = time.time() - self._start_time
+        logger.info(
+            f"Runtime loop {self._run_id} complete: "
+            f"{len(self._batch_results)} batches, "
+            f"{self._total_shots} total shots, "
+            f"overall LER={self.overall_ler:.6f}, "
+            f"elapsed={elapsed:.1f}s"
+        )
+
+        return self._batch_results
+
+    def _execute_batch(
+        self,
+        batch_idx: int,
+        circuit_builder: Any = None,
+        decoder: Any = None,
+    ) -> BatchResult:
+        """
+        Execute a single batch of shots.
+
+        Steps:
+        1. Get controller action (if available)
+        2. Build circuit with current parameters
+        3. Submit to hardware (or simulate in dry run)
+        4. Extract syndromes and decode
+        5. Update controller with reward
+        6. Update DEM calibrator with new noise estimates
+
+        Returns:
+            BatchResult with all execution metadata.
+        """
+        t_start = time.time()
+
+        # Get controller decision
+        action_dict: Optional[dict[str, Any]] = None
+        if self._controller is not None:
+            try:
+                action = self._controller.decide()
+                action_dict = {
+                    "decoder": action.decoder if hasattr(action, "decoder") else "mwpm",
+                    "dd_sequence": action.dd_sequence if hasattr(action, "dd_sequence") else "none",
+                    "schedule": action.schedule if hasattr(action, "schedule") else "balanced",
+                }
+            except Exception as e:
+                logger.warning(f"Controller decide failed: {e}")
+
+        # Build and execute circuit
+        shots = self._config.shots_per_batch
+        syndromes, observables = self._run_circuit(
+            shots=shots,
+            circuit_builder=circuit_builder,
+        )
+
+        # Decode and count errors
+        logical_errors = 0
+        if decoder is not None and syndromes is not None:
+            try:
+                predictions = decoder.decode_batch(syndromes)
+                if observables is not None:
+                    logical_errors = int(
+                        np.sum(predictions != observables)
+                    )
+            except Exception as e:
+                logger.warning(f"Decoding failed: {e}")
+                logical_errors = 0
+        elif observables is not None:

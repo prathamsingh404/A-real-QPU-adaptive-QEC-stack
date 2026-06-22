@@ -151,3 +151,155 @@ class ComprehensiveMetrics:
                 "DD_crossover_margin_us": self.dd_crossover_margin_us,
             },
         }
+
+
+# ---------------------------------------------------------------------------
+# TASK-094 & TASK-095: Pareto Frontiers and Adaptation Phase Diagram
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ParetoPoint:
+    config_name: str
+    ler: float
+    latency_us: float
+    switches_per_k_shots: float
+    is_pareto_optimal: bool = False
+
+
+class ParetoFrontierAnalyzer:
+    """Computes non-dominated Pareto frontiers for LER vs Latency and LER vs Overhead."""
+
+    @staticmethod
+    def identify_pareto_front(points: List[ParetoPoint], objective_x: str = "latency_us") -> List[ParetoPoint]:
+        """Mark non-dominated points minimizing both LER and objective_x."""
+        sorted_points = sorted(points, key=lambda p: getattr(p, objective_x))
+        best_ler = float("inf")
+        pareto_points = []
+
+        for p in sorted_points:
+            if p.ler < best_ler:
+                p.is_pareto_optimal = True
+                best_ler = p.ler
+                pareto_points.append(p)
+            else:
+                p.is_pareto_optimal = False
+
+        return pareto_points
+
+
+@dataclass
+class PhaseDiagramCell:
+    drift_rate: float
+    drift_amplitude: float
+    cost_switch: float
+    optimal_regime: str  # "STAY_OPTIMAL", "ADAPT_OPTIMAL", "THRASHING_ZONE"
+    net_value: float
+
+
+class AdaptationPhaseDiagram:
+    """2D Empirical Adaptation Phase Diagram across Drift Rate, Amplitude, and Cost."""
+
+    @staticmethod
+    def construct_diagram(
+        drift_rates: Sequence[float] = (0.001, 0.01, 0.1, 1.0, 10.0),
+        amplitudes: Sequence[float] = (0.002, 0.01, 0.03, 0.05),
+        cost_switch: float = 0.005,
+        tau_adapt: float = 0.5,
+    ) -> List[PhaseDiagramCell]:
+        cells = []
+        for rate in drift_rates:
+            for amp in amplitudes:
+                # Timescale ratio: rho = tau_adapt / tau_drift = tau_adapt * rate
+                rho = tau_adapt * rate
+
+                if rho > 1.0:
+                    regime = "THRASHING_ZONE"
+                    net_val = -cost_switch
+                elif amp < 0.005:  # Below deadzone
+                    regime = "STAY_OPTIMAL"
+                    net_val = 0.0
+                else:
+                    gross = amp * 0.8
+                    net = gross - cost_switch
+                    regime = "ADAPT_OPTIMAL" if net > 0 else "STAY_OPTIMAL"
+                    net_val = net
+
+                cells.append(PhaseDiagramCell(rate, amp, cost_switch, regime, round(net_val, 4)))
+        return cells
+
+
+# ---------------------------------------------------------------------------
+# TASK-096 & TASK-097: Decision Accuracy & Calibration Curves
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DecisionAccuracyReport:
+    total_decisions: int
+    true_positives: int    # Adapted when beneficial
+    false_positives: int   # Adapted when harmful (false switch)
+    true_negatives: int    # Stayed when harmful or null (correct abstention)
+    false_negatives: int   # Stayed when beneficial (missed adaptation)
+    precision: float
+    recall: float
+    f1_score: float
+    false_adaptation_rate: float
+
+
+def benchmark_decision_accuracy(
+    decisions: Sequence[str],      # "ADAPT" or "STAY"
+    ground_truth_benefit: Sequence[bool],  # True if net gain > 0
+) -> DecisionAccuracyReport:
+    tp = sum(1 for d, b in zip(decisions, ground_truth_benefit) if d == "ADAPT" and b)
+    fp = sum(1 for d, b in zip(decisions, ground_truth_benefit) if d == "ADAPT" and not b)
+    tn = sum(1 for d, b in zip(decisions, ground_truth_benefit) if d == "STAY" and not b)
+    fn = sum(1 for d, b in zip(decisions, ground_truth_benefit) if d == "STAY" and b)
+
+    total = len(decisions)
+    prec = tp / max(1, (tp + fp))
+    rec = tp / max(1, (tp + fn))
+    f1 = 2 * (prec * rec) / max(1e-12, (prec + rec))
+    far = fp / max(1, (fp + tn))
+
+    return DecisionAccuracyReport(
+        total_decisions=total,
+        true_positives=tp,
+        false_positives=fp,
+        true_negatives=tn,
+        false_negatives=fn,
+        precision=round(prec, 4),
+        recall=round(rec, 4),
+        f1_score=round(f1, 4),
+        false_adaptation_rate=round(far, 4),
+    )
+
+
+@dataclass
+class CalibrationCurve:
+    bin_centers: List[float]
+    empirical_frequencies: List[float]
+    bin_counts: List[int]
+    expected_calibration_error: float
+    brier_score: float
+
+
+def compute_calibration_curve(
+    predicted_probabilities: Sequence[float],
+    binary_outcomes: Sequence[bool],
+    num_bins: int = 5,
+) -> CalibrationCurve:
+    p = np.array(predicted_probabilities, dtype=np.float64)
+    y = np.array(binary_outcomes, dtype=np.float64)
+
+    bins = np.linspace(0.0, 1.0, num_bins + 1)
+    bin_centers = []
+    emp_freqs = []
+    bin_counts = []
+    ece = 0.0
+
+    for i in range(num_bins):
+        low, high = bins[i], bins[i + 1]
+        mask = (p >= low) & (p <= high if i == num_bins - 1 else p < high)
+        count = int(np.sum(mask))
+        bin_counts.append(count)
+        center = 0.5 * (low + high)
+        bin_centers.append(round(center, 3))

@@ -221,3 +221,217 @@ def inject_burst(
     rng = rng or np.random.default_rng()
     result = syndromes.copy()
     num_shots = result.shape[0]
+
+    for shot in range(num_shots):
+        # Stochastically hits ~60% of shots during a burst window
+        if rng.random() > 0.60:
+            continue
+
+        base_n = max(1, int(num_detectors_per_round * intensity))
+        jitter = int(rng.integers(-1, 2))
+        n_affected = max(1, min(num_detectors_per_round, base_n + jitter))
+        affected_dets = rng.choice(num_detectors_per_round, size=n_affected, replace=False)
+        burst_round = int(rng.integers(1, max(2, num_rounds)))
+
+        for det in affected_dets:
+            if rng.random() < 0.90:
+                flat_idx = burst_round * num_detectors_per_round + det
+                if flat_idx < result.shape[1]:
+                    result[shot, flat_idx] = 1
+
+    return result
+
+
+def inject_leakage(
+    syndromes: np.ndarray,
+    num_detectors_per_round: int,
+    num_rounds: int,
+    leak_detectors: list[int],
+    rng: Optional[np.random.Generator] = None,
+) -> np.ndarray:
+    """Inject persistent defects to simulate leakage stochastically.
+
+    A leaked qubit causes repeated syndrome violations with high
+    transition probability (85%), with per-shot stochastic variation.
+    """
+    rng = rng or np.random.default_rng()
+    result = syndromes.copy()
+    num_shots = result.shape[0]
+
+    for shot in range(num_shots):
+        for det in leak_detectors:
+            for r in range(num_rounds):
+                if rng.random() < 0.85:
+                    flat_idx = r * num_detectors_per_round + det
+                    if flat_idx < result.shape[1]:
+                        result[shot, flat_idx] = 1
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Experiment arms
+# ---------------------------------------------------------------------------
+
+@dataclass
+class WindowResult:
+    """Result for a single experiment window."""
+    window_idx: int
+    n_shots: int
+    n_errors: int
+    error_rate: float
+    ci_low: float
+    ci_high: float
+    decoder_used: str = ""
+    dd_used: str = ""
+    burst_mitigated: bool = False
+
+
+@dataclass
+class ArmResult:
+    """Complete result for one experimental arm."""
+    arm_name: str
+    windows: list[WindowResult]
+    total_shots: int = 0
+    total_errors: int = 0
+    overall_error_rate: float = 0.0
+    overall_ci: tuple[float, float] = (0.0, 1.0)
+
+    def finalize(self) -> None:
+        self.total_shots = sum(w.n_shots for w in self.windows)
+        self.total_errors = sum(w.n_errors for w in self.windows)
+        if self.total_shots > 0:
+            self.overall_error_rate = self.total_errors / self.total_shots
+            self.overall_ci = wilson_ci(self.total_errors, self.total_shots)
+
+    def to_dict(self) -> dict[str, Any]:
+        self.finalize()
+        return {
+            "arm_name": self.arm_name,
+            "total_shots": self.total_shots,
+            "total_errors": self.total_errors,
+            "overall_error_rate": round(self.overall_error_rate, 6),
+            "overall_ci_95": [round(x, 6) for x in self.overall_ci],
+            "per_window": [
+                {
+                    "window": w.window_idx,
+                    "n_shots": w.n_shots,
+                    "n_errors": w.n_errors,
+                    "error_rate": round(w.error_rate, 6),
+                    "ci": [round(w.ci_low, 6), round(w.ci_high, 6)],
+                    "decoder": w.decoder_used,
+                    "dd": w.dd_used,
+                    "burst_mitigated": w.burst_mitigated,
+                }
+                for w in self.windows
+            ],
+        }
+
+
+# ---------------------------------------------------------------------------
+# Main experiment
+# ---------------------------------------------------------------------------
+
+def run_adaptive_vs_static(
+    distance: int = 3,
+    rounds: int = 3,
+    schedule: Optional[NoiseSchedule] = None,
+    output_dir: Optional[Path] = None,
+    seed: int = 42,
+) -> dict[str, Any]:
+    """Run the full adaptive vs static comparison experiment.
+
+    Args:
+        distance: Surface code distance.
+        rounds: Number of QEC rounds per circuit.
+        schedule: Noise schedule (uses default if None).
+        output_dir: Directory to save results JSON.
+        seed: Random seed for reproducibility.
+
+    Returns:
+        Dict with results for all three arms + statistical comparison.
+    """
+    schedule = schedule or NoiseSchedule()
+    rng = np.random.default_rng(seed)
+
+    logger.info(
+        f"Starting adaptive vs static experiment: d={distance}, "
+        f"rounds={rounds}, windows={schedule.total_windows}, "
+        f"shots/window={schedule.shots_per_window}"
+    )
+
+    code = create_code("surface", distance=distance, rounds=rounds)
+    num_data = distance**2
+    num_dets_per_round = num_data - 1  # approximate for surface code
+
+    # Initialize decoders
+    base_noise_init = schedule.get_noise_config(0)
+    circuit_base_mwpm = code.generate_circuit(noise=apply_dd_to_noise(base_noise_init, DDSequenceType.NONE))
+    circuit_base_uf = code.generate_circuit(noise=apply_dd_to_noise(base_noise_init, DDSequenceType.XY4))
+
+    mwpm_decoder_static = MWPMDecoder()
+    mwpm_decoder_static.configure(circuit=circuit_base_mwpm)
+
+    uf_decoder_static = UnionFindDecoder()
+    uf_decoder_static.configure(circuit=circuit_base_uf)
+
+    mwpm_decoder_adaptive = MWPMDecoder()
+    uf_decoder_adaptive = UnionFindDecoder()
+    uf_decoder_adaptive.configure(circuit=circuit_base_uf)
+
+    # Initialize controller
+    controller = AdaptiveController(
+        weights=CostWeights(),
+        hysteresis_patience=3,
+        hysteresis_margin=0.05,
+    )
+
+    # Noise detectors for the adaptive arm
+    drift_detector = CompositeDriftDetector(warmup_samples=5)
+    burst_detector = BurstDetector()
+    leakage_detector = LeakageDetector()
+
+    # Results accumulators
+    static_mwpm_results = ArmResult(arm_name="static_mwpm", windows=[])
+    static_uf_results = ArmResult(arm_name="static_uf_xy4", windows=[])
+    adaptive_results = ArmResult(arm_name="adaptive", windows=[])
+
+    last_detection_rates = np.zeros(circuit_base_mwpm.num_detectors)
+    last_burst_active = False
+
+    for window_idx in range(schedule.total_windows):
+        base_noise = schedule.get_noise_config(window_idx)
+        window_seed = (seed * 100_003 + window_idx) % (2**31)
+
+        # 1. Compile physical circuits with causal dynamical decoupling
+        noise_mwpm = apply_dd_to_noise(base_noise, DDSequenceType.NONE)
+        circuit_mwpm = code.generate_circuit(noise=noise_mwpm)
+
+        noise_uf = apply_dd_to_noise(base_noise, DDSequenceType.XY4)
+        circuit_uf = code.generate_circuit(noise=noise_uf)
+
+        # Adaptive telemetry & state
+        drift_report = drift_detector.update(last_detection_rates)
+        leakage_frac = 0.0
+        if schedule.is_leakage_active(window_idx):
+            leakage_frac = len(schedule.leakage_detector_indices) / max(num_dets_per_round, 1)
+
+        state = HardwareState(
+            defect_rate=float(last_detection_rates.mean()),
+            drift_magnitude=drift_report.magnitude,
+            drift_status=drift_report.status,
+            burst_active=last_burst_active,
+            leakage_fraction=leakage_frac,
+            t1_mean_us=150.0,
+            t2_mean_us=120.0,
+            p_1q=0.0003,
+            p_2q=base_noise.gate.two_qubit,
+            p_ro=0.01,
+            code_distance=distance,
+            num_data_qubits=num_data,
+            num_detectors=circuit_mwpm.num_detectors,
+        )
+        action = controller.select_action(state)
+
+        # Adaptive arm circuit compiled with adaptively selected DD policy
+        noise_adapt = apply_dd_to_noise(base_noise, action.dd_policy)
+        circuit_adapt = code.generate_circuit(noise=noise_adapt)

@@ -189,3 +189,198 @@ class BanditVsStaticExperiment:
         """Initialize all controller variants."""
         cfg = self._config
         arms = self._arms
+
+        controllers = {
+            "static_mwpm": StaticController(
+                decoder="mwpm", dd_sequence="none", schedule="balanced"
+            ),
+            "static_uf_xy4": StaticController(
+                decoder="union_find", dd_sequence="xy4", schedule="balanced"
+            ),
+            "exp3": Exp3Controller(
+                arms=arms, gamma=cfg.exp3_gamma,
+            ),
+            "dase": DASEController(
+                arms=arms,
+                exploration_bonus=cfg.dase_exploration_bonus,
+                drift_window=cfg.dase_drift_window,
+            ),
+            "sprt": SPRTController(
+                arms=arms,
+                alpha=cfg.sprt_alpha,
+                beta=cfg.sprt_beta,
+                p0=cfg.sprt_p0,
+                p1=cfg.sprt_p1,
+            ),
+        }
+        return controllers
+
+    def _create_scenario(self) -> NoiseScenarioFactory:
+        """Create the noise scenario based on configuration."""
+        total_steps = self._config.num_windows
+        scenario_map = {
+            "stationary": lambda: stationary_scenario(total_steps=total_steps),
+            "drift": lambda: drift_scenario(total_steps=total_steps),
+            "burst": lambda: burst_scenario(total_steps=total_steps),
+            "multi_phase": lambda: multi_phase_scenario(total_steps=total_steps),
+        }
+        factory_fn = scenario_map.get(self._config.scenario)
+        if factory_fn is None:
+            raise ValueError(f"Unknown scenario: {self._config.scenario}")
+        return factory_fn()
+
+    def run(self) -> ExperimentSummary:
+        """
+        Execute the full experiment.
+
+        Returns:
+            ExperimentSummary with comparative results.
+        """
+        cfg = self._config
+        t_start = time.time()
+
+        logger.info(
+            f"Starting BanditVsStatic experiment: "
+            f"d={cfg.code_distance}, "
+            f"windows={cfg.num_windows}, "
+            f"shots_per_window={cfg.shots_per_window}, "
+            f"scenario={cfg.scenario}"
+        )
+
+        # Create noise scenario
+        self._noise_scenario = self._create_scenario()
+
+        # Generate Stim circuit for baseline
+        circuit = self._build_stim_circuit()
+        dem = circuit.detector_error_model(decompose_errors=True)
+
+        # Build decoders
+        import pymatching
+        from adaptive_qec.decoders.union_find import UnionFindDecoder
+        mwpm_matcher = pymatching.Matching.from_detector_error_model(dem)
+        uf_decoder = UnionFindDecoder()
+        uf_decoder.configure_from_dem(dem)
+
+        # Main experiment loop
+        for window_idx in range(cfg.num_windows):
+            noise = self._noise_scenario.get_noise(window_idx)
+
+            # Build noise-injected circuit for this window
+            noisy_circuit = self._inject_noise(circuit, noise)
+
+            # Sample syndromes and observables with deterministic seed
+            window_seed = (cfg.seed * 100_003 + window_idx) % (2**31)
+            sampler = noisy_circuit.compile_detector_sampler(seed=window_seed)
+            detection_events, observable_flips = sampler.sample(
+                shots=cfg.shots_per_window,
+                separate_observables=True,
+            )
+
+            # Build hardware state for controllers
+            hw_state = HardwareState(
+                error_rate=noise.gate_error_2q,
+                t1_us=noise.t1_us,
+                t2_us=noise.t2_us,
+                readout_error=noise.readout_error,
+                gate_error_1q=noise.gate_error_1q,
+                gate_error_2q=noise.gate_error_2q,
+            )
+
+            # Run each controller arm on identical syndrome data
+            for ctrl_name, ctrl in self._controllers.items():
+                t_arm = time.time()
+
+                # Get controller decision
+                ctrl.observe(hw_state)
+                action = ctrl.decide()
+
+                # Dispatch decoder based on arm action
+                dec_str = action.decoder.value if hasattr(action.decoder, "value") else str(action.decoder)
+                if "union" in dec_str.lower() or "uf" in dec_str.lower():
+                    predictions = uf_decoder.decode_batch(detection_events)
+                else:
+                    predictions = mwpm_matcher.decode_batch(detection_events)
+
+                n_obs = observable_flips.shape[1] if observable_flips.ndim > 1 else 1
+                pred_flat = predictions[:, :n_obs] if predictions.ndim > 1 else predictions.reshape(-1, 1)
+                obs_flat = observable_flips if observable_flips.ndim > 1 else observable_flips.reshape(-1, 1)
+                logical_errors = int(np.sum(np.any(pred_flat != obs_flat, axis=1)))
+
+                ler = logical_errors / cfg.shots_per_window
+                ci_low, ci_high = wilson_score_ci(
+                    logical_errors, cfg.shots_per_window
+                )
+
+                # Update controller with reward
+                reward = 1.0 - ler
+                ctrl.update(reward)
+
+                # Record result
+                self._results[ctrl_name].append(ArmWindowResult(
+                    window_idx=window_idx,
+                    arm_name=ctrl_name,
+                    logical_errors=logical_errors,
+                    total_shots=cfg.shots_per_window,
+                    ler=ler,
+                    ci_lower=ci_low,
+                    ci_upper=ci_high,
+                    controller_action={
+                        "decoder": action.decoder,
+                        "dd_sequence": action.dd_sequence,
+                    } if hasattr(action, "decoder") else None,
+                    execution_time_s=time.time() - t_arm,
+                ))
+
+            if (window_idx + 1) % 10 == 0:
+                self._log_progress(window_idx + 1)
+
+        elapsed = time.time() - t_start
+        logger.info(f"Experiment complete in {elapsed:.1f}s")
+
+        # Analyze and save results
+        summary = self._analyze()
+        self._save_results(summary)
+        return summary
+
+    def _build_stim_circuit(self) -> stim.Circuit:
+        """Build base Stim surface code circuit."""
+        d = self._config.code_distance
+        r = self._config.num_rounds
+        p = self._config.physical_error_rate
+
+        circuit = stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=d,
+            rounds=r,
+            after_clifford_depolarization=p,
+            before_round_data_depolarization=p,
+            before_measure_flip_probability=p * 2,
+            after_reset_flip_probability=p * 0.5,
+        )
+        return circuit
+
+    def _inject_noise(
+        self,
+        circuit: stim.Circuit,
+        noise: Any,
+    ) -> stim.Circuit:
+        """
+        Re-generate circuit with noise parameters from the scenario.
+
+        Instead of modifying the circuit in-place, we regenerate it
+        with the current noise levels — this ensures Stim's noise
+        model is correctly applied everywhere.
+        """
+        d = self._config.code_distance
+        r = self._config.num_rounds
+        p = noise.gate_error_2q
+
+        return stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=d,
+            rounds=r,
+            after_clifford_depolarization=p,
+            before_round_data_depolarization=p,
+            before_measure_flip_probability=noise.readout_error,
+            after_reset_flip_probability=p * 0.5,
+        )

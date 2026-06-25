@@ -91,3 +91,93 @@ class DeterministicTeleportation:
         c_bsm = ClassicalRegister(2, name="c_bsm")
         c_out = ClassicalRegister(1, name="c_out")
         qc = QuantumCircuit(q, c_bsm, c_out, name=f"teleport_{self.target_state.name}_{basis}_{self.regime}")
+
+        # 1. Prepare target state on source qubit q[0]
+        if self.target_state.theta != 0.0:
+            qc.ry(self.target_state.theta, q[0])
+        if self.target_state.phi != 0.0:
+            qc.rz(self.target_state.phi, q[0])
+
+        if self.regime == "swap_network":
+            # Baseline: unitary swap network without mid-circuit measurement
+            # SWAP q[0], q[1] then SWAP q[1], q[2]
+            qc.swap(q[0], q[1])
+            qc.swap(q[1], q[2])
+
+        else:
+            # 2. Distribute EPR pair between transit q[1] and destination q[2]
+            qc.h(q[1])
+            qc.cx(q[1], q[2])
+
+            # 3. Bell-State Measurement (BSM) between source q[0] and transit q[1]
+            qc.cx(q[0], q[1])
+            qc.h(q[0])
+
+            # Measure source and transit qubits into classical bits
+            qc.measure(q[0], c_bsm[0])
+            qc.measure(q[1], c_bsm[1])
+
+            # 4. Optional Dynamical Decoupling on destination q[2] during BSM readout window
+            if self.apply_dd:
+                qc.x(q[2])
+                qc.y(q[2])
+                qc.x(q[2])
+                qc.y(q[2])
+
+            # 5. Dynamic Real-Time Feedforward Corrections on destination q[2]
+            if self.regime == "dynamic":
+                # If transit measured 1: apply Pauli-X
+                with qc.if_test((c_bsm[1], 1)):
+                    qc.x(q[2])
+                # If source measured 1: apply Pauli-Z
+                with qc.if_test((c_bsm[0], 1)):
+                    qc.z(q[2])
+
+        # 6. Quantum State Tomography rotation on destination qubit q[2]
+        if basis == "X":
+            qc.h(q[2])
+        elif basis == "Y":
+            qc.sdg(q[2])
+            qc.h(q[2])
+
+        # Final readout of destination qubit
+        qc.measure(q[2], c_out[0])
+        return qc
+
+    def compute_fidelity_from_tomography(
+        self,
+        counts_x: Dict[str, int],
+        counts_y: Dict[str, int],
+        counts_z: Dict[str, int],
+    ) -> Dict[str, Any]:
+        """
+        Reconstruct physical Bloch vector and calculate quantum state fidelity.
+
+        Args:
+            counts_x: Raw bitstring counts in X-basis.
+            counts_y: Raw bitstring counts in Y-basis.
+            counts_z: Raw bitstring counts in Z-basis.
+
+        Returns:
+            Dictionary containing expectation values, fidelity, classical bound test.
+        """
+        def _get_expectation(counts: Dict[str, int]) -> Tuple[float, int, int]:
+            # Bitstring format in Qiskit: 'c_out c_bsm' e.g. '0 11' or '011'
+            shots_0 = 0
+            shots_1 = 0
+            for bstr, freq in counts.items():
+                cleaned = bstr.replace(" ", "")
+                # c_out is the first (leftmost) bit in Qiskit reverse order
+                # or last bit depending on formatting. We check destination bit.
+                dest_bit = cleaned[0] if len(cleaned) == 3 else cleaned[-1]
+                
+                # If post-selected regime: filter out non-(0,0) BSM results
+                if self.regime == "post_selected":
+                    bsm_bits = cleaned[1:] if len(cleaned) == 3 else cleaned[:2]
+                    if bsm_bits not in ("00", "0"):
+                        continue
+
+                if dest_bit == '0':
+                    shots_0 += freq
+                else:
+                    shots_1 += freq

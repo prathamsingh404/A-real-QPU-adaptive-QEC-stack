@@ -178,3 +178,180 @@ class FullAdaptiveExperiment:
         self._adaptive_records: list[WindowRecord] = []
         self._static_mwpm_lers: list[float] = []
         self._static_uf_lers: list[float] = []
+
+    def _init_controller(self) -> Any:
+        """Initialize the adaptive controller."""
+        cfg = self._config
+        arms = self._arms
+
+        if cfg.controller_type == "exp3":
+            return Exp3Controller(arms=arms, gamma=cfg.exp3_gamma)
+        elif cfg.controller_type == "dase":
+            return DASEController(
+                arms=arms,
+                exploration_bonus=cfg.dase_exploration_bonus,
+                drift_window=cfg.dase_drift_window,
+            )
+        elif cfg.controller_type == "sprt":
+            return SPRTController(
+                arms=arms,
+                alpha=cfg.sprt_alpha,
+                beta=cfg.sprt_beta,
+                p0=0.03,
+                p1=0.04,
+            )
+        else:
+            raise ValueError(f"Unknown controller: {cfg.controller_type}")
+
+    def _init_scheduler(self) -> AdaptiveXZScheduler:
+        """Initialize the adaptive scheduler."""
+        return AdaptiveXZScheduler(AdaptiveSchedulerConfig(
+            ewma_alpha=self._config.ewma_alpha,
+            theta_enter=self._config.theta_enter,
+            theta_exit=self._config.theta_exit,
+        ))
+
+    def run(self) -> dict[str, Any]:
+        """Execute the full adaptive experiment."""
+        cfg = self._config
+        t_start = time.time()
+
+        logger.info(
+            f"Starting FULL ADAPTIVE experiment: "
+            f"d={cfg.code_distance}, "
+            f"controller={cfg.controller_type}, "
+            f"scheduling={'ON' if cfg.scheduling_enabled else 'OFF'}, "
+            f"windows={cfg.num_windows}, "
+            f"scenario={cfg.scenario}"
+        )
+
+        # Create noise scenario
+        scenario = self._create_scenario()
+
+        # Build base circuit
+        circuit = self._build_circuit()
+        dem = circuit.detector_error_model(decompose_errors=True)
+
+        import pymatching
+        from adaptive_qec.decoders.union_find import UnionFindDecoder
+        matcher = pymatching.Matching.from_detector_error_model(dem)
+        uf_decoder = UnionFindDecoder()
+        uf_decoder.configure(dem=dem)
+
+        for window_idx in range(cfg.num_windows):
+            # Check budget
+            if not self._budget.can_submit(cfg.shots_per_window):
+                logger.warning(f"Budget exhausted at window {window_idx}")
+                break
+
+            t_window = time.time()
+
+            # Get noise for this window
+            noise = scenario.get_noise(window_idx)
+
+            # Build noise-injected circuit
+            noisy_circuit = stim.Circuit.generated(
+                "surface_code:rotated_memory_z",
+                distance=cfg.code_distance,
+                rounds=cfg.num_rounds,
+                after_clifford_depolarization=noise.gate_error_2q,
+                before_round_data_depolarization=noise.gate_error_2q,
+                before_measure_flip_probability=noise.readout_error,
+                after_reset_flip_probability=noise.gate_error_2q * 0.5,
+            )
+
+            # Sample identical syndrome data for all arms with deterministic seed
+            window_seed = (cfg.seed * 100_003 + window_idx) % (2**31)
+            sampler = noisy_circuit.compile_detector_sampler(seed=window_seed)
+            detection_events, observable_flips = sampler.sample(
+                shots=cfg.shots_per_window,
+                separate_observables=True,
+            )
+
+            # Update adaptive scheduler
+            schedule_type = "balanced"
+            imbalance = 0.0
+            if self._scheduler is not None:
+                n_det = detection_events.shape[1]
+                det_coords = circuit.get_detector_coordinates()
+                x_indices: list[int] = []
+                z_indices: list[int] = []
+                for d_id, coords in det_coords.items():
+                    if len(coords) >= 2:
+                        if int(round(coords[0] + coords[1])) % 4 == 0:
+                            x_indices.append(d_id)
+                        else:
+                            z_indices.append(d_id)
+                if not x_indices or not z_indices:
+                    x_indices = list(range(0, n_det, 2))
+                    z_indices = list(range(1, n_det, 2))
+
+                x_det = int(np.sum(detection_events[:, x_indices]))
+                z_det = int(np.sum(detection_events[:, z_indices]))
+                obs_sched = DefectObservation(
+                    round_idx=window_idx,
+                    x_defects=x_det,
+                    z_defects=z_det,
+                    total_x_stabilizers=len(x_indices),
+                    total_z_stabilizers=len(z_indices),
+                )
+                sched = self._scheduler.update(obs_sched)
+                schedule_type = sched.schedule_type.value
+                imbalance = self._scheduler.imbalance
+
+            # Hardware state for controller
+            hw_state = HardwareState(
+                error_rate=noise.gate_error_2q,
+                t1_us=noise.t1_us,
+                t2_us=noise.t2_us,
+                readout_error=noise.readout_error,
+                gate_error_1q=noise.gate_error_1q,
+                gate_error_2q=noise.gate_error_2q,
+            )
+
+            # Adaptive controller decision
+            self._controller.observe(hw_state)
+            action = self._controller.decide()
+
+            # Decode based on adaptive controller choice
+            dec_str = action.decoder.value if hasattr(action.decoder, "value") else str(action.decoder)
+            if "union" in dec_str.lower() or "uf" in dec_str.lower():
+                predictions = uf_decoder.decode_batch(detection_events)
+            else:
+                predictions = matcher.decode_batch(detection_events)
+
+            n_obs = observable_flips.shape[1] if observable_flips.ndim > 1 else 1
+            pred_flat = predictions[:, :n_obs] if predictions.ndim > 1 else predictions.reshape(-1, 1)
+            obs_flat = observable_flips if observable_flips.ndim > 1 else observable_flips.reshape(-1, 1)
+
+            logical_errors = int(np.sum(np.any(pred_flat != obs_flat, axis=1)))
+            ler = logical_errors / cfg.shots_per_window
+            ci_low, ci_high = wilson_score_ci(logical_errors, cfg.shots_per_window)
+
+            # Update controller with reward
+            reward = 1.0 - ler
+            self._controller.update(reward)
+
+            # Record budget usage
+            self._budget.record_usage(
+                cfg.shots_per_window,
+                source=f"window_{window_idx}",
+            )
+
+            # Record results
+            self._adaptive_records.append(WindowRecord(
+                window_idx=window_idx,
+                ler=ler,
+                ci_lower=ci_low,
+                ci_upper=ci_high,
+                logical_errors=logical_errors,
+                total_shots=cfg.shots_per_window,
+                noise_level=noise.gate_error_2q,
+                controller_action={
+                    "decoder": action.decoder if hasattr(action, "decoder") else "mwpm",
+                    "dd_sequence": action.dd_sequence if hasattr(action, "dd_sequence") else "none",
+                },
+                schedule_type=schedule_type,
+                imbalance=imbalance,
+                execution_time_s=time.time() - t_window,
+            ))

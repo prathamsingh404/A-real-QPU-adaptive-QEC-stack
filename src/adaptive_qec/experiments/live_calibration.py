@@ -126,3 +126,118 @@ class LiveCalibrationExperiment:
             before_measure_flip_probability=p_ro,
             after_reset_flip_probability=p_ro * 0.5,
         )
+
+    def _create_scenario(self) -> NoiseScenarioFactory:
+        """Create noise scenario based on config."""
+        n = self._config.num_windows
+        scenarios = {
+            "stationary": lambda: stationary_scenario(total_steps=n),
+            "drift": lambda: drift_scenario(total_steps=n, rate=0.0003),
+            "burst": lambda: burst_scenario(total_steps=n),
+            "multi_phase": lambda: multi_phase_scenario(total_steps=n),
+        }
+        factory_fn = scenarios.get(self._config.scenario, scenarios["drift"])
+        return factory_fn()
+
+    def run(self) -> dict[str, Any]:
+        """Execute the live calibration experiment."""
+        logger.info(
+            f"Starting LIVE CALIBRATION experiment: d={self._config.code_distance}, "
+            f"windows={self._config.num_windows}, scenario={self._config.scenario}"
+        )
+        t_start = time.time()
+        cfg = self._config
+
+        for window_idx in range(cfg.num_windows):
+            snapshot: NoiseSnapshot = self._scenario.step()
+            p_2q = snapshot.p_2q
+            p_ro = snapshot.p_ro
+
+            # Generate real drifting circuit and sample syndromes
+            noisy_circuit = self._build_circuit(p_2q=p_2q, p_ro=p_ro)
+            sampler = noisy_circuit.compile_detector_sampler(seed=int(self._rng.integers(0, 2**31)))
+            detection_events, observables = sampler.sample(
+                shots=cfg.shots_per_window,
+                separate_observables=True,
+            )
+
+            obs_flat = observables[:, :1] if observables.ndim > 1 else observables.reshape(-1, 1)
+
+            # 1. Decode with Static Factory MWPM
+            static_preds = self._static_matcher.decode_batch(detection_events)
+            static_flat = static_preds[:, :1] if static_preds.ndim > 1 else static_preds.reshape(-1, 1)
+            static_errs = int(np.sum(np.any(static_flat != obs_flat, axis=1)))
+
+            # 2. Decode with Live-Calibrated MWPM
+            calibrated_dem: CalibratedDEM = self._calibrator.calibrate_from_syndromes(
+                detection_events,
+                smoothing=cfg.smoothing,
+                calibration_timestamp=f"window_{window_idx}",
+            )
+            calibrated_matcher = calibrated_dem.to_matching()
+            cal_preds = calibrated_matcher.decode_batch(detection_events)
+            cal_flat = cal_preds[:, :1] if cal_preds.ndim > 1 else cal_preds.reshape(-1, 1)
+            cal_errs = int(np.sum(np.any(cal_flat != obs_flat, axis=1)))
+
+            # 3. Decode with Static Union-Find
+            uf_preds = self._uf_decoder.decode_batch(detection_events)
+            uf_flat = uf_preds[:, :1] if uf_preds.ndim > 1 else uf_preds.reshape(-1, 1)
+            uf_errs = int(np.sum(np.any(uf_flat != obs_flat, axis=1)))
+
+            rec = WindowComparison(
+                window_idx=window_idx,
+                p_2q=p_2q,
+                p_ro=p_ro,
+                static_errors=static_errs,
+                calibrated_errors=cal_errs,
+                uf_errors=uf_errs,
+                total_shots=cfg.shots_per_window,
+                static_ler=static_errs / cfg.shots_per_window,
+                calibrated_ler=cal_errs / cfg.shots_per_window,
+                uf_ler=uf_errs / cfg.shots_per_window,
+            )
+            self._records.append(rec)
+
+            if (window_idx + 1) % 10 == 0 or window_idx == cfg.num_windows - 1:
+                logger.info(
+                    f"Window {window_idx + 1:2d}/{cfg.num_windows}: "
+                    f"p_2q={p_2q:.4f}, "
+                    f"Static MWPM LER={rec.static_ler:.4f}, "
+                    f"Calibrated MWPM LER={rec.calibrated_ler:.4f}, "
+                    f"UF LER={rec.uf_ler:.4f}"
+                )
+
+        elapsed = time.time() - t_start
+        results = self._analyze_results(elapsed)
+        self._save_results(results)
+        self._print_summary(results)
+        return results
+
+    def _analyze_results(self, elapsed: float) -> dict[str, Any]:
+        """Compute statistical metrics and hypothesis tests."""
+        cfg = self._config
+        total_shots = sum(r.total_shots for r in self._records)
+
+        static_total_errs = sum(r.static_errors for r in self._records)
+        cal_total_errs = sum(r.calibrated_errors for r in self._records)
+        uf_total_errs = sum(r.uf_errors for r in self._records)
+
+        static_overall_ler = static_total_errs / max(total_shots, 1)
+        cal_overall_ler = cal_total_errs / max(total_shots, 1)
+        uf_overall_ler = uf_total_errs / max(total_shots, 1)
+
+        static_ci = wilson_score_ci(static_total_errs, total_shots)
+        cal_ci = wilson_score_ci(cal_total_errs, total_shots)
+        uf_ci = wilson_score_ci(uf_total_errs, total_shots)
+
+        static_lers = [r.static_ler for r in self._records]
+        cal_lers = [r.calibrated_ler for r in self._records]
+        uf_lers = [r.uf_ler for r in self._records]
+
+        # Hypothesis test: Calibrated vs Static MWPM
+        t_test_static = welch_t_test(static_lers, cal_lers)
+
+        # Relative improvement
+        rel_improvement = 0.0
+        if static_overall_ler > 0:
+            rel_improvement = (static_overall_ler - cal_overall_ler) / static_overall_ler * 100.0

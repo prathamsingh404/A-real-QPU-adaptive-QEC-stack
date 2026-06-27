@@ -75,3 +75,74 @@ def get_h2_sto3g_coefficients(r_angstrom: float) -> H2HamiltonianCoefficients:
         g2=g2,
         exact_ground_energy=exact_total_energy,
     )
+
+
+class MolecularIQPE:
+    """
+    Iterative Quantum Phase Estimation (IQPE) for molecular Hamiltonians.
+
+    Uses exactly 1 ancilla qubit and 1 system qubit with dynamic feedforward
+    and active reset to extract m-bit binary phase precision.
+    """
+
+    def __init__(
+        self,
+        r_angstrom: float = 0.7414,
+        num_bits: int = 3,
+        tau: float = 1.0,
+        apply_dd: bool = True,
+    ) -> None:
+        self.r_angstrom = r_angstrom
+        self.num_bits = num_bits
+        self.tau = tau
+        self.apply_dd = apply_dd
+        self.coeffs = get_h2_sto3g_coefficients(r_angstrom)
+
+    def build_circuit(self) -> QuantumCircuit:
+        """
+        Build dynamic IQPE circuit for H2 electronic ground state.
+
+        Architecture:
+            - Ancilla qubit: q[0]
+            - System qubit:  q[1]
+            - Classical register: m bits (c[0] ... c[m-1])
+        """
+        q = QuantumRegister(2, name="q")
+        c = ClassicalRegister(self.num_bits, name="c")
+        qc = QuantumCircuit(q, c, name=f"iqpe_h2_{self.r_angstrom:.3f}A")
+
+        # 1. Prepare system qubit in trial ground state |psi_trial>
+        # The ground state of g1*Z + g2*X is cos(theta/2)|0> - sin(theta/2)|1>
+        # where tan(theta) = g2 / g1
+        theta = math.atan2(self.coeffs.g2, self.coeffs.g1)
+        # Apply Ry(theta) to prepare trial state close to true eigenstate
+        qc.ry(theta, q[1])
+
+        # 2. Iterate from least significant bit (k = num_bits - 1 down to 0)
+        # In IQPE convention: bit k has weight 2^{-(k+1)}
+        omega = math.sqrt(self.coeffs.g1**2 + self.coeffs.g2**2)
+        nx = self.coeffs.g2 / omega if omega > 0 else 0.0
+        nz = self.coeffs.g1 / omega if omega > 0 else 1.0
+        axis_angle = math.atan2(nx, nz)
+
+        for bit_idx in range(self.num_bits - 1, -1, -1):
+            power = 2**bit_idx
+            dt = power * self.tau
+
+            # Step A: Initialize ancilla into |+>
+            qc.h(q[0])
+
+            # Step B: Controlled-U^{2^k} evolution
+            # U = exp(-i * omega * (nx*X + nz*Z) * dt)
+            # Implemented via basis rotation: Ry(-axis_angle), Controlled-Rz, Ry(axis_angle)
+            qc.ry(-axis_angle, q[1])
+            qc.crz(2.0 * omega * dt, q[0], q[1])
+            qc.ry(axis_angle, q[1])
+
+            # Step C: Dynamic Classical Feedforward phase kickback
+            # Apply Rz(-omega_corr) conditioned on previously measured classical bits
+            # omega_corr = 2*pi * sum_{j=bit_idx+1}^{num_bits-1} c[j] * 2^{-(j - bit_idx + 1)}
+            for prev_j in range(bit_idx + 1, self.num_bits):
+                shift = -2.0 * math.pi / (2.0 ** (prev_j - bit_idx + 1))
+                with qc.if_test((c[prev_j], 1)):
+                    qc.rz(shift, q[0])

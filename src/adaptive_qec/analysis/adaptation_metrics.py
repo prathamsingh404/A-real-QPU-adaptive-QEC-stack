@@ -104,3 +104,106 @@ def compute_adaptation_efficiency(
         eff = 1.0 if abs(gain_deployable) <= 1e-12 else 0.0
     else:
         eff = gain_deployable / gain_oracle
+
+    valid = 0.0 <= eff <= 1.0
+
+    return AdaptationEfficiencyReport(
+        static_ler=static_ler,
+        deployable_ler=deployable_ler,
+        oracle_ler=oracle_ler,
+        gain_deployable=gain_deployable,
+        gain_oracle=gain_oracle,
+        efficiency=float(eff),
+        is_valid_range=valid,
+    )
+
+
+@dataclass
+class RegretTrajectory:
+    """Empirical cumulative regret against dynamic hindsight oracle."""
+    total_steps: int
+    cumulative_regret: float
+    time_averaged_regret: float
+    regret_curve: List[float]
+    total_switches: int
+    switching_penalty_total: float
+    oracle_actions: List[str]
+    controller_actions: List[str]
+
+
+class EmpiricalRegretTracker:
+    """
+    Formulates and computes empirical cumulative regret R_T against hindsight optimum:
+        R_T = sum_{t=1}^T [ L(a_t, s_t) - min_{a^*} L(a^*, s_t) ] + sum_{t=1}^T C_switch * 1_{a_t != a_{t-1}}
+    """
+
+    def __init__(self, switch_cost: float = 0.001) -> None:
+        self.switch_cost = switch_cost
+        self._step_losses_controller: List[float] = []
+        self._step_losses_oracle: List[float] = []
+        self._actions_controller: List[str] = []
+        self._actions_oracle: List[str] = []
+        self._switches: int = 0
+
+    def record_step(
+        self,
+        chosen_action: str,
+        chosen_loss: float,
+        oracle_action: str,
+        oracle_loss: float,
+    ) -> None:
+        if self._actions_controller and chosen_action != self._actions_controller[-1]:
+            self._switches += 1
+            effective_loss = chosen_loss + self.switch_cost
+        else:
+            effective_loss = chosen_loss
+
+        self._actions_controller.append(chosen_action)
+        self._actions_oracle.append(oracle_action)
+        self._step_losses_controller.append(effective_loss)
+        self._step_losses_oracle.append(oracle_loss)
+
+    def compute_regret(self) -> RegretTrajectory:
+        t = len(self._step_losses_controller)
+        if t == 0:
+            return RegretTrajectory(0, 0.0, 0.0, [], 0, 0.0, [], [])
+
+        regret_curve: List[float] = []
+        cum_regret = 0.0
+        for loss_c, loss_o in zip(self._step_losses_controller, self._step_losses_oracle):
+            inst_regret = max(0.0, loss_c - loss_o)
+            cum_regret += inst_regret
+            regret_curve.append(cum_regret)
+
+        return RegretTrajectory(
+            total_steps=t,
+            cumulative_regret=cum_regret,
+            time_averaged_regret=cum_regret / t,
+            regret_curve=regret_curve,
+            total_switches=self._switches,
+            switching_penalty_total=self._switches * self.switch_cost,
+            oracle_actions=list(self._actions_oracle),
+            controller_actions=list(self._actions_controller),
+        )
+
+
+class ConformalLERPredictor:
+    """
+    Distribution-free split conformal prediction for policy LER estimates.
+    Provides finite-sample valid coverage:
+        P( LER_{true} in [ LER_hat - q, LER_hat + q ] ) >= 1 - alpha
+    without assuming asymptotic normality.
+    """
+
+    def __init__(self, alpha: float = 0.05) -> None:
+        self.alpha = alpha
+        self.q_hat: Optional[float] = None
+        self._calibration_scores: List[float] = []
+
+    def calibrate(self, predicted_lers: Sequence[float], true_lers: Sequence[float]) -> float:
+        """
+        Calibrate on held-out validation trajectories (seeds 10–19).
+        Non-conformity score: s_i = |predicted_ler_i - true_ler_i|
+        """
+        if len(predicted_lers) != len(true_lers) or len(predicted_lers) == 0:
+            raise ValueError("Predictions and ground truths must have equal non-zero length")

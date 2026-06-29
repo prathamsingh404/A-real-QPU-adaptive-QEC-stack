@@ -59,3 +59,54 @@ class LatencyProfileResult:
     throughput_shots_per_s: float
     breakdown_mean: LatencyBreakdown
     timescale_classification: str  # "microsecond_feedforward" or "macro_orchestration"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "p50_us": round(self.p50_us, 2),
+            "p90_us": round(self.p90_us, 2),
+            "p95_us": round(self.p95_us, 2),
+            "p99_us": round(self.p99_us, 2),
+            "mean_us": round(self.mean_us, 2),
+            "max_us": round(self.max_us, 2),
+            "throughput_shots_per_s": round(self.throughput_shots_per_s, 2),
+            "breakdown_mean": self.breakdown_mean.to_dict(),
+            "timescale_classification": self.timescale_classification,
+        }
+
+
+class LatencyProfiler:
+    """Profiles latency distributions across measurement, decoding, decision, and communication."""
+
+    def __init__(self) -> None:
+        self.recorded_totals: list[float] = []
+        self.recorded_breakdowns: list[LatencyBreakdown] = []
+
+    def record(
+        self,
+        t_meas_us: float,
+        t_decode_us: float,
+        t_decision_us: float,
+        t_comm_us: float = 0.5,
+    ) -> None:
+        lb = LatencyBreakdown(
+            t_meas_us=t_meas_us,
+            t_decode_us=t_decode_us,
+            t_decision_us=t_decision_us,
+            t_comm_us=t_comm_us,
+        )
+        self.recorded_breakdowns.append(lb)
+        self.recorded_totals.append(lb.total_us)
+
+    def summarize(self) -> LatencyProfileResult:
+        if not self.recorded_totals:
+            zero_bd = LatencyBreakdown(0, 0, 0, 0)
+            return LatencyProfileResult(0, 0, 0, 0, 0, 0, 0, zero_bd, "unprofiled")
+
+        totals = np.array(self.recorded_totals)
+        mean_meas = float(np.mean([b.t_meas_us for b in self.recorded_breakdowns]))
+        mean_dec = float(np.mean([b.t_decode_us for b in self.recorded_breakdowns]))
+        mean_ctrl = float(np.mean([b.t_decision_us for b in self.recorded_breakdowns]))
+        mean_comm = float(np.mean([b.t_comm_us for b in self.recorded_breakdowns]))
+
+        mean_total = float(np.mean(totals))
+        throughput = 1e6 / max(mean_total, 1e-6)

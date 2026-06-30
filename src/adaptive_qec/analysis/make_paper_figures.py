@@ -76,3 +76,84 @@ def fig_1_window_variance_tradeoff(data: dict[str, Any], out_dir: Path) -> None:
     hot_naive = [hot_sc[w]["arms"]["naive_reweighted_mwpm"]["mean_ler"] for w in w_keys]
     hot_cg = [hot_sc[w]["arms"]["cg_ccads"]["mean_ler"] for w in w_keys]
     hot_oracle = [hot_sc[w]["arms"]["oracle_mwpm"]["mean_ler"] for w in w_keys]
+
+    ax2.plot(w_labels, hot_stat, "o--", label="Static MWPM (Stale Weights)", color="#4a7bb0")
+    ax2.plot(w_labels, hot_naive, "s-", label="Naive Reweighted", color="#d95f02")
+    ax2.plot(w_labels, hot_cg, "^-", label="CG-CCADS (This Work)", color="#2ca02c", linewidth=2.5)
+    ax2.plot(w_labels, hot_oracle, "d:", label="Oracle Matched Bound", color="#7570b3")
+
+    ax2.set_xlabel("Syndrome Observation Window Size (W)")
+    ax2.set_ylabel("Logical Error Rate (LER)")
+    ax2.set_title("(b) Localized Hotspot: Reweighting Advantage")
+    ax2.legend(loc="upper right")
+
+    plt.tight_layout()
+    fig.savefig(out_dir / "fig_1_window_variance_tradeoff.png", dpi=300)
+    fig.savefig(out_dir / "fig_1_window_variance_tradeoff.pdf")
+    plt.close(fig)
+    logger.info("Saved fig_1_window_variance_tradeoff")
+
+
+def fig_2_architecture_diagram(out_dir: Path) -> None:
+    """Figure 2: End-to-End System Architecture (Block Schematic)."""
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    ax.axis("off")
+
+    blocks = [
+        ("Quantum Device\n& Syndrome Stream\n$S_t \\in \\{0, 1\\}^{W \\times M}$", (0.05, 0.4), (0.22, 0.35), "#e0f3f8"),
+        ("Label-Free Diagnostics\n• CUSUM Drift Score $Z_t$\n• Spitz Edge Shift $\\hat{p}_e$\n• Binomial SE $\\sigma_e$", (0.33, 0.35), (0.28, 0.45), "#fee0d2"),
+        ("CG-CCADS 3-Gate Rule\n1. Stationarity: $Z_t \\leq T_{drift}$?\n2. Noise Floor: LCB $\\leq \\epsilon$?\n3. Cost Barrier: LCB $> \\tau_{adapt}$?", (0.65, 0.35), (0.32, 0.45), "#e5f5e0"),
+    ]
+
+    for title, (x, y), (w, h), bg in blocks:
+        rect = plt.Rectangle((x, y), w, h, facecolor=bg, edgecolor="#252525", linewidth=1.5, transform=ax.transAxes)
+        ax.add_patch(rect)
+        ax.text(x + w / 2, y + h / 2, title, ha="center", va="center", transform=ax.transAxes, fontweight="bold")
+
+    # Connect arrows
+    ax.annotate("", xy=(0.33, 0.57), xytext=(0.27, 0.57), arrowprops=dict(facecolor="black", shrink=0.05, width=1.5, headwidth=6))
+    ax.annotate("", xy=(0.65, 0.57), xytext=(0.61, 0.57), arrowprops=dict(facecolor="black", shrink=0.05, width=1.5, headwidth=6))
+
+    ax.text(0.5, 0.12, "Strictly Label-Free Pipeline: Zero Peek at Ground-Truth Logical Observables", ha="center", va="center", transform=ax.transAxes, fontstyle="italic", fontsize=11)
+
+    plt.tight_layout()
+    fig.savefig(out_dir / "fig_2_architecture_diagram.png", dpi=300)
+    fig.savefig(out_dir / "fig_2_architecture_diagram.pdf")
+    plt.close(fig)
+    logger.info("Saved fig_2_architecture_diagram")
+
+
+def fig_4_distance_scaling(data: dict[str, Any], out_dir: Path) -> None:
+    """Figure 4: Code Distance Scaling (d=3 vs d=5)."""
+    fig, ax = plt.subplots(figsize=(6, 4.5))
+
+    distances = [3, 5]
+    stat_lers = [
+        data["aggregates"]["d3"]["stationary_noise"]["w2000"]["arms"]["static_mwpm"]["mean_ler"],
+        data["aggregates"]["d5"]["stationary_noise"]["w2000"]["arms"]["static_mwpm"]["mean_ler"],
+    ]
+    cg_lers = [
+        data["aggregates"]["d3"]["stationary_noise"]["w2000"]["arms"]["cg_ccads"]["mean_ler"],
+        data["aggregates"]["d5"]["stationary_noise"]["w2000"]["arms"]["cg_ccads"]["mean_ler"],
+    ]
+
+    ax.plot(distances, stat_lers, "o--", label="Static MWPM", color="#4a7bb0", markersize=8)
+    ax.plot(distances, cg_lers, "s-", label="CG-CCADS", color="#2ca02c", markersize=8)
+
+    ax.set_xticks([3, 5])
+    ax.set_xlabel("Code Distance ($d$)")
+    ax.set_ylabel("Logical Error Rate (LER)")
+    ax.set_yscale("log")
+    ax.set_title("Code Distance Scaling Below Threshold ($p=0.004$)")
+    ax.legend(loc="upper right")
+
+    plt.tight_layout()
+    fig.savefig(out_dir / "fig_4_distance_scaling.png", dpi=300)
+    fig.savefig(out_dir / "fig_4_distance_scaling.pdf")
+    plt.close(fig)
+    logger.info("Saved fig_4_distance_scaling")
+
+
+def fig_5_paired_deltas(data: dict[str, Any], out_dir: Path) -> None:
+    """Figure 5: Forest Plot of Paired Delta LER across Scenarios from Suite Results."""
+    fig, ax = plt.subplots(figsize=(8, 4.5))

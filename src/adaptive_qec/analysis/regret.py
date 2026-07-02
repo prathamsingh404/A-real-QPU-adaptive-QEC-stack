@@ -80,3 +80,84 @@ class RegretAnalysis:
             "reward_p5": self.reward_p5,
             "reward_p95": self.reward_p95,
         }
+
+
+class RegretAnalyzer:
+    """Computes regret metrics from experiment results.
+
+    Usage:
+        analyzer = RegretAnalyzer(window_results)
+        analysis = analyzer.analyze("exp3")
+    """
+
+    def __init__(
+        self,
+        window_results: Optional[list[dict[str, Any]]] = None,
+        switch_penalty: float = 0.001,
+        num_arms: Optional[int] = None,
+    ) -> None:
+        self._results = list(window_results) if window_results is not None else []
+        self._switch_penalty = switch_penalty
+        self.num_arms = num_arms
+
+        # Group results by controller
+        self._by_controller: dict[str, list[dict]] = {}
+        for r in self._results:
+            name = r.get("controller_name", "unknown")
+            self._by_controller.setdefault(name, []).append(r)
+
+    def add_result(self, result: dict[str, Any]) -> None:
+        """Add a single window result record."""
+        self._results.append(result)
+        name = result.get("controller_name", "unknown")
+        self._by_controller.setdefault(name, []).append(result)
+
+    def _compute_oracle(self, arm_rewards: dict[str, list[float]]) -> tuple[str, float]:
+        """Find the best fixed arm in hindsight.
+
+        The oracle always plays the single arm with the highest
+        total reward over the entire experiment.
+        """
+        best_arm = ""
+        best_total = -float("inf")
+
+        for arm, rewards in arm_rewards.items():
+            total = sum(rewards)
+            if total > best_total:
+                best_total = total
+                best_arm = arm
+
+        return best_arm, best_total
+
+    def _extract_arm_rewards(
+        self, results: list[dict], all_results: list[dict]
+    ) -> dict[str, list[float]]:
+        """Build per-arm reward histories from ALL controllers' results.
+
+        For the oracle comparison, we need the reward that each arm
+        *would have* achieved at each step.  In an interleaved experiment,
+        different controllers pull different arms at the same step.
+        """
+        arm_rewards: dict[str, list[float]] = {}
+
+        for r in all_results:
+            arm_label = f"{r['action']['decoder']}:{r['action']['dd_policy']}"
+            arm_rewards.setdefault(arm_label, []).append(r["reward"])
+
+        return arm_rewards
+
+    def analyze(self, controller_name: str) -> RegretAnalysis:
+        """Compute regret analysis for a specific controller.
+
+        Parameters
+        ----------
+        controller_name : str
+            Name of the controller to analyze.
+
+        Returns
+        -------
+        RegretAnalysis
+            Comprehensive regret metrics.
+        """
+        if controller_name not in self._by_controller:
+            raise ValueError(f"No results for controller: {controller_name}")

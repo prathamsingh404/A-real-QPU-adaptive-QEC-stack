@@ -117,3 +117,120 @@ class ComparisonReport:
             "bootstrap_ci": list(self.bootstrap_ci),
             "conclusion": self.conclusion,
         }
+
+
+class SignificanceTester:
+    """Statistical testing engine for controller comparisons.
+
+    Parameters
+    ----------
+    alpha : float
+        Significance level (default 0.05).
+    bootstrap_samples : int
+        Number of bootstrap resamples for CI estimation.
+    """
+
+    def __init__(
+        self,
+        alpha: float = 0.05,
+        bootstrap_samples: int = 10000,
+    ) -> None:
+        self._alpha = alpha
+        self._bootstrap_n = bootstrap_samples
+        self._rng = np.random.default_rng(42)
+
+    def welch_t_test(
+        self,
+        baseline: Any,
+        treatment: Any,
+    ) -> HypothesisTestResult:
+        """Welch's t-test for unequal variances.
+
+        H₀: μ_baseline = μ_treatment
+        H₁: μ_treatment < μ_baseline (treatment has lower error rate)
+        """
+        b = np.asarray(baseline, dtype=np.float64)
+        t = np.asarray(treatment, dtype=np.float64)
+
+        t_stat, p_value = stats.ttest_ind(
+            b, t, equal_var=False, alternative="greater"
+        )
+
+        # Cohen's d effect size
+        pooled_std = np.sqrt(
+            (np.var(b, ddof=1) + np.var(t, ddof=1)) / 2.0
+        )
+        d = (float(np.mean(b)) - float(np.mean(t))) / max(float(pooled_std), 1e-10)
+
+        # CI on the difference
+        diff = b.mean() - t.mean()
+        se = np.sqrt(np.var(b, ddof=1)/len(b) + np.var(t, ddof=1)/len(t))
+        t_crit = stats.t.ppf(1 - self._alpha/2, df=max(min(len(b), len(t)) - 1, 1))
+        ci = (float(diff - t_crit * se), float(diff + t_crit * se))
+
+        return HypothesisTestResult(
+            test_name="Welch's t-test",
+            null_hypothesis="μ_baseline = μ_treatment",
+            alternative_hypothesis="μ_treatment < μ_baseline (lower error rate)",
+            test_statistic=float(t_stat),
+            p_value=float(p_value),
+            significant=float(p_value) < self._alpha,
+            alpha=self._alpha,
+            effect_size=float(d),
+            confidence_interval=ci,
+            sample_sizes=(len(b), len(t)),
+        )
+
+    def mann_whitney_test(
+        self,
+        baseline: Any,
+        treatment: Any,
+    ) -> HypothesisTestResult:
+        """Mann-Whitney U test (non-parametric).
+
+        Does not assume normality. Tests whether treatment values
+        tend to be smaller than baseline values.
+        """
+        b = np.asarray(baseline, dtype=np.float64)
+        t = np.asarray(treatment, dtype=np.float64)
+
+        u_stat, p_value = stats.mannwhitneyu(
+            b, t, alternative="greater"
+        )
+
+        # Rank-biserial correlation as effect size
+        n1, n2 = len(b), len(t)
+        r = 1 - 2 * u_stat / (n1 * n2)
+
+        return HypothesisTestResult(
+            test_name="Mann-Whitney U test",
+            null_hypothesis="P(baseline > treatment) = 0.5",
+            alternative_hypothesis="P(baseline > treatment) > 0.5",
+            test_statistic=float(u_stat),
+            p_value=float(p_value),
+            significant=float(p_value) < self._alpha,
+            alpha=self._alpha,
+            effect_size=float(r),
+            confidence_interval=(0.0, 0.0),  # not applicable for MWU
+            sample_sizes=(n1, n2),
+            notes="Rank-biserial correlation used as effect size",
+        )
+
+    def bootstrap_ci(
+        self,
+        baseline: Any,
+        treatment: Any,
+    ) -> tuple[float, float]:
+        """Bootstrap confidence interval for the difference in means.
+
+        Returns the (alpha/2, 1-alpha/2) percentile CI.
+        """
+        b = np.asarray(baseline, dtype=np.float64)
+        t = np.asarray(treatment, dtype=np.float64)
+        diffs: list[float] = []
+        n_b, n_t = len(b), len(t)
+
+        for _ in range(self._bootstrap_n):
+            b_sample = self._rng.choice(b, size=n_b, replace=True)
+            t_sample = self._rng.choice(t, size=n_t, replace=True)
+            diffs.append(float(np.mean(b_sample) - np.mean(t_sample)))

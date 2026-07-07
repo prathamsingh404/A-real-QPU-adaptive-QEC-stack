@@ -432,3 +432,437 @@
     },
     {
       "qubit": 58,
+      "t1_us": 162.54,
+      "t2_us": 133.55,
+      "frequency_ghz": null,
+      "readout_error": 0.020386
+    },
+    {
+      "qubit": 59,
+      "t1_us": 156.57,
+      "t2_us": 208.81,
+      "frequency_ghz": null,
+      "readout_error": 0.009155
+    },
+    {
+      "qubit": 60,
+      "t1_us": 171.01,
+      "t2_us": 49.61,
+      "frequency_ghz": null,
+      "readout_error": 0.025391
+    },
+    {
+      "qubit": 61,
+      "t1_us": 263.38,
+      "t2_us": 134.63,
+      "frequency_ghz": null,
+      "readout_error": 0.027588
+    },
+    {
+      "qubit": 62,
+      "t1_us": 132.48,
+      "t2_us": 49.09,
+      "frequency_ghz": null,
+      "readout_error": 0.022095
+    },
+    {
+      "qubit": 63,
+      "t1_us": 124.44,
+      "t2_us": 103.26,
+      "frequency_ghz": null,
+      "readout_error": 0.015747
+    },
+    {
+      "qubit": 64,
+      "t1_us": 200.43,
+      "t2_us": 30.88,
+      "frequency_ghz": null,
+      "readout_error": 0.068237
+    },
+    {
+      "qubit": 65,
+      "t1_us": 291.69,
+      "t2_us": 52.04,
+      "frequency_ghz": null,
+      "readout_error": 0.008911
+    },
+    {
+      "qubit": 66,
+      "t1_us": 124.63,
+      "t2_us": 32.12,
+      "frequency_ghz": null,
+      "readout_error": 0.012085
+    },
+    {
+      "qubit": 67,
+      "t1_us": 340.44,
+      "t2_us": 53.41,
+      "frequency_ghz": null,
+      "readout_error": 0.012329
+    },
+    {
+      "qubit": 68,
+      "t1_us": 123.18,
+      "t2_us": 25.87,
+      "frequency_ghz": null,
+      "readout_error": 0.014282
+    },
+    {
+      "qubit": 69,
+      "t1_us": 137.18,
+      "t2_us": 80.67,
+      "frequency_ghz": null,
+      "readout_error": 0.038208
+    },
+    {
+      "qubit": 70,
+      "t1_us": 131.14,
+      "t2_us": 20.75,
+      "frequency_ghz": null,
+      "readout_error": 0.030273
+    },
+    {
+      "qubit": 71,
+      "t1_us": 127.0,
+      "t2_us": 53.36,
+      "frequency_ghz": null,
+      "readout_error": 0.005615
+    },
+    {
+      "qubit": 72,
+      "t1_us": 111.34,
+      "t2_us": 54.68,
+      "frequency_ghz": null,
+      "readout_error": 0.047607
+    },
+    {
+      "qubit": 73,
+      "t1_us": 189.54,
+      "t2_us": 112.4,
+      "frequency_ghz": null,
+      "readout_error": 0.024292
+    },
+    {
+      "qubit": 74,
+      "t1_us": 134.14,
+      "t2_us": 21.35,
+      "frequency_ghz": null,
+      "readout_error": 0.021118
+    },
+    {
+      "qubit": 75,
+      "t1_us": 130.12,
+      "t2_us": 127.79,
+      "frequency_ghz": null,
+      "readout_error": 0.003296
+    },
+    {
+      "qubit": 76,
+      "t1_us": 72.14,
+      "t2_us": 44.5,
+      "frequency_ghz": null,
+      "readout_error": 0.034912
+    },
+    {
+      "qubit": 77,
+      "t1_us": 222.41,
+      "t2_us": 36.98,
+      "frequency_ghz": null,
+      "readout_error": 0.006348
+    },
+    {
+      "qubit": 78,
+      "t1_us": 162.79,
+      "t2_us": 30.37,
+      "frequency_ghz": null,
+      "readout_error": 0.006348
+    },
+    {
+      "qubit": 79,
+      "t1_us": 117.47,
+      "t2_us": 29.93,
+      "frequency_ghz": null,
+      "readout_error": 0.075195
+    },
+    {
+      "qubit": 80,
+      "t1_us": 110.88,
+      "t2_us": 31.81,
+      "frequency_ghz": null,
+      "readout_error": 0.005859
+    },
+    {
+      "qubit": 81,
+      "t1_us": 175.98,
+      "t2_us": 185.91,
+      "frequency_ghz": null,
+      "readout_error": 0.033081
+    },
+    {
+      "qubit": 82,
+      "t1_us": 8.12,
+      "t2_us": null,
+      "frequency_ghz": null,
+      "readout_error": 0.494873
+    },
+    {
+      "qubit": 83,
+      "t1_us": 186.14,
+      "t2_us": 192.43,
+      "frequency_ghz": null,
+      "readout_error": 0.15979
+    },
+    {
+      "qubit": 84,
+      "t1_us": 132.9,
+      "t2_us": 126.96,
+      "frequency_ghz": null,
+      "readout_error": 0.059448
+    },
+    {
+      "qubit": 85,
+      "t1_us": 151.66,
+      "t2_us": 70.86,
+      "frequency_ghz": null,
+      "readout_error": 0.005737
+    },
+    {
+      "qubit": 86,
+      "t1_us": 224.66,
+      "t2_us": 19.04,
+      "frequency_ghz": null,
+      "readout_error": 0.011963
+    },
+    {
+      "qubit": 87,
+      "t1_us": 193.35,
+      "t2_us": 160.88,
+      "frequency_ghz": null,
+      "readout_error": 0.014038
+    },
+    {
+      "qubit": 88,
+      "t1_us": 201.51,
+      "t2_us": 171.58,
+      "frequency_ghz": null,
+      "readout_error": 0.066162
+    },
+    {
+      "qubit": 89,
+      "t1_us": 61.56,
+      "t2_us": 54.63,
+      "frequency_ghz": null,
+      "readout_error": 0.01123
+    },
+    {
+      "qubit": 90,
+      "t1_us": 90.79,
+      "t2_us": 98.54,
+      "frequency_ghz": null,
+      "readout_error": 0.008911
+    },
+    {
+      "qubit": 91,
+      "t1_us": 147.01,
+      "t2_us": 203.62,
+      "frequency_ghz": null,
+      "readout_error": 0.007568
+    },
+    {
+      "qubit": 92,
+      "t1_us": 96.59,
+      "t2_us": 65.99,
+      "frequency_ghz": null,
+      "readout_error": 0.005005
+    },
+    {
+      "qubit": 93,
+      "t1_us": 206.03,
+      "t2_us": 189.75,
+      "frequency_ghz": null,
+      "readout_error": 0.009521
+    },
+    {
+      "qubit": 94,
+      "t1_us": null,
+      "t2_us": 433.49,
+      "frequency_ghz": null,
+      "readout_error": 0.393921
+    },
+    {
+      "qubit": 95,
+      "t1_us": 336.61,
+      "t2_us": 425.51,
+      "frequency_ghz": null,
+      "readout_error": 0.005981
+    },
+    {
+      "qubit": 96,
+      "t1_us": 126.67,
+      "t2_us": 31.66,
+      "frequency_ghz": null,
+      "readout_error": 0.011475
+    },
+    {
+      "qubit": 97,
+      "t1_us": 201.58,
+      "t2_us": 36.95,
+      "frequency_ghz": null,
+      "readout_error": 0.093628
+    },
+    {
+      "qubit": 98,
+      "t1_us": 282.94,
+      "t2_us": 45.72,
+      "frequency_ghz": null,
+      "readout_error": 0.004517
+    },
+    {
+      "qubit": 99,
+      "t1_us": 136.54,
+      "t2_us": 33.7,
+      "frequency_ghz": null,
+      "readout_error": 0.01001
+    },
+    {
+      "qubit": 100,
+      "t1_us": 97.59,
+      "t2_us": 63.59,
+      "frequency_ghz": null,
+      "readout_error": 0.01001
+    },
+    {
+      "qubit": 101,
+      "t1_us": 182.95,
+      "t2_us": 73.1,
+      "frequency_ghz": null,
+      "readout_error": 0.005737
+    },
+    {
+      "qubit": 102,
+      "t1_us": 84.64,
+      "t2_us": 33.58,
+      "frequency_ghz": null,
+      "readout_error": 0.038452
+    },
+    {
+      "qubit": 103,
+      "t1_us": 85.62,
+      "t2_us": 17.26,
+      "frequency_ghz": null,
+      "readout_error": 0.008057
+    },
+    {
+      "qubit": 104,
+      "t1_us": 234.6,
+      "t2_us": 55.63,
+      "frequency_ghz": null,
+      "readout_error": 0.006592
+    },
+    {
+      "qubit": 105,
+      "t1_us": 143.12,
+      "t2_us": 94.35,
+      "frequency_ghz": null,
+      "readout_error": 0.003784
+    },
+    {
+      "qubit": 106,
+      "t1_us": 279.41,
+      "t2_us": 142.97,
+      "frequency_ghz": null,
+      "readout_error": 0.022217
+    },
+    {
+      "qubit": 107,
+      "t1_us": 221.13,
+      "t2_us": 103.28,
+      "frequency_ghz": null,
+      "readout_error": 0.00293
+    },
+    {
+      "qubit": 108,
+      "t1_us": 42.89,
+      "t2_us": 25.73,
+      "frequency_ghz": null,
+      "readout_error": 0.007935
+    },
+    {
+      "qubit": 109,
+      "t1_us": 224.83,
+      "t2_us": 110.47,
+      "frequency_ghz": null,
+      "readout_error": 0.017944
+    },
+    {
+      "qubit": 110,
+      "t1_us": 232.67,
+      "t2_us": 48.92,
+      "frequency_ghz": null,
+      "readout_error": 0.009277
+    },
+    {
+      "qubit": 111,
+      "t1_us": 200.81,
+      "t2_us": 110.89,
+      "frequency_ghz": null,
+      "readout_error": 0.014038
+    },
+    {
+      "qubit": 112,
+      "t1_us": 267.17,
+      "t2_us": 174.88,
+      "frequency_ghz": null,
+      "readout_error": 0.005127
+    },
+    {
+      "qubit": 113,
+      "t1_us": 89.53,
+      "t2_us": null,
+      "frequency_ghz": null,
+      "readout_error": 0.406494
+    },
+    {
+      "qubit": 114,
+      "t1_us": 266.29,
+      "t2_us": 259.59,
+      "frequency_ghz": null,
+      "readout_error": 0.00415
+    },
+    {
+      "qubit": 115,
+      "t1_us": 168.32,
+      "t2_us": 51.84,
+      "frequency_ghz": null,
+      "readout_error": 0.008667
+    },
+    {
+      "qubit": 116,
+      "t1_us": 78.37,
+      "t2_us": 67.37,
+      "frequency_ghz": null,
+      "readout_error": 0.028198
+    },
+    {
+      "qubit": 117,
+      "t1_us": 191.16,
+      "t2_us": 16.0,
+      "frequency_ghz": null,
+      "readout_error": 0.01062
+    },
+    {
+      "qubit": 118,
+      "t1_us": 160.65,
+      "t2_us": 20.3,
+      "frequency_ghz": null,
+      "readout_error": 0.005615
+    },
+    {
+      "qubit": 119,
+      "t1_us": 207.45,
+      "t2_us": 23.54,
+      "frequency_ghz": null,
+      "readout_error": 0.140137
+    },
+    {
+      "qubit": 120,

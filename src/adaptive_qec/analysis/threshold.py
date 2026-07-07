@@ -104,3 +104,105 @@ class ThresholdAnalyzer:
     ) -> None:
         """
         Add an experimental result for a given code distance.
+
+        Args:
+            distance: code distance (must be odd: 3, 5, 7, ...)
+            metrics: decoder metrics from the experiment
+            physical_error_rate: the physical error rate used
+        """
+        if distance % 2 == 0:
+            raise ValueError(f"Code distance must be odd, got {distance}")
+
+        self._results[distance] = {
+            "distance": distance,
+            "logical_error_rate": metrics.logical_error_rate,
+            "num_logical_errors": metrics.num_logical_errors,
+            "total_shots": metrics.total_shots,
+            "physical_error_rate": physical_error_rate,
+            "decode_time_s": metrics.decode_time_s,
+            "latency_mean_us": metrics.latency_mean_us,
+        }
+
+        # Compute Wilson score 95% CI
+        n = metrics.total_shots
+        p = metrics.logical_error_rate
+        z = 1.96
+        denom = 1.0 + z**2 / n
+        center = (p + z**2 / (2 * n)) / denom
+        delta = z * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denom
+        self._results[distance]["ci_lower"] = max(0.0, float(center - delta))
+        self._results[distance]["ci_upper"] = min(1.0, float(center + delta))
+
+        logger.info(
+            f"Added d={distance}: LER={metrics.logical_error_rate:.6f} "
+            f"[{self._results[distance]['ci_lower']:.6f}, "
+            f"{self._results[distance]['ci_upper']:.6f}] "
+            f"({metrics.num_logical_errors}/{metrics.total_shots})"
+        )
+
+    def compute_lambda(
+        self,
+        d_low: int,
+        d_high: int,
+    ) -> float:
+        """
+        Compute Λ = p_L(d_low) / p_L(d_high).
+
+        Λ > 1 indicates below-threshold operation.
+
+        Args:
+            d_low: lower code distance
+            d_high: higher code distance (should be d_low + 2)
+
+        Returns:
+            Lambda ratio. Returns 0.0 if either error rate is zero.
+        """
+        if d_low not in self._results or d_high not in self._results:
+            available = sorted(self._results.keys())
+            raise ValueError(
+                f"Need results for both d={d_low} and d={d_high}. "
+                f"Available: {available}"
+            )
+
+        p_low = self._results[d_low]["logical_error_rate"]
+        p_high = self._results[d_high]["logical_error_rate"]
+
+        if p_high <= 0:
+            logger.warning(
+                f"p_L(d={d_high}) = 0 — cannot compute Λ. "
+                f"Need more shots for statistical significance."
+            )
+            return float("inf")
+
+        if p_low <= 0:
+            return 0.0
+
+        lambda_ratio = p_low / p_high
+        logger.info(
+            f"Λ(d={d_low}→d={d_high}) = {lambda_ratio:.4f} "
+            f"({'BELOW' if lambda_ratio > 1 else 'ABOVE'} threshold)"
+        )
+        return lambda_ratio
+
+    def fit_threshold_model(self) -> ThresholdFit:
+        """
+        Fit the phenomenological threshold model:
+
+            p_L = A · (p / p_th)^((d+1)/2)
+
+        to the experimental data.
+
+        Requires results at ≥ 2 different distances.
+
+        Returns:
+            ThresholdFit with estimated p_th and A.
+        """
+        if len(self._results) < 2:
+            raise ValueError(
+                f"Need results at ≥ 2 distances for threshold fit. "
+                f"Have {len(self._results)}."
+            )
+
+        distances = sorted(self._results.keys())
+        error_rates = [self._results[d]["logical_error_rate"] for d in distances]
+        p_phys = self._results[distances[0]]["physical_error_rate"]

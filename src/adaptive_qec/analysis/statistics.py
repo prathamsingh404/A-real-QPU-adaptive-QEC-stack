@@ -68,3 +68,81 @@ def compute_confidence_interval(
             upper = stats.beta.ppf(1 - alpha / 2, n_errors + 1, n_total - n_errors)
 
     elif method == "normal":
+        # Normal approximation — only for large n
+        z = stats.norm.ppf(1 - alpha / 2)
+        se = np.sqrt(p_hat * (1 - p_hat) / n_total)
+        lower = max(0.0, p_hat - z * se)
+        upper = min(1.0, p_hat + z * se)
+
+    else:
+        raise ValueError(f"Unknown CI method: {method}")
+
+    return (float(lower), float(upper))
+
+
+@dataclass
+class HypothesisTestResult:
+    """Result of a two-proportion hypothesis test."""
+    test_name: str
+    p_value: float
+    test_statistic: float
+    significant: bool
+    confidence: float
+    effect_size: float  # difference in error rates
+    details: dict = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.details is None:
+            self.details = {}
+
+
+def compare_error_rates(
+    n_errors_a: int,
+    n_total_a: int,
+    n_errors_b: int,
+    n_total_b: int,
+    confidence: float = 0.95,
+    alternative: str = "two-sided",
+) -> HypothesisTestResult:
+    """
+    Test H₀: p_{L,A} = p_{L,B}.
+
+    Uses a two-proportion z-test.
+
+    Args:
+        n_errors_a, n_total_a: errors and shots for decoder/config A.
+        n_errors_b, n_total_b: errors and shots for decoder/config B.
+        confidence: confidence level.
+        alternative: "two-sided", "less", or "greater".
+
+    Returns:
+        HypothesisTestResult with p-value and significance.
+    """
+    alpha = 1 - confidence
+
+    p_a = n_errors_a / n_total_a if n_total_a > 0 else 0
+    p_b = n_errors_b / n_total_b if n_total_b > 0 else 0
+
+    # Pooled proportion under H₀
+    p_pool = (n_errors_a + n_errors_b) / (n_total_a + n_total_b)
+
+    # Standard error
+    se = np.sqrt(p_pool * (1 - p_pool) * (1 / n_total_a + 1 / n_total_b))
+
+    if se < 1e-12:
+        z_stat = 0.0
+    else:
+        z_stat = (p_a - p_b) / se
+
+    # P-value
+    if alternative == "two-sided":
+        p_value = 2 * stats.norm.sf(abs(z_stat))
+    elif alternative == "less":
+        p_value = stats.norm.cdf(z_stat)
+    elif alternative == "greater":
+        p_value = stats.norm.sf(z_stat)
+    else:
+        raise ValueError(f"Unknown alternative: {alternative}")
+
+    significant = bool(p_value < alpha)
+    effect_size = p_a - p_b

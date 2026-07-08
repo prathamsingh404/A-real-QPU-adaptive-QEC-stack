@@ -33,3 +33,39 @@
       "arm_name": "b1_optimized_mwpm",
       "total_shots": 500,
       "num_logical_errors": 1,
+      "logical_error_rate": 0.002,
+      "ler_wilson_ci": [
+        0.000353127309584542,
+        0.011240992747195207
+      ],
+      "mean_delta_ler": 0.0,
+      "delta_std_err": 0.0,
+      "p_value_paired_t": 1.0,
+      "p_value_wilcoxon": 1.0,
+      "decode_time_s": 0.00017769999976735562,
+      "latency_mean_us": 0.16179999511223286
+    },
+    "b2_true_union_find": {
+      "arm_name": "b2_true_union_find",
+      "total_shots": 500,
+      "num_logical_errors": 0,
+      "logical_error_rate": 0.0,
+      "ler_wilson_ci": [
+        0.0,
+        0.007624618530903363
+      ],
+      "mean_delta_ler": -0.002,
+      "delta_std_err": 0.002,
+      "p_value_paired_t": 0.31779517611187164,
+      "p_value_wilcoxon": 1.0,
+      "decode_time_s": 0.011486999996122904,
+      "latency_mean_us": 22.2492000029888
+    },
+    "b3_online_reweighted_mwpm": {
+      "arm_name": "b3_online_reweighted_mwpm",
+      "total_shots": 500,
+      "num_logical_errors": 1,
+      "logical_error_rate": 0.002,
+      "ler_wilson_ci": [
+        0.000353127309584542,
+        0.011240992747195207

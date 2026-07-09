@@ -38,3 +38,43 @@
         "unwrapped_phase": -0.125,
         "qpu_eigenvalue_hartree": -0.6375018366025518,
         "qpu_ground_energy_hartree": 0.07625215706213662,
+        "exact_ground_energy_hartree": -1.1372813237292403,
+        "error_hartree": 1.213533480791377,
+        "error_kcal_per_mol": 761.5031809979162,
+        "chemical_accuracy_achieved": false,
+        "counts": {
+          "000": 362,
+          "111": 363,
+          "100": 111,
+          "101": 22,
+          "011": 47,
+          "010": 30,
+          "110": 42,
+          "001": 23
+        }
+      }
+    },
+    "part2_teleportation": {
+      "job_id": "dat0p45vr3kc73ekooo0",
+      "dynamic_feedforward": {
+        "target_state": "|+>",
+        "regime": "dynamic",
+        "measured_bloch_vector": [
+          0.838,
+          0.022,
+          0.018
+        ],
+        "ideal_bloch_vector": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "state_fidelity": 0.919,
+        "classical_bound": 0.6666666666666666,
+        "surpasses_classical_limit": true,
+        "deterministic_yield_rate": 1.0,
+        "valid_shots": 3000,
+        "total_submitted_shots": 3000
+      },
+      "post_selected": {
+        "target_state": "|+>",

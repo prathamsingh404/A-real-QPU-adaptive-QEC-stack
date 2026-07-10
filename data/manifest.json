@@ -9,3 +9,14 @@
     "python_version": "3.14.2",
     "stim_version": "1.16.0",
     "pymatching_version": "2.4.0"
+  },
+  "config": {
+    "path": "configs\\suite.yaml",
+    "sha256": "918e0b33ff9cf6bab0c44b09127759cbb0971ecbca2361f7786703d03b225e78"
+  },
+  "results_file": {
+    "path": "data\\suite_results.json",
+    "sha256": "b99374433fcd5511cd5ccd31fcb94c6f3e8050ef917bb06b06aedb8e8d63a85f",
+    "total_records": 720
+  }
+}

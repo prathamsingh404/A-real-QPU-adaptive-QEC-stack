@@ -18,3 +18,23 @@
         "x_stabilizer_defects": 83,
         "x_defect_rate": 0.083,
         "total_detected_errors": 175,
+        "error_detection_rate": 0.175,
+        "code_space_violations": 305,
+        "code_space_fidelity": 0.6950000000000001,
+        "ci_95": [
+          0.1527053610921423,
+          0.19978212298901157
+        ]
+      },
+      "dd_mitigated": {
+        "shots": 1000,
+        "z_stabilizer_defects": 167,
+        "z_defect_rate": 0.167,
+        "x_stabilizer_defects": 404,
+        "x_defect_rate": 0.404,
+        "total_detected_errors": 488,
+        "error_detection_rate": 0.488,
+        "code_space_violations": 280,
+        "code_space_fidelity": 0.72,
+        "ci_95": [
+          0.45712383226342285,

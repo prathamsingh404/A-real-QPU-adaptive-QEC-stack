@@ -23,3 +23,29 @@
       ],
       "errors_dd": 3,
       "ler_dd": 0.006,
+      "ci_dd": [
+        0.00204,
+        0.01749
+      ]
+    },
+    "union_find": {
+      "errors_unmitigated": 20,
+      "ler_unmitigated": 0.04,
+      "ci_unmitigated": [
+        0.02604,
+        0.06097
+      ],
+      "errors_dd": 3,
+      "ler_dd": 0.006,
+      "ci_dd": [
+        0.00204,
+        0.01749
+      ]
+    },
+    "statistical_comparison": {
+      "z_statistic": -3.4494,
+      "p_value": 0.000562,
+      "significant_at_alpha_0_05": true
+    }
+  }
+}

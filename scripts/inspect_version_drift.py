@@ -19,3 +19,15 @@ def inspect_lock():
     
     with open(lock_path, "r", encoding="utf-8") as f:
         text = f.read()
+
+    locked = {}
+    pattern = re.compile(r'\[\[package\]\]\s+name = "([^"]+)"\s+version = "([^"]+)"')
+    for m in pattern.finditer(text):
+        name = m.group(1)
+        ver = m.group(2)
+        locked[name] = ver
+    return locked
+
+def main():
+    locked = inspect_lock()
+    key_pkgs = ["stim", "pymatching", "numpy", "scipy", "qiskit", "qiskit-ibm-runtime"]

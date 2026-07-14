@@ -27,3 +27,35 @@ def setup_logging() -> None:
         format="%(asctime)s | %(levelname)-8s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Analyze AdaptiveQEC experiment results")
+    parser.add_argument("--base-path", default="experiments", help="Experiment store path")
+    parser.add_argument("--list", action="store_true", help="List all experiments")
+    parser.add_argument("--experiment", type=str, help="Show details for an experiment")
+    parser.add_argument("--compare", type=str, help="Compare two experiments: id1,id2")
+
+    args = parser.parse_args()
+    setup_logging()
+
+    store = ExperimentStore(args.base_path)
+
+    if args.list:
+        experiments = store.list_experiments()
+        print(f"\nFound {len(experiments)} experiments:")
+        for exp_id in experiments:
+            try:
+                metrics = store.load_metrics(exp_id)
+                ler = metrics.get("logical_error_rate", "?")
+                print(f"  {exp_id}: LER={ler}")
+            except Exception:
+                print(f"  {exp_id}: (metrics unavailable)")
+
+    elif args.experiment:
+        try:
+            metrics = store.load_metrics(args.experiment)
+            print(f"\n=== Experiment: {args.experiment} ===")
+            print(json.dumps(metrics, indent=2, default=str))
+        except FileNotFoundError:
+            print(f"Experiment not found: {args.experiment}")

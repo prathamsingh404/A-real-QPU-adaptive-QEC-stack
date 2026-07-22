@@ -24,3 +24,33 @@ def main():
     leak_detectors = list(range(1, num_leakage + 1))
     
     p_values = np.linspace(0.003, 0.015, 7)
+    
+    for p in p_values:
+        print(f"\n{'='*80}")
+        print(f"RUNNING SWEEP FOR p_phys={p:.4f} at d={d}")
+        print(f"{'='*80}")
+        
+        # We use a constant p for this sweep point, but with leakage starting at window 5.
+        sched = NoiseSchedule(
+            total_windows=30,
+            shots_per_window=500, # 15000 shots per arm per point
+            drift_start_window=100, # no drift
+            drift_end_window=101,
+            drift_p2q_base=float(p),
+            drift_p2q_peak=float(p),
+            burst_windows=[], # no bursts, just pure background noise + leakage
+            burst_intensity=0.0,
+            leakage_start_window=5,
+            leakage_detector_indices=leak_detectors,
+        )
+        
+        run_adaptive_vs_static(
+            distance=d,
+            rounds=d,
+            schedule=sched,
+            output_dir=out_dir,
+            seed=42 + int(p*10000),
+        )
+
+if __name__ == "__main__":
+    main()

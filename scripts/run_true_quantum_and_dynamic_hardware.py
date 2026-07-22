@@ -41,3 +41,41 @@ def build_422_code_circuit(insert_dd: bool = True) -> QuantumCircuit:
     qc.cx(qr_data[0], qr_data[1])
     qc.cx(qr_data[0], qr_data[2])
     qc.cx(qr_data[0], qr_data[3])
+    
+    if insert_dd:
+        qc.barrier()
+        for d in range(4):
+            qc.x(qr_data[d])
+            qc.y(qr_data[d])
+            qc.x(qr_data[d])
+            qc.y(qr_data[d])
+        qc.barrier()
+        
+    # 2. Extract Z-stabilizer: S_Z = Z0 Z1 Z2 Z3 into Ancilla 0
+    qc.reset(qr_anc[0])
+    qc.cx(qr_data[0], qr_anc[0])
+    qc.cx(qr_data[1], qr_anc[0])
+    qc.cx(qr_data[2], qr_anc[0])
+    qc.cx(qr_data[3], qr_anc[0])
+    qc.measure(qr_anc[0], cr_syn[0])
+    
+    # 3. Extract X-stabilizer: S_X = X0 X1 X2 X3 into Ancilla 1
+    qc.reset(qr_anc[1])
+    qc.h(qr_anc[1])
+    qc.cx(qr_anc[1], qr_data[0])
+    qc.cx(qr_anc[1], qr_data[1])
+    qc.cx(qr_anc[1], qr_data[2])
+    qc.cx(qr_anc[1], qr_data[3])
+    qc.h(qr_anc[1])
+    qc.measure(qr_anc[1], cr_syn[1])
+    
+    # 4. Transversal Readout
+    qc.barrier()
+    qc.measure(qr_data, cr_data)
+    return qc
+
+
+def build_realtime_feedforward_circuit() -> QuantumCircuit:
+    """
+    Builds a dynamic circuit using Qiskit OpenQASM 3 `if_test`.
+    Executes real-time sub-microsecond feedforward on IBM QPU controller electronics!

@@ -24,3 +24,29 @@ def compute_sha256(path: Path) -> str:
         while chunk := f.read(65536):
             h.update(chunk)
     return h.hexdigest()
+
+
+def verify_lock(lock_path: Path = Path("paper.lock")) -> bool:
+    """Verify all hashes in paper.lock."""
+    if not lock_path.exists():
+        logger.error("Lock file not found: %s", lock_path)
+        return False
+
+    with open(lock_path, "r", encoding="utf-8") as f:
+        lock_data = json.load(f)
+
+    files: dict[str, str] = lock_data.get("files", {})
+    if not files:
+        logger.error("Lock file contains no tracked file hashes.")
+        return False
+
+    all_matched = True
+    mismatches = []
+    missing = []
+
+    for rel_path, expected_hash in files.items():
+        p = Path(rel_path)
+        if not p.exists():
+            missing.append(rel_path)
+            all_matched = False
+            continue

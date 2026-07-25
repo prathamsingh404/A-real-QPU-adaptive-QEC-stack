@@ -33,3 +33,32 @@ def dummy_hardware_state() -> HardwareState:
         gate_error_1q=0.0005,
         gate_error_2q=0.003,
     )
+
+
+@pytest.fixture
+def dephasing_dominated_state() -> HardwareState:
+    """Hardware state where T2 << T1 (dephasing dominant)."""
+    return HardwareState(
+        error_rate=0.008,
+        t1_us=300.0,
+        t2_us=50.0,   # Much shorter than T1
+        readout_error=0.015,
+        gate_error_1q=0.0008,
+        gate_error_2q=0.005,
+    )
+
+
+@pytest.fixture
+def relaxation_dominated_state() -> HardwareState:
+    """Hardware state where T1 << T2 (relaxation dominant)."""
+    return HardwareState(
+        error_rate=0.008,
+        t1_us=50.0,    # Much shorter than T2
+        t2_us=300.0,
+        readout_error=0.015,
+        gate_error_1q=0.0008,
+        gate_error_2q=0.005,
+    )
+
+
+@pytest.fixture

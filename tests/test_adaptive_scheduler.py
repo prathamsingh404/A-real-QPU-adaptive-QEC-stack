@@ -93,3 +93,97 @@ class TestScheduleForBias:
     def test_isotropic_returns_balanced(self):
         sched = schedule_for_bias(1.0)
         assert sched.schedule_type == ScheduleType.BALANCED
+
+    def test_high_dephasing_returns_x_heavy(self):
+        sched = schedule_for_bias(5.0)
+        assert sched.schedule_type == ScheduleType.X_HEAVY
+
+    def test_extreme_dephasing_returns_extreme_x(self):
+        sched = schedule_for_bias(50.0)
+        assert sched.schedule_type == ScheduleType.EXTREME_X
+
+    def test_high_relaxation_returns_z_heavy(self):
+        sched = schedule_for_bias(0.2)
+        assert sched.schedule_type == ScheduleType.Z_HEAVY
+
+    def test_extreme_relaxation_returns_extreme_z(self):
+        sched = schedule_for_bias(0.05)
+        assert sched.schedule_type == ScheduleType.EXTREME_Z
+
+    def test_negative_bias_raises(self):
+        with pytest.raises(ValueError):
+            schedule_for_bias(-1.0)
+
+
+# -----------------------------------------------------------------------
+# AdaptiveSchedulerConfig tests
+# -----------------------------------------------------------------------
+
+class TestAdaptiveSchedulerConfig:
+    def test_valid_config(self):
+        config = AdaptiveSchedulerConfig()
+        config.validate()  # Should not raise
+
+    def test_invalid_ewma_alpha(self):
+        config = AdaptiveSchedulerConfig(ewma_alpha=0.0)
+        with pytest.raises(ValueError, match="ewma_alpha"):
+            config.validate()
+
+    def test_invalid_thresholds(self):
+        config = AdaptiveSchedulerConfig(theta_enter=0.05, theta_exit=0.15)
+        with pytest.raises(ValueError, match="theta_exit"):
+            config.validate()
+
+
+# -----------------------------------------------------------------------
+# AdaptiveXZScheduler tests
+# -----------------------------------------------------------------------
+
+class TestAdaptiveXZScheduler:
+    def test_initialization(self):
+        scheduler = AdaptiveXZScheduler()
+        assert scheduler.current_schedule.schedule_type == ScheduleType.BALANCED
+        assert scheduler.imbalance == 0.0
+
+    def test_stays_balanced_under_isotropic_noise(self):
+        """Under equal X and Z defect rates, should stay BALANCED."""
+        scheduler = AdaptiveXZScheduler()
+
+        for i in range(100):
+            obs = DefectObservation(
+                round_idx=i,
+                x_defects=5,
+                z_defects=5,
+                total_x_stabilizers=100,
+                total_z_stabilizers=100,
+            )
+            scheduler.update(obs)
+
+        assert scheduler.current_schedule.schedule_type == ScheduleType.BALANCED
+        assert scheduler.switch_count == 0
+
+    def test_switches_to_x_heavy_under_x_dominant_noise(self):
+        """Strong X defect dominance should trigger X_HEAVY schedule."""
+        scheduler = AdaptiveXZScheduler(
+            AdaptiveSchedulerConfig(
+                theta_enter=0.15,
+                theta_exit=0.05,
+                min_rounds_before_switch=5,
+                ewma_alpha=0.2,
+            )
+        )
+
+        for i in range(60):
+            obs = DefectObservation(
+                round_idx=i,
+                x_defects=20,   # X defects dominate
+                z_defects=2,
+                total_x_stabilizers=100,
+                total_z_stabilizers=100,
+            )
+            scheduler.update(obs)
+
+        assert scheduler.current_schedule.schedule_type in (
+            ScheduleType.X_HEAVY, ScheduleType.EXTREME_X
+        )
+        assert scheduler.switch_count >= 1

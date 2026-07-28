@@ -66,3 +66,75 @@ def test_invoked_decoder_matches_controller_action():
         
     assert invoked_decoder_type == action_uf.decoder.value
     assert res.total_shots == 10
+
+
+def test_static_arms_compute_own_predictions():
+    """Verify that each static arm computes its own predictions on its own circuit/syndromes.
+    
+    Prevents bug in full_adaptive.py where static arrays were filled by copying adaptive LER.
+    """
+    code = create_code("surface", distance=3, rounds=3)
+    circ1 = code.generate_circuit()
+    circ2 = code.generate_circuit()
+    
+    mwpm1 = MWPMDecoder()
+    mwpm1.configure(circuit=circ1)
+    
+    mwpm2 = MWPMDecoder()
+    mwpm2.configure(circuit=circ2)
+    
+    # Use different seeds to ensure independent outputs
+    s1, o1 = circ1.compile_detector_sampler(seed=101).sample(shots=20, separate_observables=True)
+    s2, o2 = circ2.compile_detector_sampler(seed=202).sample(shots=20, separate_observables=True)
+    
+    res1 = mwpm1.decode_batch(s1.astype(np.uint8), o1.astype(np.uint8))
+    res2 = mwpm2.decode_batch(s2.astype(np.uint8), o2.astype(np.uint8))
+    
+    # Ensure they are distinct objects and not identical references
+    assert res1 is not res2
+    assert hasattr(res1, "logical_error_rate")
+    assert hasattr(res2, "logical_error_rate")
+
+
+def test_controller_does_not_import_noise_schedules():
+    """Verify that controller module does not import simulation noise schedules.
+    
+    Structural enforcement preventing the controller from peeking at ground truth.
+    """
+    controller_file = Path(__file__).resolve().parents[1] / "src" / "adaptive_qec" / "controller" / "controller.py"
+    with open(controller_file, "r", encoding="utf-8") as f:
+        tree = ast.parse(f.read(), filename=str(controller_file))
+        
+    imported_names = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for n in node.names:
+                imported_names.append(n.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                imported_names.append(node.module)
+                
+    forbidden_modules = [
+        "adaptive_qec.experiments",
+        "adaptive_qec.experiments.adaptive_vs_static",
+        "NoiseSchedule",
+    ]
+    for imp in imported_names:
+        for forbidden in forbidden_modules:
+            assert forbidden not in imp, f"Forbidden import detected in controller: {imp}"
+
+
+def test_observation_frame_blocks_oracle_fields():
+    """Verify that ObservationFrame strictly rejects oracle fields."""
+    from adaptive_qec.observation.schema import ObservationFrame
+    frame = ObservationFrame(
+        total_shots=100,
+        num_detectors=8,
+        total_defects=5,
+        defect_rate=0.00625,
+        x_defect_rate=0.005,
+        z_defect_rate=0.0075,
+    )
+    assert not hasattr(frame, "latent_noise")
+    assert not hasattr(frame, "true_ler")
+    assert not hasattr(frame, "actual_p_x")

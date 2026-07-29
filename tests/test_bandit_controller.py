@@ -86,3 +86,92 @@ class TestExp3Controller:
         ctrl.observe(dummy_state)
         action = ctrl.decide()
         assert isinstance(action, ControlAction)
+
+    def test_probability_distribution_sums_to_one(self, arms):
+        ctrl = Exp3Controller(arms=arms, gamma=0.1)
+        probs = ctrl._compute_probs()
+        assert abs(probs.sum() - 1.0) < 1e-10
+        assert all(p >= 0 for p in probs)
+
+    def test_update_shifts_weights(self, arms, dummy_state):
+        ctrl = Exp3Controller(arms=arms, gamma=0.1)
+        ctrl.observe(dummy_state)
+        action = ctrl.decide()
+
+        probs_before = ctrl._compute_probs().copy()
+        ctrl.update(1.0)  # High reward for chosen arm
+        probs_after = ctrl._compute_probs()
+
+        # Distribution should have shifted
+        assert not np.allclose(probs_before, probs_after)
+
+    def test_numerical_stability_under_extreme_rewards(self, arms, dummy_state):
+        ctrl = Exp3Controller(arms=arms, gamma=0.01)
+        for _ in range(500):
+            ctrl.observe(dummy_state)
+            ctrl.decide()
+            ctrl.update(1.0)
+        
+        probs = ctrl._compute_probs()
+        assert not np.any(np.isnan(probs))
+        assert not np.any(np.isinf(probs))
+        assert abs(probs.sum() - 1.0) < 1e-8
+
+    def test_reset_restores_uniform(self, arms, dummy_state):
+        ctrl = Exp3Controller(arms=arms, gamma=0.1)
+        for _ in range(20):
+            ctrl.observe(dummy_state)
+            ctrl.decide()
+            ctrl.update(0.5)
+        ctrl.reset()
+        probs = ctrl._compute_probs()
+        expected = 1.0 / len(arms)
+        assert all(abs(p - expected) < 0.01 for p in probs)
+
+
+# -----------------------------------------------------------------------
+# Exp3PController tests
+# -----------------------------------------------------------------------
+
+class TestExp3PController:
+    def test_initialization(self, arms):
+        ctrl = Exp3PController(arms=arms, gamma=0.1, beta=0.05, delta=0.01)
+        assert ctrl.name == "exp3p"
+
+    def test_decide_and_update(self, arms, dummy_state):
+        ctrl = Exp3PController(arms=arms, gamma=0.1, beta=0.05, delta=0.01)
+        for _ in range(10):
+            ctrl.observe(dummy_state)
+            action = ctrl.decide()
+            assert isinstance(action, ControlAction)
+            ctrl.update(np.random.uniform(0, 1))
+
+    def test_probabilities_valid(self, arms, dummy_state):
+        ctrl = Exp3PController(arms=arms, gamma=0.1, beta=0.05, delta=0.01)
+        for _ in range(50):
+            ctrl.observe(dummy_state)
+            ctrl.decide()
+            ctrl.update(np.random.uniform(0, 1))
+        
+        probs = ctrl._compute_probs()
+        assert abs(probs.sum() - 1.0) < 1e-8
+        assert all(p >= 0 for p in probs)
+
+
+# -----------------------------------------------------------------------
+# DASEController tests
+# -----------------------------------------------------------------------
+
+class TestDASEController:
+    def test_initialization(self, arms):
+        ctrl = DASEController(arms=arms, exploration_bonus=1.0)
+        assert ctrl.name == "dase"
+
+    def test_forced_exploration(self, arms, dummy_state):
+        """All arms should be pulled at least min_pulls times."""
+        ctrl = DASEController(arms=arms, exploration_bonus=1.0, min_pulls=3)
+        
+        pulls = {a.label: 0 for a in arms}
+        for _ in range(len(arms) * 3):
+            ctrl.observe(dummy_state)
+            action = ctrl.decide()

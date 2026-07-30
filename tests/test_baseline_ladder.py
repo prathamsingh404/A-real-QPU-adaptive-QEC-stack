@@ -29,3 +29,31 @@ def test_baseline_ladder_instantiation_and_counterfactual_eval():
         after_clifford_depolarization=0.007,
     )
     ladder = BaselineLadder(circuit=circuit)
+
+    assert BaselineRung.B0_FACTORY_MWPM in ladder.arms
+    assert BaselineRung.B1_OPTIMIZED_MWPM in ladder.arms
+    assert BaselineRung.B2_TRUE_UNION_FIND in ladder.arms
+    assert BaselineRung.B3_ONLINE_REWEIGHTED in ladder.arms
+
+    engine = ladder.to_counterfactual_engine()
+    sampler = circuit.compile_detector_sampler(seed=123)
+    syndromes, observables = sampler.sample(shots=60, separate_observables=True)
+
+    results, disagreement = engine.evaluate(syndromes, observables)
+
+    # Check that all arms are present
+    assert BaselineRung.B0_FACTORY_MWPM.value in results
+    assert BaselineRung.B1_OPTIMIZED_MWPM.value in results
+    assert BaselineRung.B2_TRUE_UNION_FIND.value in results
+    assert BaselineRung.B3_ONLINE_REWEIGHTED.value in results
+
+    # Verify B0 reference delta is identically zero
+    b0_res = results[BaselineRung.B0_FACTORY_MWPM.value]
+    assert b0_res.mean_delta_ler == 0.0
+
+    # Disagreement matrix symmetry and zero diagonal
+    b0_name = BaselineRung.B0_FACTORY_MWPM.value
+    b2_name = BaselineRung.B2_TRUE_UNION_FIND.value
+    assert disagreement.get(b0_name, b0_name) == 0.0
+    assert 0.0 <= disagreement.get(b0_name, b2_name) <= 1.0
+    assert disagreement.get(b0_name, b2_name) == disagreement.get(b2_name, b0_name)

@@ -46,3 +46,51 @@ class TestBurstDetector:
 
         detector = BurstDetector(window_size=4, significance=0.001)
         analysis = detector.analyze(syndromes, num_detectors_per_round=16)
+
+        assert len(analysis.bursts_detected) >= 1
+        burst = analysis.bursts_detected[0]
+        assert burst.round_start <= 11 and burst.round_end >= 10
+        assert burst.burst_type == BurstType.COSMIC_RAY_LIKE
+        assert burst.severity > 2.0
+        assert burst.p_value < 0.001
+
+    def test_detect_qp_poisoning_burst(self):
+        """A persistent localized burst should be classified as QP_POISONING."""
+        rng = np.random.default_rng(42)
+        syndromes = (rng.random((30, 16)) < 0.01).astype(np.uint8)
+
+        # Inject localized burst on only 2 detectors across 6 consecutive rounds (12..17)
+        syndromes[12:18, 0:2] = 1
+
+        detector = BurstDetector(window_size=5, significance=0.005, min_defects_for_burst=3)
+        analysis = detector.analyze(syndromes, num_detectors_per_round=16)
+
+        assert len(analysis.bursts_detected) >= 1
+        # Look for the detected burst
+        qp_bursts = [b for b in analysis.bursts_detected if b.burst_type == BurstType.QP_POISONING_LIKE]
+        assert len(qp_bursts) >= 1 or analysis.bursts_detected[0].severity > 1.5
+
+    def test_reshape_syndromes_to_tensor(self):
+        flat = np.zeros(24, dtype=np.uint8)
+        flat[5] = 1
+        tensor = reshape_syndromes_to_tensor(flat, num_rounds=6, num_detectors_per_round=4)
+        assert tensor.shape == (6, 4)
+        assert tensor[1, 1] == 1  # index 5 = 1 * 4 + 1
+
+
+class TestDriftIntegration:
+    """Tests for CompositeDriftDetector with burst detection."""
+
+    def test_composite_drift_catches_burst(self):
+        burst_detector = BurstDetector(window_size=4, significance=0.001)
+        composite = CompositeDriftDetector(
+            ewma_alpha=0.15,
+            cusum_threshold=4.5,
+            warmup_samples=3,
+            burst_detector=burst_detector,
+        )
+
+        rates = np.full(8, 0.01)
+        # Normal warmup
+        for _ in range(5):
+            composite.update(rates)

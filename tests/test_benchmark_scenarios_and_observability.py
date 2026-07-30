@@ -18,3 +18,24 @@ from adaptive_qec.engine.scenarios import (
     SyntheticEnvironment,
 )
 
+
+def test_all_twelve_scenarios_generate_valid_snapshots():
+    """Verify that all 12 scenario types produce valid physical noise snapshots."""
+    for stype in ScenarioType:
+        config = ScenarioConfig(scenario_type=stype, total_steps=30)
+        factory = NoiseScenarioFactory(config)
+        snap0 = factory.get_noise(0)
+        snap15 = factory.get_noise(15)
+        snap25 = factory.get_noise(25)
+
+        assert 0.0 < snap0.p_2q < 0.20
+        assert 0.0 < snap15.p_2q < 0.20
+        assert 0.0 < snap25.p_2q < 0.20
+        assert snap0.t1_mean_us > 0.0
+        assert snap0.t2_mean_us > 0.0
+
+
+def test_synthetic_environment_observability_tiers():
+    """Verify that information is gated strictly across O0, O1, O2, and O_oracle."""
+    config = ScenarioConfig(scenario_type=ScenarioType.DO_NOTHING, total_steps=20)
+    factory = NoiseScenarioFactory(config)

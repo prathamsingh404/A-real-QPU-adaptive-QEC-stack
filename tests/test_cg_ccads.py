@@ -43,3 +43,49 @@ def test_controller_state_vector_shape():
     assert arr.shape == (8,)
     assert arr[4] == 1.5  # D_t
     assert arr[5] == 0.02 # C_t
+
+
+def test_gate1_stationary_abstains_stay():
+    """Verify that Gate 1 outputs STAY under stationary, non-drifting noise."""
+    controller = CGCCADSController()
+
+    # Feed 10 stationary windows with normal defect rate ~0.03
+    for _ in range(10):
+        state = HardwareState(defect_rate=0.03, p_2q=0.003)
+        action = controller.step(state)
+        controller.update(reward=-0.03)
+
+    assert action.decoder == DecoderChoice.MWPM
+    assert "stay" in action.notes.lower()
+    assert controller.total_switches == 0
+    assert controller.total_stays >= 10
+
+
+def test_gate2_zero_disagreement_abstains_stay():
+    """Verify Gate 2: Even with drift, if decoder disagreement is below threshold, stay."""
+    controller = CGCCADSController(disagreement_threshold=0.10)  # High disagreement requirement
+
+    # Sudden drift spike in defect rate
+    for _ in range(5):
+        state = HardwareState(defect_rate=0.07, p_2q=0.005)
+        action = controller.step(state)
+        controller.update(reward=-0.05)
+
+    # Disagreement remains below threshold 0.10 -> Gate 2 STAY
+    assert action.decoder == DecoderChoice.MWPM
+    assert controller.total_switches == 0
+
+
+def test_gate3_confidence_gated_switch_under_drift():
+    """Verify Gate 3: Significant drift with high leakage triggers confidence-gated switch."""
+    controller = CGCCADSController(
+        confidence_level=0.95,
+        dead_zone_epsilon=0.001,
+        probation_blocks=3,
+        hysteresis_up=0.01,
+    )
+
+    # Feed baseline
+    for _ in range(5):
+        controller.step(HardwareState(defect_rate=0.03))
+        controller.update(reward=-0.02)

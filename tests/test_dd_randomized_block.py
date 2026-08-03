@@ -14,3 +14,13 @@ def test_randomized_block_dd_benchmark_runs():
         shots_per_block=100,
         seed=42,
     )
+
+    assert "none" in res.performances
+    assert "cpmg" in res.performances
+    assert "xy4" in res.performances
+    assert "xy8" in res.performances
+    assert len(res.block_order) == 8  # 2 randomized cycles of 4
+    assert res.pulse_damage_threshold_us > 0.0
+
+    d = res.to_dict()
+    assert d["optimal_sequence"] in ["none", "cpmg", "xy4", "xy8"]

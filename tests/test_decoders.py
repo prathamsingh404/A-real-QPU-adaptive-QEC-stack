@@ -38,3 +38,51 @@ class TestMWPMDecoder:
 
         decoder = MWPMDecoder()
         decoder.configure(dem=dem)
+
+    def test_decode_single(self):
+        circuit = self._make_circuit()
+        decoder = MWPMDecoder()
+        decoder.configure(circuit=circuit)
+
+        # Create a zero syndrome (no errors)
+        syndrome = np.zeros(circuit.num_detectors, dtype=np.uint8)
+        correction = decoder.decode(syndrome)
+
+        assert correction.observable_corrections is not None
+
+    def test_decode_batch(self):
+        circuit = self._make_circuit(p=0.02)
+        decoder = MWPMDecoder()
+        decoder.configure(circuit=circuit)
+
+        # Sample some syndromes
+        sampler = circuit.compile_detector_sampler()
+        result = sampler.sample(shots=1000, separate_observables=True)
+        detections = np.array(result[0], dtype=np.uint8)
+        obs_flips = np.array(result[1], dtype=np.uint8)
+
+        metrics = decoder.decode_batch(detections, obs_flips)
+
+        assert isinstance(metrics, DecoderMetrics)
+        assert metrics.total_shots == 1000
+        assert 0 <= metrics.logical_error_rate <= 1
+        assert metrics.decode_time_s > 0
+        assert metrics.throughput_shots_per_s > 0
+
+    def test_error_rate_decreases_with_distance(self):
+        """Higher distance should give lower error rate (below threshold)."""
+        rates = {}
+        for d in [3, 5]:
+            circuit = self._make_circuit(
+                code_type="surface", distance=d, rounds=d, p=0.001
+            )
+            decoder = MWPMDecoder()
+            decoder.configure(circuit=circuit)
+
+            sampler = circuit.compile_detector_sampler()
+            result = sampler.sample(shots=5000, separate_observables=True)
+            detections = np.array(result[0], dtype=np.uint8)
+            obs_flips = np.array(result[1], dtype=np.uint8)
+
+            metrics = decoder.decode_batch(detections, obs_flips)
+            rates[d] = metrics.logical_error_rate

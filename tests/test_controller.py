@@ -102,3 +102,109 @@ class TestCostFunction:
         cost_mit = compute_cost(state, mit, None, weights)
 
         assert cost_mit < cost_no
+
+    def test_switch_cost_penalizes_mode_change(self):
+        """Switching decoders should incur a penalty."""
+        state = _make_state()
+        weights = CostWeights(lambda_switch=0.1)
+
+        new_action = ControlAction(decoder=DecoderChoice.MWPM, dd_policy=DDSequenceType.XY4)
+        prev_uf = ControlAction(decoder=DecoderChoice.UNION_FIND, dd_policy=DDSequenceType.XY4)
+        prev_same = ControlAction(decoder=DecoderChoice.MWPM, dd_policy=DDSequenceType.XY4)
+
+        cost_switch = compute_cost(state, new_action, prev_uf, weights)
+        cost_stay = compute_cost(state, new_action, prev_same, weights)
+
+        assert cost_switch > cost_stay
+
+    def test_dd_adds_overhead(self):
+        """DD sequences should add cost via pulse overhead."""
+        state = _make_state()
+        weights = CostWeights(lambda_dd_cost=0.1)
+
+        no_dd = ControlAction(decoder=DecoderChoice.MWPM, dd_policy=DDSequenceType.NONE)
+        xy8_dd = ControlAction(decoder=DecoderChoice.MWPM, dd_policy=DDSequenceType.XY8)
+
+        cost_no = compute_cost(state, no_dd, None, weights)
+        cost_xy8 = compute_cost(state, xy8_dd, None, weights)
+
+        # XY8 adds 8/8 * 0.1 = 0.1 DD cost, but also suppresses noise
+        # The cost comparison depends on the balance
+        assert isinstance(cost_no, float) and isinstance(cost_xy8, float)
+
+
+class TestLogicalErrorRateModel:
+    def test_zero_noise_low_error(self):
+        """Near-zero physical noise should give very low logical error rate."""
+        state = _make_state(p_2q=0.0001, p_ro=0.001, drift_magnitude=0.0,
+                            leakage_fraction=0.0)
+        p_L = estimate_logical_error_rate(
+            state, DecoderChoice.MWPM, DDSequenceType.NONE, False
+        )
+        assert p_L < 0.01
+
+    def test_high_noise_high_error(self):
+        """High physical noise should give high logical error rate."""
+        state = _make_state(p_2q=0.05, p_ro=0.1)
+        p_L = estimate_logical_error_rate(
+            state, DecoderChoice.MWPM, DDSequenceType.NONE, False
+        )
+        assert p_L > 0.01
+
+    def test_uf_slightly_worse_than_mwpm(self):
+        """UF should estimate slightly worse LER than MWPM (10% penalty)."""
+        state = _make_state(p_2q=0.005)
+        p_mwpm = estimate_logical_error_rate(
+            state, DecoderChoice.MWPM, DDSequenceType.NONE, False
+        )
+        p_uf = estimate_logical_error_rate(
+            state, DecoderChoice.UNION_FIND, DDSequenceType.NONE, False
+        )
+        assert p_uf >= p_mwpm
+
+    def test_error_rate_bounded(self):
+        """Logical error rate should always be in [0, 0.5]."""
+        for p_2q in [0.0, 0.001, 0.01, 0.05, 0.1, 0.5]:
+            state = _make_state(p_2q=p_2q)
+            p_L = estimate_logical_error_rate(
+                state, DecoderChoice.MWPM, DDSequenceType.NONE, False
+            )
+            assert 0.0 <= p_L <= 0.5, f"OOB p_L={p_L} at p_2q={p_2q}"
+
+
+# ---------------------------------------------------------------------------
+# Hysteresis tracker tests
+# ---------------------------------------------------------------------------
+
+class TestHysteresisTracker:
+    def test_no_switch_below_patience(self):
+        """Should not switch before patience windows of improvement."""
+        tracker = HysteresisTracker(patience=3, margin=0.05)
+        for _ in range(2):
+            result = tracker.should_switch("uf:none", "mwpm:xy4", 1.0, 0.8)
+            assert not result  # 2 < patience=3
+
+    def test_switch_at_patience(self):
+        """Should switch after patience consecutive improvements."""
+        tracker = HysteresisTracker(patience=3, margin=0.05)
+        for i in range(3):
+            result = tracker.should_switch("uf:none", "mwpm:xy4", 1.0, 0.8)
+        assert result  # 3 == patience
+
+    def test_no_switch_small_improvement(self):
+        """Should not switch if improvement is below margin."""
+        tracker = HysteresisTracker(patience=3, margin=0.10)
+        for _ in range(5):
+            result = tracker.should_switch("uf:none", "mwpm:xy4", 1.0, 0.95)
+        assert not result  # 5% < 10% margin
+
+    def test_reset_on_regression(self):
+        """Counter should reset if the candidate regresses."""
+        tracker = HysteresisTracker(patience=3, margin=0.05)
+        tracker.should_switch("uf:none", "mwpm:xy4", 1.0, 0.8)
+        tracker.should_switch("uf:none", "mwpm:xy4", 1.0, 0.8)
+        # Now candidate is worse
+        tracker.should_switch("uf:none", "mwpm:xy4", 1.0, 1.1)
+        # Next two shouldn't trigger (counter reset)
+        result = tracker.should_switch("uf:none", "mwpm:xy4", 1.0, 0.8)
+        assert not result

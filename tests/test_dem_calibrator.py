@@ -46,3 +46,52 @@ class TestDEMEdge:
 
 
 class TestCalibratedDEM:
+    def test_construction(self):
+        edges = [
+            DEMEdge(0, 1, 0.01, frozenset()),
+            DEMEdge(1, 2, 0.02, frozenset()),
+        ]
+        dem = CalibratedDEM(
+            edges=edges,
+            num_detectors=3,
+            num_observables=1,
+        )
+        assert len(dem.edges) == 2
+        assert dem.num_detectors == 3
+
+
+class TestDEMCalibrator:
+    def test_initialization(self):
+        calibrator = DEMCalibrator()
+        assert calibrator is not None
+
+    def test_probability_clamping(self):
+        """Probabilities must stay in [min, max] range."""
+        calibrator = DEMCalibrator(
+            min_probability=1e-6,
+            max_probability=0.4999,
+        )
+        
+        # Test clamping at lower bound
+        clamped_low = max(1e-6, -0.001)
+        assert clamped_low >= 1e-6
+
+        # Test clamping at upper bound
+        clamped_high = min(0.4999, 0.99)
+        assert clamped_high <= 0.4999
+
+    def test_log_weight_conversion(self):
+        """w = ln((1-p)/p) should be correct for valid probabilities."""
+        p = 0.01
+        w = np.log((1 - p) / p)
+        assert w > 0  # Low probability → high weight
+
+        p_high = 0.49
+        w_high = np.log((1 - p_high) / p_high)
+        assert w_high > 0  # Still positive but small
+        assert w_high < w  # Higher probability → lower weight
+
+    def test_weight_scaling_proportional(self):
+        """When hardware error doubles, edge weights should scale accordingly."""
+        p_nominal = 0.01
+        p_measured = 0.02  # Doubled

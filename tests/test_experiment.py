@@ -36,3 +36,43 @@ class TestExperimentStore:
             config_snapshot={"qec": {"distance": 3}},
             git_commit="abc123",
         )
+
+    def test_save_and_load(self, tmp_path):
+        store = ExperimentStore(tmp_path)
+        record = self._make_record()
+
+        store.save_experiment(record)
+
+        # Verify directory structure
+        exp_dir = tmp_path / "test_001"
+        assert exp_dir.exists()
+        assert (exp_dir / "config.yaml").exists()
+        assert (exp_dir / "circuit.qasm").exists()
+        assert (exp_dir / "qpu_metadata.json").exists()
+        assert (exp_dir / "calibration.json").exists()
+        assert (exp_dir / "raw_results" / "measurement_outcomes.npy").exists()
+        assert (exp_dir / "git_commit.txt").exists()
+
+        # Load back
+        loaded = store.load_experiment("test_001")
+        assert loaded.experiment_id == "test_001"
+        assert loaded.backend == "test_backend"
+        assert loaded.measurement_outcomes.shape == (1000, 10)
+
+    def test_save_detector_data(self, tmp_path):
+        store = ExperimentStore(tmp_path)
+        record = self._make_record()
+        store.save_experiment(record)
+
+        det_record = DetectorRecord(
+            experiment_id="test_001",
+            num_rounds=3,
+            num_detectors=8,
+            syndrome_tensor=np.random.randint(0, 2, (1000, 8), dtype=np.uint8),
+            observable_flips=np.random.randint(0, 2, (1000, 1), dtype=np.uint8),
+        )
+        store.save_detector_data(det_record)
+
+        loaded = store.load_detector_data("test_001")
+        assert loaded.num_detectors == 8
+        assert loaded.syndrome_tensor.shape == (1000, 8)

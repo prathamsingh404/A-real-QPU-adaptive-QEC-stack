@@ -31,3 +31,34 @@ def test_lazy_mwpm_zero_syndrome():
     corr0 = dec.decode(syn0)
     assert corr0.observable_corrections.shape[-1] == dec._num_observables
     assert np.all(corr0.observable_corrections == 0)
+
+def test_lazy_mwpm_sparse_syndrome():
+    circuit = stim.Circuit.generated('surface_code:rotated_memory_z', distance=3, rounds=3, after_clifford_depolarization=0.01)
+    dem = circuit.detector_error_model()
+    dec = LazyMWPMDecoder(defect_threshold=5)
+    dec.configure(circuit=circuit, dem=dem)
+    syn_sparse = np.zeros(dec._num_detectors, dtype=np.uint8)
+    syn_sparse[0] = 1
+    corr_sparse = dec.decode(syn_sparse)
+    assert corr_sparse.observable_corrections is not None
+
+def test_lazy_mwpm_high_density_routing():
+    circuit = stim.Circuit.generated('surface_code:rotated_memory_z', distance=3, rounds=3, after_clifford_depolarization=0.01)
+    dem = circuit.detector_error_model()
+    dec = LazyMWPMDecoder(defect_threshold=2)
+    dec.configure(circuit=circuit, dem=dem)
+    syn_high = np.ones(dec._num_detectors, dtype=np.uint8)
+    assert dec.is_ambiguous(syn_high)
+    corr_high = dec.decode(syn_high)
+    assert corr_high is not None
+
+def test_lazy_mwpm_batch_parity():
+    circuit = stim.Circuit.generated('surface_code:rotated_memory_z', distance=3, rounds=3, after_clifford_depolarization=0.01)
+    dem = circuit.detector_error_model()
+    dec = LazyMWPMDecoder(defect_threshold=5)
+    dec.configure(circuit=circuit, dem=dem)
+    sampler = circuit.compile_detector_sampler()
+    det_data, obs_data = sampler.sample(shots=50, separate_observables=True)
+    m = dec.decode_batch(det_data, obs_data)
+    assert m.total_shots == 50
+    assert 0.0 <= m.logical_error_rate <= 1.0

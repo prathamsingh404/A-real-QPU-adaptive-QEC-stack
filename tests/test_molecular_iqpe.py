@@ -25,3 +25,26 @@ class TestMolecularIQPE:
         assert math.isclose(coeffs.g0, -1.4229, rel_tol=1e-3)
         assert math.isclose(coeffs.g1, 0.3879, rel_tol=1e-3)
         assert math.isclose(coeffs.g2, 0.1812, rel_tol=1e-3)
+        # Ground state energy around -1.137 Hartrees
+        assert -1.2 < coeffs.exact_ground_energy < -1.1
+
+    def test_h2_coefficients_dissociation_limit(self) -> None:
+        """Verify coefficients scale physically as bond is stretched."""
+        r_eq = get_h2_sto3g_coefficients(0.7414)
+        r_stretched = get_h2_sto3g_coefficients(2.0)
+        # Exchange coupling g2 should decay as bond stretches
+        assert r_stretched.g2 < r_eq.g2
+        # Nuclear repulsion decays with 1/R
+        assert r_stretched.nuclear_repulsion < r_eq.nuclear_repulsion
+
+    def test_build_circuit_without_dd(self) -> None:
+        """Test building IQPE circuit without dynamical decoupling."""
+        iqpe = MolecularIQPE(r_angstrom=0.7414, num_bits=3, tau=1.0, apply_dd=False)
+        qc = iqpe.build_circuit()
+        assert qc.num_qubits == 2
+        assert qc.num_clbits == 3
+        # Should have mid-circuit measurements and resets
+        op_names = [inst.operation.name for inst in qc.data]
+        assert "measure" in op_names
+        assert "reset" in op_names
+        assert "crz" in op_names or "rz" in op_names

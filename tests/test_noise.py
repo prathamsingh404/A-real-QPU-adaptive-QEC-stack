@@ -53,3 +53,59 @@ class TestDetectorStatistics:
 
 class TestTemporalCorrelation:
     """Test temporal autocorrelation."""
+
+    def test_basic_temporal(self):
+        rng = np.random.default_rng(42)
+        # 500 shots, 20 detectors (4 rounds × 5 per round)
+        data = rng.binomial(1, 0.1, size=(500, 20)).astype(np.uint8)
+
+        result = compute_temporal_correlation(data, num_rounds=3, max_lag=3)
+
+        assert result.max_lag == 3
+        assert result.mean_autocorrelation.shape == (3,)
+
+
+class TestSpatialCorrelation:
+    """Test spatial correlation analysis."""
+
+    def test_basic_spatial(self):
+        rng = np.random.default_rng(42)
+        data = rng.binomial(1, 0.1, size=(1000, 10)).astype(np.uint8)
+
+        result = compute_spatial_correlation(data)
+
+        assert result.num_detectors == 10
+        assert result.correlation_matrix.shape == (10, 10)
+
+
+class TestEWMADriftDetector:
+    """Test EWMA drift detection."""
+
+    def test_stable_signal(self):
+        """Stable signal should not trigger drift."""
+        detector = EWMADriftDetector(warmup_samples=5)
+        rng = np.random.default_rng(42)
+
+        report = None
+        for _ in range(20):
+            rates = rng.normal(0.1, 0.005, size=10)
+            rates = np.clip(rates, 0, 1)
+            report = detector.update(rates)
+
+        assert report is not None
+        assert report.status in (DriftStatus.STABLE, DriftStatus.WARNING)
+
+    def test_drift_detection(self):
+        """A clear shift should trigger drift detection."""
+        detector = EWMADriftDetector(warmup_samples=10, alarm_sigma=2.0)
+
+        # Warmup with baseline
+        for _ in range(15):
+            rates = np.full(10, 0.05)
+            detector.update(rates)
+
+        # Apply a large shift
+        report = None
+        for _ in range(10):
+            rates = np.full(10, 0.30)  # 6x increase
+            report = detector.update(rates)

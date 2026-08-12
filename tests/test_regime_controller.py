@@ -22,3 +22,24 @@ def test_burst_fast_path():
     assert action.decoder == DecoderChoice.MWPM
     assert action.dd_pattern == DDPattern.XY4
     assert 'burst' in action.reason
+
+def test_drift_mitigation():
+    ctrl = AdaptiveController()
+    telem = HardwareTelemetry(drift_magnitude=3.5, code_distance=5)
+    action = ctrl.select_action(telem)
+    assert action.dd_pattern == DDPattern.CPMG
+    assert action.recalibrate_dem is True
+
+def test_nominal_state():
+    ctrl = AdaptiveController()
+    telem = HardwareTelemetry(drift_magnitude=0.1, code_distance=5)
+    action = ctrl.select_action(telem)
+    assert action.decoder == DecoderChoice.MWPM
+    assert action.dd_pattern == DDPattern.NONE
+    assert action.recalibrate_dem is False
+
+def test_fast_path_counter():
+    ctrl = AdaptiveController(leakage_threshold=0.10, distance_crossover=3)
+    telem = HardwareTelemetry(leakage_fraction=0.20, code_distance=3)
+    ctrl.select_action(telem)
+    assert ctrl.fast_path_count == 1

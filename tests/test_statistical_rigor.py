@@ -47,3 +47,42 @@ def test_paired_trajectory_analysis_superiority():
         # Adaptive is better by ~0.015 with small variation
         adaptive_ler = static_ler - float(rng.normal(0.015, 0.003))
         delta = adaptive_ler - static_ler
+
+        trajectories.append(
+            TrajectoryResult(
+                trajectory_id=f"traj_{i}",
+                scenario_name="slow_drift",
+                seed=20 + i,
+                split="test",
+                static_ler=static_ler,
+                adaptive_ler=adaptive_ler,
+                delta_ler=delta,
+                adaptation_count=2,
+                stay_count=18,
+                rollback_count=0,
+                total_shots=1000,
+            )
+        )
+
+    summary = PairedTrajectoryAnalysis.analyze_trajectories(trajectories)
+
+    assert summary.num_trajectories == 30
+    assert summary.mean_delta_ler < -0.010
+    assert summary.statistically_significant is True
+    assert summary.direction == "ADAPTIVE_SUPERIOR"
+    assert summary.ci_95_t[1] < 0.0  # Entire 95% CI is strictly below zero
+    assert summary.ci_95_bootstrap[1] < 0.0
+    assert summary.t_p_value < 0.001
+    assert summary.cohens_d < -2.0
+
+
+def test_paired_trajectory_analysis_inconclusive():
+    """Test paired trajectory statistics when adaptation has no effect (null hypothesis)."""
+    trajectories = []
+    rng = np.random.default_rng(999)
+
+    for i in range(30):
+        static_ler = 0.170
+        # Zero true difference plus symmetric noise
+        adaptive_ler = static_ler + float(rng.normal(0.0, 0.002))
+        delta = adaptive_ler - static_ler

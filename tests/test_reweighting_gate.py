@@ -34,3 +34,43 @@ def surface_code_fixture():
     sampler = circuit.compile_detector_sampler()
     return circuit, base_matching, sampler
 
+
+def test_stationary_noise_null_false_alarm_rate(surface_code_fixture):
+    """Under stationary null noise, false reweight rate is bounded by alpha <= 0.05."""
+    _, base_matching, sampler = surface_code_fixture
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        alpha_significance=0.05,
+        drift_z_threshold=2.0,
+        adaptation_tax=0.004,
+        dead_zone_epsilon=0.002,
+    )
+
+    # Sample 50 windows of 500 shots each under stationary noise
+    reweight_count = 0
+    total_windows = 50
+
+    for _ in range(total_windows):
+        syndromes, _ = sampler.sample(shots=500, separate_observables=True)
+        decision, _, stats = controller.evaluate_window(syndromes)
+        if decision == GateDecision.REWEIGHT:
+            reweight_count += 1
+
+    false_alarm_rate = reweight_count / total_windows
+    # Must be at most 0.10 (well within statistical bounds of alpha=0.05 on 50 samples)
+    assert false_alarm_rate <= 0.10
+    assert controller.total_stays >= total_windows * 0.90
+
+
+def test_localized_hotspot_triggers_reweight_at_large_window(surface_code_fixture):
+    """Under localized hotspot with W=2000, controller detects drift and reweights."""
+    circuit_base, base_matching, _ = surface_code_fixture
+
+    # Inject localized depolarizing error on central data qubit 10
+    lines = []
+    for line in str(circuit_base).splitlines():
+        lines.append(line)
+        if line.startswith("TICK"):
+            lines.append("DEPOLARIZE1(0.04) 10")
+    circuit_hotspot = stim.Circuit("\n".join(lines))
+    sampler_hotspot = circuit_hotspot.compile_detector_sampler()

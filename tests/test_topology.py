@@ -25,3 +25,37 @@ class TestHeavyHexTopology:
         assert len(topo.edges) == 6
         assert topo.degree(0) == 2
         assert topo.neighbors(0) == {1, 5}
+
+    def test_synthetic_heavy_hex(self):
+        topo = HeavyHexTopology.synthetic(rows=6, cols=6)
+        assert topo.num_qubits == 36
+        metrics = topo.compute_metrics()
+
+        assert isinstance(metrics, TopologyMetrics)
+        assert metrics.num_qubits == 36
+        assert metrics.num_edges > 0
+        assert metrics.max_degree <= 3
+        assert metrics.diameter > 0
+
+    def test_shortest_path_and_swap_distance(self):
+        edges = [[0, 1], [1, 2], [2, 3], [3, 4]]
+        topo = HeavyHexTopology.from_coupling_map(edges, num_qubits=5)
+
+        path = topo.find_shortest_path(0, 3)
+        assert path == [0, 1, 2, 3]
+
+        # Adjacent qubits require 0 SWAPs
+        assert topo.swap_distance(0, 1) == 0
+        # 0 to 2 requires 1 SWAP (len(path) - 2 = 3 - 2 = 1)
+        assert topo.swap_distance(0, 2) == 1
+        # 0 to 3 requires 2 SWAPs
+        assert topo.swap_distance(0, 3) == 2
+
+
+class TestEmbeddingFinder:
+    """Tests for SurfaceCode EmbeddingFinder."""
+
+    def test_find_embedding_d3(self):
+        # Synthetic heavy-hex with plenty of qubits
+        topo = HeavyHexTopology.synthetic(rows=7, cols=7)
+        finder = EmbeddingFinder(topo)

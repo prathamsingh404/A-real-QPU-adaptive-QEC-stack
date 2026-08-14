@@ -98,3 +98,101 @@ class TestDetectorGraph:
         assert graph.num_observables == dem.num_observables
         assert len(graph.edges) > 0
         assert graph.boundary_node == graph.num_detectors
+
+    def test_build_from_surface_code(self):
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+        dem = circuit.detector_error_model(decompose_errors=True)
+
+        graph = build_detector_graph(dem)
+
+        assert graph.num_detectors > 0
+        assert len(graph.edges) > 0
+        # Should have adjacency built
+        assert len(graph.adjacency) > 0
+
+    def test_boundary_edges_exist(self):
+        """Surface code should have boundary edges."""
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+        dem = circuit.detector_error_model(decompose_errors=True)
+
+        graph = build_detector_graph(dem)
+
+        boundary_edges = [e for e in graph.edges if e.is_boundary]
+        assert len(boundary_edges) > 0, "Surface code must have boundary edges"
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: UF decoder correctness
+# ---------------------------------------------------------------------------
+
+class TestUnionFindDecoder:
+    """Test the full Union-Find decoder."""
+
+    def test_configure_from_circuit(self):
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+
+        decoder = UnionFindDecoder()
+        decoder.configure(circuit=circuit)
+        assert decoder.name == "union_find"
+
+    def test_configure_from_dem(self):
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+        dem = circuit.detector_error_model(decompose_errors=True)
+
+        decoder = UnionFindDecoder()
+        decoder.configure(dem=dem)
+
+    def test_unconfigured_raises(self):
+        decoder = UnionFindDecoder()
+        with pytest.raises(RuntimeError, match="not configured"):
+            decoder.decode(np.zeros(10, dtype=np.uint8))
+
+    def test_decode_single_no_defects(self):
+        """No defects should produce zero corrections."""
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+
+        decoder = UnionFindDecoder()
+        decoder.configure(circuit=circuit)
+
+        dem = circuit.detector_error_model(decompose_errors=True)
+        syndrome = np.zeros(dem.num_detectors, dtype=np.uint8)
+        correction = decoder.decode(syndrome)
+
+        assert np.all(correction.observable_corrections == 0)
+
+    def test_decode_batch(self):
+        """Batch decoding should produce valid metrics."""
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+
+        sampler = circuit.compile_detector_sampler()
+        detectors, observables = sampler.sample(
+            shots=200, separate_observables=True
+        )
+
+        decoder = UnionFindDecoder()
+        decoder.configure(circuit=circuit)
+        metrics = decoder.decode_batch(detectors, observables)
+
+        assert isinstance(metrics, DecoderMetrics)
+        assert metrics.total_shots == 200
+        assert 0 <= metrics.logical_error_rate <= 1
+        assert metrics.decode_time_s > 0
+        assert metrics.throughput_shots_per_s > 0

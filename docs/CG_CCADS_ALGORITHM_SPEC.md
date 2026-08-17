@@ -36,3 +36,38 @@ Where:
   $$C_t(d_{\text{active}}, d_{\text{candidate}}) = \frac{1}{W} \sum_{w=1}^W \mathbb{I}\left[\hat{L}_{w, d_{\text{active}}} \neq \hat{L}_{w, d_{\text{candidate}}}\right]$$
 * $U_t$: Empirical standard error of the performance estimator: $U_t = \hat{\sigma}_{\Delta} / \sqrt{W}$.
 * $G_t$: Expected net gain $\hat{\Delta}_t = \mathbb{E}\left[\text{Reward}(d_{\text{candidate}}) - \text{Reward}(d_{\text{active}})\right]$.
+
+---
+
+## 3. The Three-Gate Decision Algorithm
+
+```text
+================================================================================
+Algorithm 1: Confidence-Gated Cost-Constrained Adaptive Decoder Selection (CG-CCADS)
+================================================================================
+Input: 
+  Syndrome window s_t, Active decoder d_active, Baseline decoder d_base,
+  Candidate decoder set D, Adaptation tax tau_adapt,
+  Thresholds: T_drift, delta_disagree, epsilon_deadzone,
+  Significance level alpha (z_{1-alpha}), Hysteresis margin T_hys,
+  Probation window K_prob, Adaptation budget B_epoch.
+Output:
+  Selected control action a_t in {STAY, SWITCH(d*), ROLLBACK(d_base)}.
+
+1:  // Step 1: Update Multi-Timescale Noise Estimators
+2:  r_det <- MeanDefectRate(s_t)
+3:  D_t, is_drift_flag <- UpdateCUSUM(r_det)
+4:  
+5:  // Step 2: Handle Active Probation Safety Window
+6:  if InProbationState() then
+7:      probation_counter <- probation_counter + 1
+8:      if RecentSurrogatePerformance() < -Threshold_Failure then
+9:          ResetCUSUM()
+10:         Return ROLLBACK(d_base)   // Safety rollback to default baseline
+11:     end if
+12:     if probation_counter >= K_prob then
+13:         CommitPermanentSwitch()
+14:     end if
+15: end if
+16: 
+17: // GATE 1: Drift Significance Gate

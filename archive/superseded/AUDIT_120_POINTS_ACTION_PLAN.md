@@ -161,3 +161,168 @@ The new research question is:
 ### 30. Completely rebuild the leakage model
 - **Mandate**: Deprecate naive detector-bit flipping (`detector[2] = 1`).
 - **Repository Action**: Implement a stateful, physical phenomenological leakage model where leakage persists across rounds, propagates through two-qubit gates, and heralds leakage via measurement/reset.
+
+### 31. Add leakage propagation
+- **Mandate**: Model leakage transfer during two-qubit operations: when a leaked qubit interacts via CZ/CNOT, it induces correlated Pauli faults on its partner and excites neighboring detector clusters.
+
+### 32. Do not make leakage and DD the central novelty simultaneously
+- **Mandate**: Keep the core paper claim focused on selective, cost-constrained adaptation under uncertainty. Treat leakage as an adversarial stress-test regime and DD as a physical intervention extension.
+
+### 33. Rebuild the Dynamical Decoupling (DD) experiment
+- **Mandate**: Test DD sequences (Free Evolution, XY4, XY8, CPMG) under rigorous randomized block assignments ($A/B/C/A/C/B$) on the same physical qubits, tracking pulse count and gate duration overhead.
+
+### 34. Do not interpret higher detection rate automatically as better
+- **Mandate**: Decouple detection event rate $R_{\text{det}}$ from logical error rate LER and state fidelity. Clearly explain that increased detector activity can signal pulse damage rather than enhanced sensitivity.
+
+### 35. Hardware experiment design
+- **Mandate**: Hold constant backend, qubit subset, transpilation optimization, and measurement maps. Interleave control policies across time to avoid confounding temporal drift with algorithmic performance.
+
+### 36. Make calibration snapshots part of the analysis
+- **Mandate**: Ingest and log full IBM backend calibration snapshots ($T_1, T_2$, readout error, gate errors) before and after each experimental block.
+
+### 37. Separate "telemetry available" from "telemetry used"
+- **Mandate**: Create an explicit observability table in the manuscript detailing what telemetry is physically readable vs what is provided to the controller.
+
+### 38. Benchmark actual controller latency correctly
+- **Mandate**: Profile every segment of the control loop: syndrome extraction, decoder execution, controller decision, and communication. Report $p50, p90, p95, p99$ and throughput (shots/second).
+
+### 39. Build a real-time architecture separately
+- **Mandate**: Honestly distinguish macro-timescale inter-batch orchestration (Python/cloud, seconds latency) from hypothetical microsecond intra-circuit FPGA feedforward.
+
+### 40. Introduce a prediction layer only after the core controller works
+- **Mandate**: Verify reactive selective control before implementing predictive forecasting models. Do not jump to complex neural forecasting prematurely.
+
+### 41. Design the predictive controller
+- **Mandate**: Evaluate whether anticipating structured drift (e.g., slow sinusoidal drift) via EWMA/AR(1) reduces adaptation lag without introducing speculative instability.
+
+### 42. Use oracle experiments properly
+- **Mandate**: Implement an Oracle controller (with privileged access to latent noise states) strictly as an analytical benchmark to quantify the maximum achievable theoretical adaptation gain.
+
+### 43. Turn partial observability into a measured quantity
+- **Mandate**: Define adaptation efficiency $\eta_{\text{adapt}} = G_{\text{observable}} / G_{\text{oracle}}$, measuring what fraction of oracle advantage is recovered using only deployable observables.
+
+### 44. Build an adaptation regret metric
+- **Mandate**: Track empirical cumulative regret $R_T = \sum_{t=1}^T L_t(a_t) - \sum_{t=1}^T L_t(a_t^*)$ against the hindsight optimal policy across non-stationary trajectories.
+
+### 45. Fix the statistical unit completely
+- **Mandate**: Cease treating individual shots within the same drift trajectory as i.i.d. The primary independent statistical unit must be the independent noise trajectory.
+
+### 46. Use at least 20 independent trajectories for the core study
+- **Mandate**: Base all headline simulation claims on $\ge 20$ (ideally 30) independent noise trajectories per scenario, reporting trajectory-level confidence intervals.
+
+### 47. Use paired trajectories
+- **Mandate**: For every seed, execute candidate controllers on the exact same noise trajectory instance, computing paired differences $\Delta_i = \text{LER}_{\text{adaptive}, i} - \text{LER}_{\text{static}, i}$ to eliminate environmental variance.
+
+### 48. Split tuning and evaluation seeds
+- **Mandate**: Enforce strict seed partitioning: Train (seeds 0–9), Validation (seeds 10–19), Test (seeds 20–49). Hyperparameters are frozen before running on held-out test seeds.
+
+### 49. Predefine the complete noise suite
+- **Mandate**: Pre-register 12 benchmark noise regimes: Stationary, Slow Drift, Fast Drift, Random Walk, Step Change, Periodic Bursts, Rare Catastrophic Bursts, Spatial Anisotropy, Temporal Correlation, Leakage Proxy, Physical Stateful Leakage, and Mixed Drift+Leakage.
+
+### 50. Keep the system below threshold for the main performance study
+- **Mandate**: Ensure physical error rates in the benchmark suite remain below the fault-tolerant threshold ($\sim 0.7\% - 1.0\%$) so error suppression with code distance $d$ is physically meaningful.
+
+### 51. Add distance scaling sweeps ($d = 3, 5, 7$)
+- **Mandate**: Evaluate all baselines across surface code distances $d \in \{3, 5, 7\}$, reporting error suppression factor $\Lambda = \text{LER}(d) / \text{LER}(d+2)$.
+
+### 52. Measure more than LER
+- **Mandate**: Report comprehensive metric tables: LER, logical fidelity, switch count, false-switch rate, rollback frequency, adaptation delay, noise estimation RMSE, decoder latency, and gate/pulse overhead.
+
+### 53. Make the Pareto frontier a major paper figure
+- **Mandate**: Plot 2D trade-off curves: LER vs Classical Latency and LER vs Adaptation Switching Overhead, showing where selective adaptation dominates naive strategies.
+
+### 54. Build an adaptation phase diagram
+- **Mandate**: Construct 2D phase diagrams over Drift Rate vs Drift Amplitude, coloring regions where `STAY`, `REWEIGHT`, `SWITCH`, and `ROLLBACK` are optimal.
+
+### 55. Test the controller's decision accuracy
+- **Mandate**: Evaluate the controller as a binary classifier of "adaptation worthiness," reporting precision, recall, false-adaptation rate, and missed-benefit rate.
+
+### 56. Add calibration plots
+- **Mandate**: Validate that predicted improvement probabilities align with empirical benefit frequencies (reliability diagram).
+
+### 57. Consider conformal prediction for uncertainty bounds
+- **Mandate**: Implement distribution-free conformal prediction intervals for estimated policy performance as an advanced confidence-gating mechanism.
+
+### 58. Add an explicit switching budget
+- **Mandate**: Introduce `AdaptationBudget(max_switches_per_trajectory, max_latency_penalty)`, demonstrating that selective adaptation saturates performance under tight budgets.
+
+### 59. Add an "adaptation tax" model
+- **Mandate**: Quantify the total cost of adaptation $\tau_{\text{adapt}} = C_{\text{switch}} + C_{\text{latency}} + C_{\text{compute}} + C_{\text{physical}}$ and prove adaptation is only rational when $V_{\text{adapt}} > \tau_{\text{adapt}}$.
+
+### 60. Keep bandits, but move them inside the candidate-selection layer
+- **Mandate**: Refactor Exp3/DASE bandit logic to propose candidate policies within the uncertainty-gated decision pipeline, subject to switching cost constraints.
+
+### 61. Add contextual features to the policy selector
+- **Mandate**: Incorporate contextual telemetry: drift velocity, detection event entropy, spatial asymmetry, syndrome autocorrelation, and time since last switch.
+
+### 62. Compare three adaptation strategies directly
+- **Mandate**: Benchmark: (1) Always-Adapt (Naive), (2) Threshold-Adapt (Simple CUSUM heuristic), and (3) Selective Confidence/Cost-Gated Adapt (CG-CCADS).
+
+### 63. Optional predictive selective adaptation
+- **Mandate**: Benchmark predictive CG-CCADS against reactive CG-CCADS specifically under structured sinusoidal drift.
+
+### 64. Keep RL out of the core paper unless it adds genuine value
+- **Mandate**: Avoid trying to out-scale Google's 2026 Nature deep RL architecture; focus on interpretable, statistically provable decision-theoretic control.
+
+### 65. Add an explicit prior-art matrix to documentation
+- **Mandate**: Maintain `docs/prior_art_matrix.md` rigorously comparing this work to AlphaQubit, Google Nature 2026, Bhardwaj et al. (PRX Quantum 2026), DGR, LCD, and GreenPeas.
+
+### 66. Use the existing negative result as Figure 1 motivation
+- **Mandate**: Feature the $27.74\%$ degradation of naive adaptation in Figure 1 to illustrate the fundamental hazard of unconstrained adaptation.
+
+### 67. Do a formal component ablation study
+- **Mandate**: Systematically disable components: $- \text{confidence}$, $- \text{abstention (stay)}$, $- \text{switching cost}$, $- \text{hysteresis}$, $- \text{disagreement}$, $- \text{rollback}$.
+
+### 68. Format the complete ablation table
+- **Mandate**: Present a 7-column ablation table showing how each algorithmic mechanism progressively suppresses false adaptations and LER.
+
+### 69. Build a synthetic "hidden environment" benchmark
+- **Mandate**: Abstract benchmark execution into `Environment(latent_noise_trajectory, observable_stream)` ensuring the evaluator verifies oracle decisions without leaking ground truth.
+
+### 70. Test observability levels explicitly
+- **Mandate**: Evaluate controller performance under $O_0$ (syndrome only), $O_1$ (syndrome + daily calibration), $O_2$ (syndrome + calibration + historical statistics), and $O_{\text{oracle}}$.
+
+### 71. Add delayed-feedback experiments
+- **Mandate**: Introduce observation lags of 1, 2, 5, and 10 blocks to measure controller resilience under cloud communication latencies.
+
+### 72. Create the drift-to-controller timescale ratio ($\rho = \tau_{\text{adapt}} / \tau_{\text{drift}}$)
+- **Mandate**: Quantify system dynamics along $\rho \ll 1$ (effective tracking), $\rho \approx 1$ (marginal), and $\rho \gg 1$ (chasing noise).
+
+### 73. Build the Adaptation Feasibility Map
+- **Mandate**: Plot $\tau_{\text{adapt}} / \tau_{\text{drift}}$ vs expected benefit, demarcating the theoretical boundary where adaptation ceases to be viable.
+
+### 74. Standardize the repository modular structure
+- **Mandate**: Maintain clean separation across `codes/`, `decoders/`, `estimation/`, `control/`, `noise/`, `hardware/`, and `analysis/`.
+
+### 75. Scientific validity tests must be separated from unit tests
+- **Mandate**: Create `tests/scientific/` checking invariance to unobservable labels, paired trajectory seeding, and absence of synthetic fallback.
+
+### 76. Add adversarial stress tests
+- **Mandate**: Subject the controller to deceptive scenarios: localized detector hotspots, rate shifts without LER shifts, and rapid oscillatory noise.
+
+### 77. Build a "do nothing" benchmark (Stationary Regime)
+- **Mandate**: Verify that under stationary noise, the controller achieves zero false switches, zero rollback, and zero added latency overhead.
+
+### 78. Build an "obvious adaptation" benchmark (Severe Anisotropy)
+- **Mandate**: Verify that under persistent asymmetric noise, the controller promptly identifies the discrepancy, switches to reweighted MWPM, and maintains superior LER.
+
+### 79. Build a "too-fast-to-adapt" benchmark (Fast Jitter)
+- **Mandate**: Demonstrate that when noise oscillates faster than the estimation window, the controller correctly abstains (`STAY`) rather than thrashing.
+
+### 80. Create a "switching trap" benchmark (Alternating Regimes)
+- **Mandate**: Construct alternating regimes where marginal gains are smaller than switching costs; verify that CG-CCADS stays put while naive controllers suffer severe switching penalties.
+
+### 81. Create a "hidden transition" benchmark
+- **Mandate**: Test subtle, low-amplitude drift where the controller deliberately delays switching until evidence surpasses confidence thresholds.
+
+### 82. Create a "recovery" benchmark (Post-Burst Normalization)
+- **Mandate**: Verify that after a transient error burst clears, the controller safely returns to baseline operation without getting trapped in high-overhead configurations.
+
+### 83. Create a "persistent leakage" benchmark
+- **Mandate**: Benchmark performance against stateful, multi-round leakage faults with spatial spreading across neighboring stabilizer checks.
+
+### 84. Hardware should validate core principles, not every simulation permutation
+- **Mandate**: Target IBM QPU runs on validating the observation boundary, genuine drift tracking, and paired offline counterfactual decoding on real quantum noise.
+
+### 85. Use the same hardware data for offline counterfactual decoder comparisons
+- **Mandate**: Replay raw physical bitstrings through MWPM, RW-MWPM, and UF to compare decoders on identical quantum trajectories.

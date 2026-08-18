@@ -72,3 +72,79 @@ Our work bridges this gap. Rather than proposing a new decoding graph solver, we
 
 \subsection{Label-Free Covariance-Parity Estimator}
 Following Spitz et al.~\cite{spitz2018}, consider a decoding graph $G = (V, E)$ where vertices represent detectors $u \in V$ and edges $(u, v) \in E$ represent independent fault mechanisms with error probability $p_{uv}$. For a window of $W$ binary syndrome measurement vectors $X \in \{0, 1\}^{W \times |V|}$, let $\bar{x}_u = \frac{1}{W} \sum_{k=1}^W X_{k, u}$ and $x_{uv} = \frac{1}{W} \sum_{k=1}^W X_{k, u} X_{k, v}$.
+
+The single-fault edge probability $p_{uv}$ is computed analytically via:
+\begin{equation}
+p_{uv} = \frac{1}{2} - \frac{1}{2}\sqrt{\max\left(0, 1 - \frac{4(x_{uv} - \bar{x}_u \bar{x}_v)}{1 - 2\bar{x}_u - 2\bar{x}_v + 4x_{uv}}\right)}.
+\label{eq:spitz_bulk}
+\end{equation}
+For boundary edges connected to detector $u$, the error probability $p_b$ satisfies the parity conservation identity:
+\begin{equation}
+1 - 2\bar{x}_u = (1 - 2p_b) \prod_{e \in \partial u \setminus \{b\}} (1 - 2p_e).
+\label{eq:spitz_boundary}
+\end{equation}
+
+\subsection{Three-Gate Decision Pipeline}
+As illustrated in Figure~\ref{fig:architecture}, CG-CCADS regulates decoder updates via three sequential tests:
+\begin{enumerate}
+    \item \textbf{Gate 1 (Defect Rate CUSUM Test)}: Evaluates standardized residual drift $Z_{\text{drift}} = \frac{|\bar{\lambda}_{\text{win}} - \lambda_{\text{ref}}|}{\sqrt{\lambda_{\text{ref}}(1 - \lambda_{\text{ref}})/W_{\text{eff}}}}$. If $Z_{\text{drift}} \le T_{\text{drift}}$, the noise environment is stationary, and the controller immediately triggers \texttt{STAY}.
+    \item \textbf{Gate 2 (FWER-Controlled Lower Confidence Bound)}: Computes the lower confidence bound on edge probability shifts across all $|E|$ graph edges:
+    \begin{equation}
+    \text{LCB}_{uv} = |\hat{p}_{uv} - p_{uv, \text{ref}}| - z_{1 - \alpha / (2|E|)} \sqrt{\frac{\hat{p}_{uv}(1 - \hat{p}_{uv})}{W}}.
+    \end{equation}
+    If $\max_{e} \text{LCB}_e \le \epsilon_{\text{deadzone}}$, observed deviations are consistent with estimation noise under Bonferroni family-wise error rate control $\alpha = 0.05$, triggering \texttt{STAY}.
+    \item \textbf{Gate 3 (Cost-Constrained LCB Threshold)}: Updates to the reweighted matching graph only if $\max_e \text{LCB}_e > \tau_{\text{adapt}} + C_{\text{switch}}$.
+\end{enumerate}
+
+\section{Confirmatory Empirical Results}
+
+\subsection{Pre-Registered Evaluation Protocol}
+To ensure methodological integrity, we adhere to a frozen analysis plan:
+\begin{itemize}
+    \item \textbf{Tuning Set}: Seeds 0--99 (used exclusively for deadzone and CUSUM threshold calibration).
+    \item \textbf{Confirmatory Held-Out Set}: Seeds 1000--1029 ($N=30$ independent trajectories).
+    \item \textbf{Paired Trajectory Design}: All decoder arms decode identical detector error event streams.
+    \item \textbf{Physical Regimes}: Below-threshold rotated surface codes ($p=0.004$, $d \in \{3, 5\}$) evaluated under stationary noise, uniform global drift, localized qubit hotspot drift ($5\%$ depolarizing on central data qubit), and structural spatial anisotropy.
+\end{itemize}
+
+\subsection{Confirmatory Endpoints Across Regimes}
+Table~\ref{tab:confirmatory_endpoints} summarizes confirmatory outcomes across the 30 held-out trajectories at primary window size $W=2{,}000$ and code distance $d=3$.
+
+\input{tables/table_1.tex}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_5_paired_deltas.pdf}
+\caption{\textbf{Trajectory-Paired Delta LER Distribution ($N=30$ Held-Out Seeds).} Evaluated at $W=2{,}000$, $d=3$. For stationary baseline and uniform drift, deltas are tightly concentrated near zero ($p > 0.10$), validating safe abstention. Under localized hotspot drift, paired deltas demonstrate consistent negative error shifts ($p = 0.0145$).}
+\label{fig:paired_deltas}
+\end{figure}
+
+Under stationary baseline and uniform global drift, the trajectory-paired differences $\bar{\Delta} = \text{LER}_{\text{adaptive}} - \text{LER}_{\text{static}}$ are statistically indistinguishable from zero ($p = 0.3256$ and $p = 0.1052$, respectively), confirming that CG-CCADS successfully avoids false adaptation under null conditions. Under localized hotspot drift, CG-CCADS identifies the localized shift and triggers adaptation, achieving a statistically significant paired error reduction ($t = -2.60$, $p = 0.0145$).
+
+\subsection{Window-Size Sensitivity and Ablation}
+Table~\ref{tab:ablation} details the component ablation across window sizes $W \in \{200, 1000, 2000\}$.
+
+\input{tables/table_2.tex}
+
+At $W=200$, naive unconstrained reweighting exhibits severe error inflation ($+104.38\%$ relative increase in LER, reaching $0.04107$) because finite-sample noise corrupts the edge weights. By contrast, CG-CCADS safely enforces abstention ($92.7\%$ abstention rate across the suite), completely protecting logical fidelity.
+
+\section{Distance Scaling and Latency Overhead}
+
+\subsection{Below-Threshold Error Suppression}
+To confirm that the simulations operate in the genuine fault-tolerant regime, we evaluate distance scaling from $d=3$ to $d=5$ at $p_{\text{base}} = 0.004$ (Table~\ref{tab:distance_scaling} and Figure~\ref{fig:distance_scaling}).
+
+\input{tables/table_3.tex}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig_4_distance_scaling.pdf}
+\caption{\textbf{Below-Threshold Logical Error Suppression.} At $p_{\text{base}} = 0.004$, both Static MWPM and CG-CCADS achieve $\Lambda_{3 \to 5} = 1.54 > 1.0$, demonstrating genuine below-threshold logical suppression.}
+\label{fig:distance_scaling}
+\end{figure}
+
+Both Static MWPM and CG-CCADS achieve an error suppression factor $\Lambda_{3 \to 5} = 1.54 > 1.0$, confirming that increasing code distance suppresses logical error.
+
+\subsection{Software Orchestration Latency Stack}
+Table~\ref{tab:latency_stack} breaks down the orchestration cycle duration measured on an x86-64 host CPU using \texttt{time.perf\_counter()}.
+
+\input{tables/table_4.tex}

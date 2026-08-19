@@ -207,3 +207,213 @@ All 5 experiment scripts located in `src/adaptive_qec/experiments/` were execute
   ImportError: cannot import name 'StatisticalTestResult' from 'adaptive_qec.analysis.significance'
   ```
 - **Root Cause**: `significance.py` defines `HypothesisTestResult`, but `bandit_vs_static.py` imports non-existent `StatisticalTestResult` and `wilson_score_ci`.
+
+---
+
+### Experiment 3: `adaptive_scheduling.py`
+- **Execution**: `.venv/Scripts/python -m adaptive_qec.experiments.adaptive_scheduling`
+- **Result**: **CRASHED IMMEDIATELY (Code 1)**
+- **Traceback**:
+  ```python
+  Traceback (most recent call last):
+    File "<frozen runpy>", line 198, in _run_module_as_main
+    File "<frozen runpy>", line 88, in _run_code
+    File "D:\Antigravity IDE\A real-QPU adaptive QEC stack\src\adaptive_qec\experiments\adaptive_scheduling.py", line 49, in <module>
+      from adaptive_qec.analysis.significance import wilson_score_ci
+  ImportError: cannot import name 'wilson_score_ci' from 'adaptive_qec.analysis.significance'
+  ```
+- **Root Cause**: Unverified import name. `wilson_score_ci` is implemented in `adaptive_vs_static.py` as `wilson_ci()` and in `statistics.py` as `confidence_interval(..., method="wilson")`, but was never exported from `significance.py`.
+
+---
+
+### Experiment 4: `hardware_baseline.py`
+- **Execution**: `.venv/Scripts/python -m adaptive_qec.experiments.hardware_baseline`
+- **Result**: **CRASHED DURING ANALYSIS (Code 1)**
+- **Traceback**:
+  ```python
+  2026-09-26 18:04:06,521 [INFO] __main__: Starting hardware baseline: backend=ibm_marrakesh, d=3, dry_run=True
+  2026-09-26 18:04:06,522 [INFO] adaptive_qec.runtime.qiskit_loop: DRY RUN mode: using local simulator instead of ibm_marrakesh
+  2026-09-26 18:04:06,563 [INFO] adaptive_qec.runtime.qiskit_loop: Runtime loop b3ef2fd4 complete: 20 batches, 20000 total shots, overall LER=0.026900, elapsed=0.0s
+  Traceback (most recent call last):
+    File "D:\Antigravity IDE\A real-QPU adaptive QEC stack\src\adaptive_qec\experiments\hardware_baseline.py", line 162, in _analyze
+      from adaptive_qec.analysis.significance import wilson_score_ci
+  ImportError: cannot import name 'wilson_score_ci' from 'adaptive_qec.analysis.significance'
+  ```
+- **Root Cause**: The runtime loop executed 20 batches of synthetic coin flips in 0.04s, but crashed when attempting to calculate confidence intervals due to the missing import.
+
+---
+
+### Experiment 5: `full_adaptive.py`
+- **Execution**: `.venv/Scripts/python -m adaptive_qec.experiments.full_adaptive`
+- **Result**: **CRASHED IMMEDIATELY (Code 1)**
+- **Traceback**:
+  ```python
+  Traceback (most recent call last):
+    File "D:\Antigravity IDE\A real-QPU adaptive QEC stack\src\adaptive_qec\experiments\full_adaptive.py", line 66, in <module>
+      from adaptive_qec.analysis.significance import wilson_score_ci, welch_t_test
+  ImportError: cannot import name 'wilson_score_ci' from 'adaptive_qec.analysis.significance'
+  ```
+- **Root Cause**: Identical import failure of `wilson_score_ci` from `adaptive_qec.analysis.significance`.
+
+---
+
+## 3. Forensic Discovery of Hardcoded, Mocked, Simulated & Phantom Mechanisms
+
+Beyond explicit Python syntax and import errors, an architectural audit of the codebase reveals deep discrepancies between what the documentation claims to accomplish and what the code actually executes:
+
+### Phantom Mechanism 1: Unused Schedules in `adaptive_scheduling.py`
+In [src/adaptive_qec/experiments/adaptive_scheduling.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/experiments/adaptive_scheduling.py#L181-L242):
+```python
+def _run_fixed_schedule(
+    self,
+    eta: float,
+    p_x: float,
+    p_z: float,
+    schedule_type: ScheduleType,
+) -> BiasPointResult:
+    """Run experiment with a fixed stabilizer schedule."""
+    circuit = self._build_biased_circuit(p_x, p_z)
+    sampler = circuit.compile_detector_sampler()
+    ...
+```
+- **The Problem**: Notice that `schedule_type` is accepted as an argument, but **never passed to `_build_biased_circuit()`**!
+- Inside `_build_biased_circuit(p_x, p_z)`:
+  ```python
+  p_total = p_x + p_z
+  circuit = stim.Circuit.generated(
+      "surface_code:rotated_memory_z",
+      distance=d,
+      rounds=r,
+      after_clifford_depolarization=p_total,
+      before_round_data_depolarization=p_total,
+      ...
+  )
+  return circuit
+  ```
+- **The Reality**: The Stim built-in `surface_code:rotated_memory_z` generates a fixed, symmetric rotated surface code. The `schedule_type` variable is discarded. The code claimed to benchmark `BALANCED` vs `X_HEAVY` vs `Z_HEAVY`, but was actually simulating the **identical standard circuit four times** with different random seeds.
+
+### Phantom Mechanism 2: Arbitrary Detector Bisection as "X vs Z Defects"
+In `adaptive_scheduling.py` (lines 277–279) and `full_adaptive.py` (lines 258–260):
+```python
+n_det = detection_events.shape[1]
+x_det = int(np.sum(detection_events[:, : n_det // 2]))
+z_det = int(np.sum(detection_events[:, n_det // 2 :]))
+```
+- **The Problem**: The code assumes the first $N/2$ detectors in the Stim circuit are $X$-stabilizers and the remaining $N/2$ are $Z$-stabilizers.
+- **The Physical Reality**: In Stim's rotated surface code generator, detectors are ordered spatially and temporally across rounds. Each round interweaves $X$ and $Z$ checks across the 2D lattice. Bisections across the middle split early rounds from late rounds, or upper spatial coordinates from lower spatial coordinates. The "imbalance ratio" $\Delta_{XZ}$ was calculating spatial/temporal round disparities, not Pauli error bias.
+
+### Phantom Mechanism 3: The Ignored Bandit Action in `bandit_vs_static.py`
+In [src/adaptive_qec/experiments/bandit_vs_static.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/experiments/bandit_vs_static.py#L273-L290):
+```python
+for ctrl_name, ctrl in self._controllers.items():
+    ctrl.observe(hw_state)
+    action = ctrl.decide()
+
+    # Decode using MWPM (both arms use same decoder for now)
+    predictions = mwpm_matcher.decode_batch(detection_events)
+    logical_errors = int(np.sum(np.any(pred_flat != obs_flat, axis=1)))
+```
+- **The Problem**: The bandit controller observes the state and decides an action (e.g. `action.decoder = UNION_FIND`, `action.dd_sequence = XY4`).
+- **The Reality**: The decoder that actually decodes the syndromes is hardcoded to `mwpm_matcher` for **all** arms! Even the static baseline `static_uf_xy4` is evaluated using MWPM. Furthermore, no dynamical decoupling is injected into `noisy_circuit`.
+- **Consequence**: Every single controller receives identical predictions and identical rewards. The bandit is learning over a dummy environment where actions have zero causal effect on rewards.
+
+### Phantom Mechanism 4: Self-Copying Baselines in `full_adaptive.py`
+In [src/adaptive_qec/experiments/full_adaptive.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/experiments/full_adaptive.py#L324-L327):
+```python
+# Track static baselines (same syndrome data)
+self._static_mwpm_lers.append(ler)  # Same decoder, so same LER
+self._static_uf_lers.append(ler)
+```
+- **The Problem**: The experiment claims to demonstrate the superiority of the full adaptive stack over static baselines.
+- **The Reality**: The static baseline arrays (`_static_mwpm_lers` and `_static_uf_lers`) simply append the adaptive arm's LER (`ler`) on every window. A comparative plot between "Adaptive" and "Static MWPM" would show identical, superimposed curves.
+
+### Simulated Mechanism 5: Coin-Flip Syndromes in `qiskit_loop.py`
+In [src/adaptive_qec/runtime/qiskit_loop.py](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/src/adaptive_qec/runtime/qiskit_loop.py#L531-L550):
+```python
+def _generate_synthetic_data(self, shots: int) -> tuple[np.ndarray, np.ndarray]:
+    rng = np.random.default_rng()
+    n_detectors = 24
+    p_phys = 0.005 + 0.001 * np.sin(2 * np.pi * self.total_batches / 50)
+    syndromes = rng.random((shots, n_detectors)) < p_phys
+    observables = rng.random((shots, 1)) < (p_phys * 1.5)
+    return syndromes.astype(np.uint8), observables.astype(np.uint8)
+```
+- **The Problem**: In "dry-run" mode, instead of calling Stim to simulate the circuit and extract topological detector samples, it generates syndromes via independent Bernoulli coin flips ($P = p_{\text{phys}}$).
+- **The Reality**: Independent Bernoulli bits do not satisfy the stabilizer code graph constraints:
+  1. Isolated defects appear without matching partners or boundaries.
+  2. The parity of defects does not match topological homology.
+  3. When PyMatching or Union-Find decodes independent random bits, it performs massive, meaningless matching across the entire lattice, producing artificial logical failure rates that have no physical connection to QEC codes.
+
+### Flawed Hardware Abstraction in `qiskit_loop.py`
+In lines 516–522 of `qiskit_loop.py`:
+```python
+# Last column(s) are observables, rest are detectors
+if n_bits > 1:
+    syndromes = raw[:, :-1]
+    observables = raw[:, -1:]
+```
+- **The Physical Reality on IBM Hardware**: IBM Quantum processors execute OpenQASM 3 / Qiskit circuits and return classical register measurement bitstrings.
+  - A real QEC circuit measures ancilla qubits round by round and data qubits at the end.
+  - The QPU **never** returns "detectors" directly.
+  - Detectors must be computed classically by XORing consecutive measurement rounds:
+    $$d_{i, r} = m_{i, r} \oplus m_{i, r-1}$$
+  - The logical observable is the product of physical data qubit readouts along a logical string operator:
+    $$O_L = \bigoplus_{q \in X_L} m_q$$
+  - Slicing `raw[:, :-1]` as detectors and `raw[:, -1:]` as the observable is physically incorrect and would completely fail if connected to live hardware output.
+
+### Hardcoded Literature Constants Catalog
+The audit identifies several critical physical parameters that are hardcoded without calibration mechanisms:
+1. **Dynamical Decoupling Suppression Factors**:
+   - `src/adaptive_qec/mitigation/dynamical_decoupling.py`: CPMG = 0.45, XY4 = 0.22, XY8 = 0.12.
+   - *Status*: Taken from Pokharel et al. (2023). On real hardware, pulse errors ($\epsilon_{\text{pulse}} \approx 3 \times 10^{-4}$) often outweigh dephasing suppression during short idle windows ($< 1\ \mu\text{s}$), making XY8 actively harmful.
+2. **Cost Weights**:
+   - `CostWeights(lambda_latency=0.01, lambda_dd=0.005, lambda_switch=0.02, lambda_cal=0.05)`.
+   - *Status*: Purely heuristic hyperparameters. They are not derived from Pareto frontier optimization or real hardware queue costs.
+3. **Hardware Latency Penalties**:
+   - `MWPM = 1.5`, `UF = 1.0`. In actual benchmarks on modern multi-core x86 CPUs, PyMatching v2 decodes $d=3$ at 150,000 shots/s ($6.6\ \mu\text{s}$), whereas our pure-Python Union-Find decodes at 1,080 shots/s ($925\ \mu\text{s}$). The cost function penalizes MWPM for latency when it is actually **140 times faster** in our Python environment!
+
+---
+
+## 4. The Multi-Reviewer Crucible (5-Way Expert Debate)
+
+To ensure this project achieves genuine research-grade novelty and avoids self-deception, we convene a debate among five simulated expert personas representing different facets of the quantum computing community.
+
+---
+
+### Reviewer 1: The Quantum Information Theorist (Fault-Tolerance & Topological Codes Purist)
+> *"Your entire premise of 'Dynamic Anisotropic Stabilizer Scheduling' violates fundamental stabilizer code invariants unless reformulated from scratch."*
+
+**Critique**:
+"Let us examine what you call 'Adaptive X/Z Stabilizer Scheduling'. In a rotated surface code, the stabilizer generators $S_X$ and $S_Z$ do not commute with each other locally if they overlap on a single data qubit, but they commute globally on all shared data qubits because they share 0 or 2 data qubits. In each QEC round, both $X$ and $Z$ checks must be extracted to maintain fault tolerance.
+
+If you unilaterally decide to execute an 'X-heavy schedule' (e.g., $X, Z, X, X$) by skipping $Z$-checks in certain rounds:
+1. **Space-Time Detector Graph Invalidation**: A Stim detector checks parity changes between consecutive measurements: $d_r = m_r \oplus m_{r-1}$. If you skip a $Z$-check in round 2, the error chain between round 1 and round 3 has duration $\Delta t = 2$. Its spacetime edge weight in the DEM must be recomputed as $\log((1-p)/p)$ with $p \approx 2 p_{\text{phys}}$. Your code does not alter the DEM graph at all!
+2. **Effective Code Distance Collapse**: If $Z$-checks are measured less frequently, phase-flip errors ($Z$ errors) accumulate unchecked on data qubits across multiple cycles. A chain of $\lfloor d/2 \rfloor$ physical phase errors can form an undetected logical fault before the next $Z$-round occurs! You have reduced your effective code distance against phase errors from $d$ to $d/2$.
+3. **Statistical Validity**: In `adaptive_vs_static.py`, you compute a Wilson score confidence interval assuming independent Bernoulli trials across 10,000 shots. But your non-stationary scenario introduces temporal autocorrelation and continuous drift across windows! A standard two-proportion $z$-test assumes i.i.d. observations. When trials are drawn from a non-stationary time series, standard error formulas underestimate variance, producing invalidly narrow confidence intervals and falsely low $p$-values."
+
+---
+
+### Reviewer 2: The Experimental Superconducting QPU Physicist (IBM Quantum / Transmon Specialist)
+> *"You are conflating real-time cryogenic control with high-latency cloud batching. Transmons do not wait for Python scripts."*
+
+**Critique**:
+"Let us talk about physical timescales on `ibm_marrakesh` (Heron r2):
+- Transmon energy relaxation time: $T_1 \approx 188.5\ \mu\text{s}$.
+- Transmon dephasing time: $T_2 \approx 130.4\ \mu\text{s}$.
+- Two-qubit gate time (ECR/CZ): $\sim 40\text{–}60\ \text{ns}$.
+- Syndrome round duration (gates + readout): $\sim 1\text{–}1.2\ \mu\text{s}$.
+
+Now, look at your software stack:
+- You run a Python script on a local Windows machine.
+- Your script calls Qiskit Runtime over the public internet via HTTP REST API.
+- Your payload enters IBM Cloud's dispatch queue. Even within an active Qiskit Runtime `Session`, round-trip latency per batch is **2 to 30 seconds** under optimal conditions, and up to **5 minutes** during peak hours.
+
+During those 5 seconds, your superconducting transmons have experienced **30,000 coherence lifetimes**!
+You cannot perform 'real-time closed-loop adaptive QEC' through a Python loop. What IBM calls 'Dynamic Circuits' with $600\ \text{ns}$ feedforward executes inside the FPGA control electronics (Qblox, Zurich Instruments, or IBM's custom control rack at room temperature), executing pre-compiled classical conditional branches (`c_if`, `if_test`) directly on the analog microwave pulse generators.
+
+If you claim in a paper submitted to *PRX Quantum* that your Python bandit controller performs 'real-time adaptive quantum error correction on IBM hardware', the paper will be desk-rejected. You must honestly describe your contribution as **inter-batch drift adaptation and macro-timescale calibration tracking**, NOT intra-circuit real-time decoding."
+
+---
+
+### Reviewer 3: The Real-Time Systems & Decoding Architect (FPGA/ASIC & High-Throughput Engineering)
+> *"Your cost model penalizes the fast decoder and rewards the slow decoder because your Python implementation has inverted complexity."*

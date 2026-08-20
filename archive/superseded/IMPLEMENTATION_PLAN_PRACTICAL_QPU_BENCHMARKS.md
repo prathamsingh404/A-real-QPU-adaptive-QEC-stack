@@ -38,3 +38,56 @@ The ground state energy is $E_0(R) = g_0(R) - \sqrt{g_1(R)^2 + g_2(R)^2}$.
 
 ### B. Algorithm Architecture: Iterative Quantum Phase Estimation (IQPE)
 Standard Quantum Phase Estimation (QPE) requires $m$ counting qubits and an inverse QFT network of depth $O(m^2)$, which experiences catastrophic decoherence on current transmons.
+
+**IQPE Architecture:**
+- **Qubit Allocation:** Exactly **1 ancilla qubit** ($q_{\text{anc}}$) + **1 system qubit** ($q_{\text{sys}}$).
+- **Precision:** $m$ bits of phase precision ($m=3$ or $m=4$, yielding energy precision $\Delta E \sim \frac{2\pi}{2^m \tau}$).
+- **Step-by-step iteration (from least significant bit $k=m$ to most significant bit $k=1$):**
+  1. Initialize $q_{\text{anc}} \leftarrow |+\rangle$.
+  2. Apply controlled unitary $C\text{-}U^{2^{k-1}}$ where $U = e^{-i \hat{H}\tau}$.
+  3. **Real-time Feedforward:** If $k < m$, apply phase correction rotation $R_z(-\omega_k)$ on $q_{\text{anc}}$, where:
+     $$\omega_k = 2\pi \sum_{j=1}^{m-k} \frac{c_{k+j}}{2^{j+1}}$$
+     conditioned on previously measured classical bits $\{c_{k+1}, \dots, c_m\}$.
+  4. Apply Hadamard $H$ on $q_{\text{anc}}$ and measure $q_{\text{anc}} \to c_k$.
+  5. Actively reset $q_{\text{anc}} \leftarrow |0\rangle$ using `circuit.reset(q_anc)`.
+  6. Repeat for next bit $k-1$.
+
+### C. The Three Experimental Arms for Rigorous Comparison
+To prove whether our stack actually solves the problem and outperforms previous work, we execute three distinct arms on real hardware:
+1. **Arm 1 (Standard Static NISQ):** Variational / static unmitigated circuit without dynamical decoupling or readout mitigation.
+2. **Arm 2 (Raw Dynamic IQPE):** IQPE circuit with mid-circuit measurement and feedforward, but **no** dynamical decoupling during feedforward delays.
+3. **Arm 3 (Our Adaptive Mitigated IQPE):** IQPE circuit with:
+   - Synchronized **XY4 Dynamical Decoupling** on the system qubit during the $\sim 800\,\text{ns}$ ancilla measurement/reset window.
+   - Readout error mitigation on ancilla classical registers.
+   - Active leakage tracking.
+
+### D. Quantitative Metrics
+- **Chemical Accuracy:** Error $\epsilon = |E_{\text{QPU}} - E_{\text{exact}}|$. (Target: Approaching chemical accuracy $1.6 \times 10^{-3}\,\text{Hartree} \approx 1\,\text{kcal/mol}$).
+- **Energy Variance Across Bond Sweep:** Mean absolute error across bond distances $R \in [0.5, 0.74, 1.0, 1.5, 2.0]\,\text{Å}$.
+
+---
+
+## 3. Part 2: Deterministic Quantum Teleportation via Real-Time Feedforward
+
+### A. Physical Problem Formulation
+Transfer an unknown quantum state $|\psi\rangle = \cos(\theta/2)|0\rangle + e^{i\phi}\sin(\theta/2)|1\rangle$ from source qubit $q_0$ to destination qubit $q_2$ via transit qubit $q_1$ on the heavy-hex lattice.
+
+### B. Algorithm Architecture
+1. **State Preparation:** Prepare test states $\{|0\rangle, |1\rangle, |+\rangle, |-\rangle, |+i\rangle, |-i\rangle\}$ on $q_0$ using parameterized $R_y(\theta), R_z(\phi)$.
+2. **Entanglement Distribution:** Create Bell pair between $q_1$ and $q_2$:
+   $$|\Phi^+\rangle_{12} = \text{CNOT}(q_1 \to q_2)(H \otimes I)|00\rangle_{12}$$
+3. **Bell-State Measurement (BSM):**
+   - Apply $\text{CNOT}(q_0 \to q_1)$.
+   - Apply $H(q_0)$.
+   - Mid-circuit measurement: $c_0 \leftarrow \text{Measure}(q_0)$, $c_1 \leftarrow \text{Measure}(q_1)$.
+4. **On-Chip FPGA Feedforward (Dynamic Circuit):**
+   - In standard static quantum mechanics:
+     $$|\Psi\rangle_{012} = \frac{1}{2} \left[ |00\rangle |\psi\rangle_{2} + |01\rangle (X|\psi\rangle_2) + |10\rangle (Z|\psi\rangle_2) + |11\rangle (XZ|\psi\rangle_2) \right]$$
+   - Real-time conditional corrections on $q_2$:
+     ```python
+     with circuit.if_test((c1, 1)):
+         circuit.x(q2)
+     with circuit.if_test((c0, 1)):
+         circuit.z(q2)
+     ```
+5. **State Verification (Quantum State Tomography):** Measure $q_2$ in $X, Y, Z$ bases to reconstruct the full density matrix $\rho_{\text{teleported}}$.

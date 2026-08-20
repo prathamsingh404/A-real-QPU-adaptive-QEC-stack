@@ -29,3 +29,43 @@ All inflated claims, unverified superlatives, and disconnected metrics have been
   2. **Oracle Peeking**: In `adaptive_vs_static.py`, the controller inspected `schedule.is_leakage_active(window_idx)` directly from the generator rather than estimating leakage from syndrome autocorrelation.
   3. **Hardcoded Fast-Paths**: In `controller.py`, a deterministic rule (`if leakage_fraction >= 0.15 and distance >= 5: force UF+XY4`) bypassed all cost optimization and bandit exploration.
   4. **Observable Disconnect**: Synthetic leakage was injected by flipping detector bits 2 and 5 to 1 with 85% probability in the syndrome array, while the logical observable was sampled prior to injection. Consequently, MWPM predicted corrections against uncorrupted logical states, inducing artificial logical errors.
+
+### 2.2 The 50,000-Shot Inverted Headline (Claim 14)
+- **Claimed in README**: Adaptive LER = 0.130220 (+23.54% error reduction vs MWPM, +4.94% vs best static).
+- **Committed Artifact Reality** (`adaptive_vs_static_high_stats_50k.json`):
+  - Static MWPM: LER = **0.170320** (8,516 errors / 50,000 shots)
+  - Adaptive Arm: LER = **0.217560** (10,878 errors / 50,000 shots)
+  - **Actual Margin**: Adaptive was **27.74% worse** ($z = 18.89, p < 10^{-15}$).
+  - Prior documentation completely inverted the experimental outcome.
+
+### 2.3 Hardware Execution Analysis (IBM Heron r2, `ibm_marrakesh`)
+1. **[[4, 2, 2]] Code Detection (Claim 1)**:
+   - Claimed: "Detection Rate = 100% | PROVEN".
+   - Artifact: Unmitigated detection rate = 17.50% (175/1000); DD-mitigated detection rate = 48.80% (488/1000).
+   - Under XY4 DD, X-stabilizer defects surged from 83 to 404 (a 4.8x increase in errors), revealing severe pulse error overhead.
+2. **Dynamic Feedforward Latency (Claim 2)**:
+   - Claimed: "Latency < 1.2 us | PROVEN".
+   - Artifact: Measured on-chip feedforward corrections (18 / 1000 shots, 1.8%). Latency was never measured in software or recorded in JSON.
+3. **Repetition Code Memory (Claim 3)**:
+   - Unmitigated (LER = 0.038) and DD-mitigated (LER = 0.006) were run in two sequential jobs rather than interleaved ABAB schedules, confounding temporal drift with DD mitigation.
+4. **Molecular IQPE & Teleportation (Claims 11 & 12)**:
+   - Molecular IQPE had an energy error of 761.5 kcal/mol (chemical accuracy failed by >760x).
+   - Teleportation fidelity was 91.90% (not 96.2%). Both are non-core workloads and have been removed from the QEC paper scope.
+
+---
+
+## 3. The 5-Phase Reform Roadmap
+
+To convert this repository from a flawed collection of heuristics into a rigorous, peer-reviewed scientific paper, the following plan is instituted:
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'fontSize': '13px', 'fontFamily': 'Fira Code, monospace'}}}%%
+timeline
+    title Reform Milestones to Publication
+    Phase 0 : Integrity Reset : make_claims ledger : Retract false wins
+    Phase 1 : Reproducibility : uv.lock pin : Dockerfile : Automated CI
+    Phase 2 : Simulation Redesign : Estimate-only controller : Physical noise : Baseline ladder
+    Phase 3 : QPU Interleaved Closed-Loop : ABAB repetition memory : Open data
+    Phase 4 : Literature Matrix & Framing : Bhardwaj / DGR positioning : Venue selection
+    Phase 5 : Manuscript & Peer Review : TQE/TQC submission
+```

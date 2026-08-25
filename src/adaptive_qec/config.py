@@ -266,3 +266,137 @@ class ExperimentConfig(BaseModel):
     save_calibration: bool = True
     save_plots: bool = True
     name_template: str = "{code}_d{distance}_r{rounds}_{backend}_{timestamp}"
+
+
+class DataConfig(BaseModel):
+    """Data storage configuration."""
+    storage_backend: StorageBackend = StorageBackend.FILESYSTEM
+    base_path: str = "experiments"
+    compression: bool = False
+    format: DataFormat = DataFormat.JSON
+
+
+class AnalysisConfig(BaseModel):
+    """Statistical analysis configuration."""
+    confidence_level: float = Field(default=0.95, gt=0.0, lt=1.0)
+    min_shots: int = Field(default=1000, ge=1)
+    bootstrap_samples: int = Field(default=10000, ge=100)
+    hypothesis_test: HypothesisTest = HypothesisTest.TWO_SIDED
+
+
+# ---------------------------------------------------------------------------
+# Root configuration
+# ---------------------------------------------------------------------------
+
+class AdaptiveQECConfig(BaseModel):
+    """
+    Root configuration for the entire AdaptiveQEC platform.
+
+    Validates the complete configuration tree. Supports loading from YAML
+    with environment variable overrides.
+    """
+    hardware: HardwareConfig = Field(default_factory=HardwareConfig)
+    qec: QECConfig = Field(default_factory=QECConfig)
+    noise: NoiseConfig = Field(default_factory=NoiseConfig)
+    decoder: DecoderConfig = Field(default_factory=DecoderConfig)
+    runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    experiment: ExperimentConfig = Field(default_factory=ExperimentConfig)
+    data: DataConfig = Field(default_factory=DataConfig)
+    analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
+
+
+# ---------------------------------------------------------------------------
+# Loading utilities
+# ---------------------------------------------------------------------------
+
+def _apply_env_overrides(data: dict[str, Any], prefix: str = "AQEC") -> dict[str, Any]:
+    """
+    Apply environment variable overrides to configuration data.
+
+    Convention: AQEC_SECTION__KEY=value
+    Double underscore separates nesting levels.
+    """
+    for key, value in os.environ.items():
+        if not key.startswith(f"{prefix}_"):
+            continue
+
+        parts = key[len(prefix) + 1:].lower().split("__")
+        current = data
+        for part in parts[:-1]:
+            if part not in current:
+                current[part] = {}
+            current = current[part]
+
+        # Type coercion for common cases
+        raw = value
+        if raw.lower() in ("true", "false"):
+            raw = raw.lower() == "true"  # type: ignore[assignment]
+        else:
+            try:
+                raw = int(raw)  # type: ignore[assignment]
+            except ValueError:
+                try:
+                    raw = float(raw)  # type: ignore[assignment]
+                except ValueError:
+                    pass
+
+        current[parts[-1]] = raw
+
+    return data
+
+
+def _load_dotenv() -> None:
+    """Load .env file from project root if it exists."""
+    try:
+        from dotenv import load_dotenv
+        # Walk up from this file to find project root with .env
+        here = Path(__file__).resolve().parent
+        for ancestor in [here, here.parent, here.parent.parent, here.parent.parent.parent]:
+            env_path = ancestor / ".env"
+            if env_path.exists():
+                load_dotenv(env_path, override=False)
+                return
+    except ImportError:
+        pass  # python-dotenv not installed; rely on manual env vars
+
+
+def load_config(path: str | Path) -> AdaptiveQECConfig:
+    """
+    Load configuration from a YAML file with environment variable overrides.
+
+    Automatically loads .env file from project root if python-dotenv is
+    installed and a .env file exists.
+
+    Args:
+        path: Path to YAML configuration file.
+
+    Returns:
+        Validated AdaptiveQECConfig instance.
+
+    Raises:
+        FileNotFoundError: If the config file doesn't exist.
+        pydantic.ValidationError: If the config is invalid.
+    """
+    _load_dotenv()
+
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Configuration file not found: {path}")
+
+    with open(path) as f:
+        data = yaml.safe_load(f) or {}
+
+    data = _apply_env_overrides(data)
+    return AdaptiveQECConfig(**data)
+
+
+def load_config_from_dict(data: dict[str, Any]) -> AdaptiveQECConfig:
+    """Load configuration from a dictionary."""
+    _load_dotenv()
+    data = _apply_env_overrides(data)
+    return AdaptiveQECConfig(**data)
+
+
+def default_config() -> AdaptiveQECConfig:
+    """Return the default configuration."""
+    return AdaptiveQECConfig()

@@ -90,3 +90,53 @@ class DetectorMap:
         elif stab_type == "Z":
             return list(self.z_indices)
         return []
+
+    def extract_defect_counts(self, syndromes: np.ndarray) -> tuple[int, int]:
+        """Extract exact total (X_defects, Z_defects) from a 2D syndrome batch.
+
+        Args:
+            syndromes: Array of shape (shots, num_detectors).
+
+        Returns:
+            Tuple of (total_x_defects, total_z_defects) summed across all shots.
+        """
+        if syndromes.size == 0 or len(self.detectors) == 0:
+            return 0, 0
+
+        # Filter indices within syndrome array bounds
+        valid_x = [i for i in self.x_indices if i < syndromes.shape[1]]
+        valid_z = [i for i in self.z_indices if i < syndromes.shape[1]]
+
+        x_defects = int(np.sum(syndromes[:, valid_x])) if valid_x else 0
+        z_defects = int(np.sum(syndromes[:, valid_z])) if valid_z else 0
+
+        return x_defects, z_defects
+
+
+@dataclass
+class CodeGeometry:
+    """High-level geometric representation of a topological code patch."""
+    code_name: str
+    distance: int
+    rounds: int
+    detector_map: DetectorMap
+    num_data_qubits: int
+    num_ancilla_qubits: int
+
+    @classmethod
+    def for_rotated_surface_code(cls, distance: int, rounds: int) -> CodeGeometry:
+        """Construct standard geometry for a rotated surface code patch."""
+        circuit = stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=distance,
+            rounds=rounds,
+        )
+        det_map = DetectorMap.from_stim_circuit(circuit, "surface_code:rotated_memory_z")
+        return cls(
+            code_name="surface_code:rotated_memory_z",
+            distance=distance,
+            rounds=rounds,
+            detector_map=det_map,
+            num_data_qubits=distance * distance,
+            num_ancilla_qubits=distance * distance - 1,
+        )

@@ -136,3 +136,71 @@ def build_multi_round_circuit(
     for r in range(rounds):
         qc.barrier()
         qc.reset(qr_anc)
+
+        for i in range(distance - 1):
+            qc.cx(qr_data[i], qr_anc[i])
+            qc.cx(qr_data[i + 1], qr_anc[i])
+
+        if insert_dd:
+            qc.barrier()
+            for d in range(distance):
+                qc.x(qr_data[d])
+                qc.y(qr_data[d])
+                qc.x(qr_data[d])
+                qc.y(qr_data[d])
+            qc.barrier()
+
+        qc.measure(qr_anc, cr_syn[r])
+
+    qc.barrier()
+    qc.measure(qr_data, cr_data)
+    return qc
+
+
+def fit_logical_error_decay(
+    rounds: list[int],
+    logical_fidelities: list[float],
+) -> dict[str, float]:
+    """
+    Fit exponential logical decay curve to extract Logical Error Per Round (epsilon_L).
+
+    Model:
+        F(R) = A * (1 - 2 * epsilon_L)^R
+
+    Args:
+        rounds: List of round counts [1, 2, 4, 8]
+        logical_fidelities: List of logical fidelities (1 - LER) for each round
+
+    Returns:
+        Dictionary with A_fit, epsilon_L, and 1-sigma uncertainty.
+    """
+    r_arr = np.array(rounds, dtype=float)
+    f_arr = np.array(logical_fidelities, dtype=float)
+
+    def decay_func(r, A, eps_L):
+        return A * (1.0 - 2.0 * eps_L) ** r
+
+    try:
+        popt, pcov = curve_fit(
+            decay_func,
+            r_arr,
+            f_arr,
+            p0=[1.0, 0.01],
+            bounds=([0.7, 0.0001], [1.05, 0.49]),
+            maxfev=5000,
+        )
+        a_fit, eps_fit = popt
+        eps_err = np.sqrt(max(0.0, pcov[1, 1]))
+    except Exception:
+        # Fallback linear approximation if non-linear fit fails on edge data
+        log_f = np.log(np.maximum(1e-6, f_arr))
+        slope, intercept = np.polyfit(r_arr, log_f, 1)
+        a_fit = float(np.exp(intercept))
+        eps_fit = float(0.5 * (1.0 - np.exp(slope)))
+        eps_err = 0.0
+
+    return {
+        "state_preparation_fidelity": float(a_fit),
+        "logical_error_per_round": float(eps_fit),
+        "epsilon_err_1sigma": float(eps_err),
+    }

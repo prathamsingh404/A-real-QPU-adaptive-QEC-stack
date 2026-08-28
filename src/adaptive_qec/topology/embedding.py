@@ -190,3 +190,98 @@ class EmbeddingFinder:
         self, distance: int, start_qubit: int
     ) -> Optional[SurfaceCodeEmbedding]:
         """Try to embed a surface code starting from a specific qubit."""
+        from collections import deque
+
+        n_data = distance ** 2
+        embedding = SurfaceCodeEmbedding(distance=distance)
+
+        # BFS from start to claim physical qubits for data qubits
+        used_physical: set[int] = set()
+        physical_queue = deque([start_qubit])
+        data_positions: list[int] = []
+
+        while physical_queue and len(data_positions) < n_data:
+            pq = physical_queue.popleft()
+            if pq in used_physical:
+                continue
+            used_physical.add(pq)
+            data_positions.append(pq)
+
+            for neighbor in sorted(self.topology.neighbors(pq)):
+                if neighbor not in used_physical:
+                    physical_queue.append(neighbor)
+
+        if len(data_positions) < n_data:
+            return None  # Not enough connected qubits
+
+        # Assign data qubits to logical grid positions
+        for idx, pq in enumerate(data_positions):
+            row = idx // distance
+            col = idx % distance
+            embedding.data_map[(row, col)] = pq
+
+        # Find ancilla positions: neighbors of data qubits not yet used
+        ancilla_positions: list[int] = []
+        n_ancilla_needed = 2 * (distance - 1) * distance  # X and Z stabilizers
+
+        for pq in data_positions:
+            for neighbor in self.topology.neighbors(pq):
+                if neighbor not in used_physical and neighbor not in ancilla_positions:
+                    ancilla_positions.append(neighbor)
+                    if len(ancilla_positions) >= n_ancilla_needed:
+                        break
+            if len(ancilla_positions) >= n_ancilla_needed:
+                break
+
+        for idx, pq in enumerate(ancilla_positions):
+            row = idx // (distance - 1) if distance > 1 else 0
+            col = idx % (distance - 1) if distance > 1 else 0
+            embedding.ancilla_map[(row, col)] = pq
+
+        # Compute SWAP overhead
+        swap_count = 0
+        for (r, c), pq in embedding.data_map.items():
+            # Check connectivity to adjacent data qubits
+            for dr, dc in [(0, 1), (1, 0)]:
+                nr, nc = r + dr, c + dc
+                if (nr, nc) in embedding.data_map:
+                    npq = embedding.data_map[(nr, nc)]
+                    if npq not in self.topology.neighbors(pq):
+                        swap_count += self.topology.swap_distance(pq, npq)
+
+        embedding._swap_count = swap_count
+        embedding._depth_overhead = 1.0 + (swap_count * 3) / max(distance * 4, 1)
+        embedding._idle_slots = swap_count * 2
+
+        return embedding
+
+    def _score_embedding(self, embedding: SurfaceCodeEmbedding) -> EmbeddingScore:
+        """Score an embedding by multiple criteria."""
+        d = embedding.distance
+
+        # Connectivity deficit: fraction of required edges missing
+        required_edges = 2 * d * (d - 1)  # horizontal + vertical in grid
+        missing = 0
+        for (r, c), pq in embedding.data_map.items():
+            for dr, dc in [(0, 1), (1, 0)]:
+                nr, nc = r + dr, c + dc
+                if (nr, nc) in embedding.data_map:
+                    npq = embedding.data_map[(nr, nc)]
+                    if npq not in self.topology.neighbors(pq):
+                        missing += 1
+
+        conn_deficit = missing / max(required_edges, 1)
+
+        total = (
+            embedding._swap_count * 1.0 +
+            embedding._depth_overhead * 10.0 +
+            conn_deficit * 50.0
+        )
+
+        return EmbeddingScore(
+            swap_count=embedding._swap_count,
+            circuit_depth_overhead=embedding._depth_overhead,
+            idle_time_slots=embedding._idle_slots,
+            connectivity_deficit=conn_deficit,
+            total_score=total,
+        )

@@ -178,3 +178,91 @@ class HeavyHexTopology:
                 avg_degree=0.0, degree_distribution={}, diameter=0,
                 is_heavy_hex=False,
             )
+
+        # Degree distribution
+        deg_dist: dict[int, int] = {}
+        for d in degrees:
+            deg_dist[d] = deg_dist.get(d, 0) + 1
+
+        # Diameter via BFS from each node (for small topologies)
+        diameter = 0
+        if self.num_qubits <= 500:
+            for start in range(min(self.num_qubits, 20)):
+                dist = self._bfs_distances(start)
+                max_dist = max(dist.values()) if dist else 0
+                diameter = max(diameter, max_dist)
+        else:
+            # Sample a few nodes for large topologies
+            sample = np.random.choice(self.num_qubits, min(10, self.num_qubits), replace=False)
+            for start in sample:
+                dist = self._bfs_distances(int(start))
+                max_dist = max(dist.values()) if dist else 0
+                diameter = max(diameter, max_dist)
+
+        # Heavy-hex detection: max degree ≤ 3, most qubits degree 2
+        max_deg = max(degrees)
+        is_heavy_hex = (max_deg <= 3 and deg_dist.get(2, 0) > len(degrees) * 0.3)
+
+        return TopologyMetrics(
+            num_qubits=self.num_qubits,
+            num_edges=len(self.edges),
+            min_degree=min(degrees),
+            max_degree=max_deg,
+            avg_degree=float(np.mean(degrees)),
+            degree_distribution=deg_dist,
+            diameter=diameter,
+            is_heavy_hex=is_heavy_hex,
+        )
+
+    def _bfs_distances(self, start: int) -> dict[int, int]:
+        """BFS from start, returns distances to all reachable nodes."""
+        from collections import deque
+        dist = {start: 0}
+        queue = deque([start])
+        while queue:
+            node = queue.popleft()
+            for neighbor in self.adjacency.get(node, set()):
+                if neighbor not in dist:
+                    dist[neighbor] = dist[node] + 1
+                    queue.append(neighbor)
+        return dist
+
+    def find_shortest_path(self, start: int, end: int) -> list[int]:
+        """Find shortest path between two qubits."""
+        from collections import deque
+        if start == end:
+            return [start]
+
+        visited: dict[int, Optional[int]] = {start: None}
+        queue = deque([start])
+
+        while queue:
+            node = queue.popleft()
+            for neighbor in self.adjacency.get(node, set()):
+                if neighbor not in visited:
+                    visited[neighbor] = node
+                    if neighbor == end:
+                        # Reconstruct path
+                        path = [end]
+                        current: Optional[int] = end
+                        while current is not None:
+                            prev = visited.get(current)
+                            if prev is not None:
+                                current = prev
+                                path.append(current)
+                            else:
+                                break
+                        return list(reversed(path))
+                    queue.append(neighbor)
+
+        return []  # No path found
+
+    def swap_distance(self, q1: int, q2: int) -> int:
+        """
+        Compute the SWAP distance between two qubits.
+
+        SWAP distance = shortest path length - 1
+        (number of SWAP gates needed to make q1 and q2 adjacent)
+        """
+        path = self.find_shortest_path(q1, q2)
+        return max(0, len(path) - 2)  # -2 because the path includes both endpoints

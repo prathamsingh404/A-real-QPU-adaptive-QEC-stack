@@ -310,3 +310,155 @@ class DEMCalibrator:
         calibration_timestamp: str = "",
     ) -> CalibratedDEM:
         """Reweight DEM edges directly from observed sliding-window syndrome defect data.
+
+        For each graph edge (u, v), estimates the empirical probability of
+        correlated detector firing from the syndrome batch and combines it
+        with the nominal base error probability via EWMA smoothing:
+            p_hat = (1 - alpha) * p_base + alpha * p_empirical
+            w_e = ln((1 - p_hat) / p_hat)
+
+        Parameters
+        ----------
+        syndromes : np.ndarray
+            Binary detection events array of shape (shots, num_detectors).
+        smoothing : float
+            Smoothing weight alpha in [0.0, 1.0] applied to empirical estimates.
+        calibration_timestamp : str
+            Timestamp metadata.
+
+        Returns
+        -------
+        CalibratedDEM
+            Calibrated DEM with updated edge weights via Spitz et al. (2018) parity estimator.
+        """
+        syndromes = np.asarray(syndromes, dtype=np.float64)
+        num_shots, num_det = syndromes.shape
+        if num_shots == 0:
+            return CalibratedDEM(
+                num_detectors=self._base_dem.num_detectors,
+                num_observables=self._base_dem.num_observables,
+                edges=list(self._base_edges),
+                calibration_timestamp=calibration_timestamp,
+                source="empty_syndromes_fallback",
+            )
+
+        mean_det = syndromes.mean(axis=0)
+
+        # 1. Estimate internal edge probabilities via parity covariance:
+        # p_ij = 0.5 - 0.5 * sqrt(1 - 4*(<xi xj> - <xi><xj>) / (1 - 2<xi> - 2<xj> + 4<xi xj>))
+        internal_p: dict[tuple[int, int], float] = {}
+        prod_other: dict[int, float] = {}
+
+        for edge in self._base_edges:
+            u, v = edge.detector_a, edge.detector_b
+            if u >= 0 and v >= 0 and u < num_det and v < num_det:
+                xij = float((syndromes[:, u] * syndromes[:, v]).mean())
+                num = 4.0 * (xij - mean_det[u] * mean_det[v])
+                den = 1.0 - 2.0 * mean_det[u] - 2.0 * mean_det[v] + 4.0 * xij
+                val = 1.0 - num / den if abs(den) > 1e-9 else 1.0
+                p_est = float(np.clip(0.5 - 0.5 * np.sqrt(max(val, 0.0)), self._min_probability, self._max_probability))
+                internal_p[(min(u, v), max(u, v))] = p_est
+
+        for (u, v), pe in internal_p.items():
+            prod_other[u] = prod_other.get(u, 1.0) * (1.0 - 2.0 * pe)
+            prod_other[v] = prod_other.get(v, 1.0) * (1.0 - 2.0 * pe)
+
+        # 2. Estimate boundary edge probabilities via parity inversion:
+        # 1 - 2<xi> = (1 - 2 pb) * prod_{other}(1 - 2 pe)
+        new_edges: list[DEMEdge] = []
+        for edge in self._base_edges:
+            u, v = edge.detector_a, edge.detector_b
+            if u >= 0 and v >= 0 and u < num_det and v < num_det:
+                p_raw = internal_p.get((min(u, v), max(u, v)), edge.probability)
+            elif (u >= 0 and v < 0 and u < num_det) or (v >= 0 and u < 0 and v < num_det):
+                node = u if u >= 0 else v
+                po = prod_other.get(node, 1.0)
+                if abs(po) > 1e-9:
+                    p_raw = 0.5 * (1.0 - (1.0 - 2.0 * mean_det[node]) / po)
+                else:
+                    p_raw = self._min_probability
+                p_raw = float(np.clip(p_raw, self._min_probability, self._max_probability))
+            else:
+                p_raw = edge.probability
+
+            # Smooth with base prior if smoothing > 0
+            p_updated = (1.0 - smoothing) * p_raw + smoothing * edge.probability if smoothing > 0 else p_raw
+            p_updated = float(np.clip(p_updated, self._min_probability, self._max_probability))
+
+            new_edge = DEMEdge(
+                detector_a=u,
+                detector_b=v,
+                probability=p_updated,
+                observables=list(edge.observables),
+            )
+            new_edge.compute_weight()
+            new_edges.append(new_edge)
+
+        return CalibratedDEM(
+            num_detectors=self._base_dem.num_detectors,
+            num_observables=self._base_dem.num_observables,
+            edges=new_edges,
+            calibration_timestamp=calibration_timestamp,
+            source=f"spitz_covariance(shots={num_shots})",
+        )
+
+
+def calibrate_spitz_matching(
+    base_matching: pymatching.Matching,
+    syndromes: np.ndarray,
+    eps: float = 1e-4,
+    max_p: float = 0.49,
+) -> pymatching.Matching:
+    """Standard analytical matching weight estimator (Spitz et al. 2018).
+
+    Estimates edge error probabilities from syndrome covariance and returns a
+    reweighted PyMatching Matching instance.
+    """
+    X = syndromes.astype(float)
+    mean = X.mean(axis=0)
+    edges = list(base_matching.edges())
+    p: dict[tuple[int, int], float] = {}
+    prod_other: dict[int, float] = {}
+
+    for u, v, a in edges:
+        if u is None or v is None or u < 0 or v < 0:
+            continue
+        xij = float((X[:, u] * X[:, v]).mean())
+        num = 4.0 * (xij - mean[u] * mean[v])
+        den = 1.0 - 2.0 * mean[u] - 2.0 * mean[v] + 4.0 * xij
+        val = 1.0 - num / den if abs(den) > 1e-9 else 1.0
+        p[(u, v)] = float(np.clip(0.5 - 0.5 * np.sqrt(max(val, 0.0)), eps, max_p))
+
+    for (u, v), pe in p.items():
+        prod_other[u] = prod_other.get(u, 1.0) * (1.0 - 2.0 * pe)
+        prod_other[v] = prod_other.get(v, 1.0) * (1.0 - 2.0 * pe)
+
+    new_matching = pymatching.Matching()
+    for u, v, a in edges:
+        fid = a.get("fault_ids", set())
+        if u is None or v is None or u < 0 or v < 0:
+            node = u if (v is None or v < 0) else v
+            po = prod_other.get(node, 1.0)
+            pb = 0.5 * (1.0 - (1.0 - 2.0 * mean[node]) / po) if abs(po) > 1e-9 else eps
+            pb = float(np.clip(pb, eps, max_p))
+            w = float(np.log((1.0 - pb) / pb))
+            new_matching.add_boundary_edge(
+                node,
+                fault_ids=fid,
+                weight=w,
+                error_probability=pb,
+                merge_strategy="replace",
+            )
+        else:
+            pe = p[(u, v)]
+            w = float(np.log((1.0 - pe) / pe))
+            new_matching.add_edge(
+                u,
+                v,
+                fault_ids=fid,
+                weight=w,
+                error_probability=pe,
+                merge_strategy="replace",
+            )
+
+    return new_matching

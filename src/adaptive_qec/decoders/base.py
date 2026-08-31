@@ -79,3 +79,44 @@ class Decoder(ABC):
     def name(self) -> str:
         """Decoder name for logging and storage."""
         ...
+
+    @abstractmethod
+    def configure(self, **kwargs: Any) -> None:
+        """
+        Configure the decoder with code-specific parameters.
+
+        Called once before decoding, e.g., with a DetectorErrorModel.
+        """
+        ...
+
+    @abstractmethod
+    def decode(self, syndrome: np.ndarray) -> Correction:
+        """
+        Decode a syndrome array.
+
+        Args:
+            syndrome: shape (num_detectors,) for single shot, or
+                      (batch, num_detectors) for batch decoding.
+
+        Returns:
+            Correction with predicted observable corrections.
+        """
+        ...
+
+    @abstractmethod
+    def decode_batch(
+        self,
+        syndromes: np.ndarray,
+        observable_flips: np.ndarray,
+    ) -> DecoderMetrics:
+        """
+        Decode a batch of syndromes and compute performance metrics.
+
+        Args:
+            syndromes: shape (shots, num_detectors)
+            observable_flips: shape (shots, num_observables) — ground truth
+
+        Returns:
+            DecoderMetrics with error rate, latency, throughput.
+        """
+        ...

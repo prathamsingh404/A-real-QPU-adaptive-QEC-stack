@@ -166,3 +166,94 @@ class MWPMDecoder(Decoder):
 
         # Latency statistics (convert to microseconds)
         latency_us = per_shot_times * 1e6
+
+        metrics = DecoderMetrics(
+            total_shots=shots,
+            num_logical_errors=num_errors,
+            logical_error_rate=error_rate,
+            decode_time_s=t_total,
+            per_shot_latency_us=latency_us,
+            latency_mean_us=float(latency_us.mean()),
+            latency_p50_us=float(np.percentile(latency_us, 50)),
+            latency_p95_us=float(np.percentile(latency_us, 95)),
+            latency_p99_us=float(np.percentile(latency_us, 99)),
+            latency_p999_us=float(np.percentile(latency_us, 99.9)),
+            throughput_shots_per_s=shots / t_total if t_total > 0 else 0,
+            peak_memory_mb=peak / (1024 * 1024),
+        )
+
+        logger.info(
+            f"MWPM decode: {shots} shots, "
+            f"LER={error_rate:.6f} ({num_errors}/{shots}), "
+            f"time={t_total:.3f}s, "
+            f"throughput={metrics.throughput_shots_per_s:.0f} shots/s, "
+            f"P99={metrics.latency_p99_us:.1f}μs"
+        )
+        return metrics
+
+    def decode_burst_aware(
+        self,
+        syndromes: np.ndarray,
+        observable_flips: np.ndarray,
+        num_rounds: int,
+        num_detectors_per_round: int,
+        burst_detector: Optional[Any] = None,
+    ) -> tuple[DecoderMetrics, DecoderMetrics, dict[str, Any]]:
+        """
+        Compare standard MWPM vs burst-aware MWPM on identical syndrome data.
+
+        Burst-aware strategy:
+        1. Identify shots and rounds with correlated error bursts.
+        2. Mitigate anomalous burst detector clusters that violate independent error models.
+        3. Decode with and without burst mitigation and return comparative metrics.
+
+        Returns:
+            (standard_metrics, burst_aware_metrics, burst_summary)
+        """
+        from adaptive_qec.noise.burst_detector import BurstDetector, reshape_syndromes_to_tensor
+
+        detector = burst_detector or BurstDetector()
+        shots = syndromes.shape[0]
+
+        # 1. Standard decode
+        standard_metrics = self.decode_batch(syndromes, observable_flips)
+
+        # 2. Burst-aware preprocessing
+        mitigated_syndromes = syndromes.copy().astype(np.uint8)
+        burst_shot_count = 0
+        total_bursts_found = 0
+
+        for i in range(shots):
+            shot_tensor = reshape_syndromes_to_tensor(
+                syndromes[i], num_rounds, num_detectors_per_round
+            )
+            analysis = detector.analyze(shot_tensor, num_detectors_per_round)
+            if analysis.bursts_detected:
+                burst_shot_count += 1
+                total_bursts_found += len(analysis.bursts_detected)
+                for b in analysis.bursts_detected:
+                    for r in range(b.round_start, b.round_end + 1):
+                        for det in b.affected_detectors:
+                            flat_idx = r * num_detectors_per_round + det
+                            if flat_idx < mitigated_syndromes.shape[1]:
+                                mitigated_syndromes[i, flat_idx] = 0
+
+        # 3. Burst-aware decode
+        burst_aware_metrics = self.decode_batch(mitigated_syndromes, observable_flips)
+
+        burst_summary = {
+            "total_shots": shots,
+            "burst_shots": burst_shot_count,
+            "burst_shot_fraction": burst_shot_count / max(shots, 1),
+            "total_bursts": total_bursts_found,
+            "standard_ler": standard_metrics.logical_error_rate,
+            "burst_aware_ler": burst_aware_metrics.logical_error_rate,
+            "ler_reduction": standard_metrics.logical_error_rate - burst_aware_metrics.logical_error_rate,
+        }
+
+        logger.info(
+            f"Burst-aware decoding: {burst_shot_count}/{shots} burst shots, "
+            f"Standard LER={standard_metrics.logical_error_rate:.4f}, "
+            f"Burst-Aware LER={burst_aware_metrics.logical_error_rate:.4f}"
+        )
+        return standard_metrics, burst_aware_metrics, burst_summary

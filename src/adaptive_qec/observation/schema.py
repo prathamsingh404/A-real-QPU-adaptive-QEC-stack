@@ -84,3 +84,50 @@ class ObservationFrame:
         shots, num_detectors = syndromes.shape
         total_defects = int(np.sum(syndromes))
         defect_rate = float(total_defects / max(1, shots * num_detectors))
+
+        if detector_map is not None:
+            x_defects, z_defects = detector_map.extract_defect_counts(syndromes)
+            n_x = max(1, len(detector_map.x_indices) * shots)
+            n_z = max(1, len(detector_map.z_indices) * shots)
+            x_rate = float(x_defects / n_x)
+            z_rate = float(z_defects / n_z)
+        else:
+            x_rate = defect_rate
+            z_rate = defect_rate
+
+        # Autocorrelation between successive shots
+        autocorr = 0.0
+        if shots > 1:
+            shot_defects = np.sum(syndromes, axis=1)
+            mean_d = np.mean(shot_defects)
+            var_d = np.var(shot_defects)
+            if var_d > 1e-12:
+                autocorr = float(np.mean((shot_defects[:-1] - mean_d) * (shot_defects[1:] - mean_d)) / var_d)
+
+        cal = calibration_dict or {}
+
+        # Spatial distribution across detector columns
+        spatial_dist = tuple(float(x) for x in np.mean(syndromes, axis=0))
+
+        return cls(
+            total_shots=shots,
+            num_detectors=num_detectors,
+            total_defects=total_defects,
+            defect_rate=defect_rate,
+            x_defect_rate=x_rate,
+            z_defect_rate=z_rate,
+            drift_score=drift_score,
+            burst_score=burst_score,
+            syndrome_autocorrelation=autocorr,
+            decoder_disagreement=decoder_disagreement,
+            code_distance=code_distance,
+            num_rounds=num_rounds,
+            t1_median_us=float(cal.get("t1_mean_us", 0.0)),
+            t2_median_us=float(cal.get("t2_mean_us", 0.0)),
+            p1q_median=float(cal.get("p_1q", 0.0)),
+            p2q_median=float(cal.get("p_2q", 0.0)),
+            pro_median=float(cal.get("p_ro", 0.0)),
+            backend_name=str(cal.get("backend", "simulation")),
+            window_idx=window_idx,
+            spatial_defect_distribution=spatial_dist,
+        )

@@ -263,3 +263,145 @@ class CGCCADSController(BaseController):
         disagreement = min(0.15, max(0.0, 0.25 * abs(defect_rate - 0.03) + 0.01 * drift_mag))
 
         # Estimate performance difference delta_hat (surrogate gain of candidate vs active)
+        # In presence of high leakage or spatial bursts, Union-Find outperforms MWPM
+        leakage = getattr(state, "leakage_fraction", 0.0)
+        gain_estimate = 0.0
+        if self.active_decoder == DecoderChoice.MWPM:
+            if leakage > 0.04 or defect_rate > 0.09:
+                gain_estimate = 0.04 + 0.5 * leakage
+            else:
+                gain_estimate = -0.015  # MWPM is optimal for stationary stochastic noise
+        else:
+            if leakage <= 0.02 and defect_rate <= 0.06:
+                gain_estimate = 0.03  # Return to MWPM
+            else:
+                gain_estimate = -0.02
+
+        # Empirical standard error
+        uncertainty = float(np.std(self._last_defect_rates) / np.sqrt(max(len(self._last_defect_rates), 2))) if len(self._last_defect_rates) > 2 else 0.02
+
+        self._current_state_vector = ControllerStateVector(
+            p_hat_x=getattr(state, "defect_rate", 0.0) * 0.5,
+            p_hat_z=getattr(state, "defect_rate", 0.0) * 0.5,
+            p_hat_2q=getattr(state, "p_2q", 0.003),
+            r_hat_det=defect_rate,
+            drift_magnitude=drift_mag,
+            decoder_disagreement=disagreement,
+            uncertainty=uncertainty,
+            estimated_gain=gain_estimate,
+        )
+
+    def decide(self) -> ControlAction:
+        """
+        Execute the Three-Gate decision pipeline.
+        """
+        sv = self._current_state_vector or ControllerStateVector()
+
+        # Handle active probation period
+        if self.decision_state == ControllerDecision.PROBATION:
+            self.probation_counter += 1
+            # Check if probationary performance degraded
+            if len(self.probation_performance_history) >= 2:
+                recent_perf = np.mean(self.probation_performance_history[-2:])
+                if recent_perf < -0.15:  # High surrogate cost -> trigger rollback
+                    self.decision_state = ControllerDecision.ROLLBACK
+                    self.active_decoder = self.baseline_decoder
+                    self.probation_counter = 0
+                    self.probation_performance_history.clear()
+                    self.total_rollbacks += 1
+                    self.estimator.reset_cusum()
+                    action = ControlAction(
+                        decoder=self.active_decoder,
+                        notes="probationary_failure_automatic_rollback",
+                    )
+                    self._record_action(action)
+                    return action
+
+            if self.probation_counter >= self.probation_blocks:
+                # Commit switch permanently
+                self.decision_state = ControllerDecision.SWITCH
+                self.probation_counter = 0
+                self.probation_performance_history.clear()
+
+        # Gate 1: Drift Significance Gate
+        drift_active = sv.drift_magnitude > 2.0 or self.estimator.drift_detected
+        if not drift_active:
+            self.total_stays += 1
+            action = ControlAction(decoder=self.active_decoder, notes="gate1_stationary_stay")
+            self._record_action(action)
+            return action
+
+        # Gate 2: Disagreement Gate
+        if sv.decoder_disagreement < self.disagreement_threshold:
+            self.total_stays += 1
+            action = ControlAction(decoder=self.active_decoder, notes="gate2_zero_disagreement_stay")
+            self._record_action(action)
+            return action
+
+        # Gate 3: Lower Confidence Bound & Cost Constraint Gate
+        lcb_gain = sv.estimated_gain - self.z_score * sv.uncertainty
+        required_margin = self.tax.total + self.dead_zone_epsilon
+
+        # Dual-threshold hysteresis
+        target_threshold = self.hysteresis_up if self.active_decoder == self.baseline_decoder else self.hysteresis_down
+
+        can_switch = (
+            lcb_gain > (required_margin + target_threshold)
+            and self.budget.has_budget
+        )
+
+        if can_switch:
+            # Determine candidate to switch to
+            new_decoder = (
+                DecoderChoice.UNION_FIND
+                if self.active_decoder == DecoderChoice.MWPM
+                else DecoderChoice.MWPM
+            )
+            self.budget.record_step(switched=True)
+            self.total_switches += 1
+            self.active_decoder = new_decoder
+            self.decision_state = ControllerDecision.PROBATION
+            self.probation_counter = 0
+            self.probation_performance_history.clear()
+            self.estimator.reset_cusum()
+
+            action = ControlAction(
+                decoder=self.active_decoder,
+                notes=f"gate3_confidence_gated_switch(lcb={lcb_gain:.4f}>tax={self.tax.total:.4f})",
+            )
+            self._record_action(action)
+            return action
+
+        # Default fallback: STAY
+        self.total_stays += 1
+        action = ControlAction(decoder=self.active_decoder, notes="gate3_cost_barrier_stay")
+        self._record_action(action)
+        return action
+
+    def update(self, reward: float) -> None:
+        """Receive surrogate reward feedback (higher is better)."""
+        self._recent_surrogate_rewards.append(reward)
+        if self.decision_state == ControllerDecision.PROBATION:
+            self.probation_performance_history.append(reward)
+
+        if self._telemetry:
+            self._telemetry[-1].cost = -reward
+
+    def summary(self) -> dict[str, Any]:
+        return {
+            "controller": self.name,
+            "total_switches": self.total_switches,
+            "total_stays": self.total_stays,
+            "total_rollbacks": self.total_rollbacks,
+            "active_decoder": self.active_decoder.value,
+            "tax": {
+                "c_switch": self.tax.c_switch,
+                "c_latency": self.tax.c_latency,
+                "c_compute": self.tax.c_compute,
+                "total": self.tax.total,
+            },
+            "budget": {
+                "switches_in_current_epoch": self.budget.switches_in_current_epoch,
+                "max_allowed": self.budget.max_switches_per_epoch,
+            },
+        }

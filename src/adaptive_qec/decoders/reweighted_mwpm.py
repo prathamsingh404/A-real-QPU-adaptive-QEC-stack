@@ -131,3 +131,71 @@ class OnlineReweightedMWPM(Decoder):
                 window_arr = np.array(self._syndrome_buffer)
                 self.update_weights(window_arr)
                 self._shots_since_update = 0
+
+            corr = np.asarray(self._current_matching.decode(syndrome), dtype=np.uint8)
+            return Correction(observable_corrections=corr)
+
+        # Batch decode with sliding window updates
+        shots = syndrome.shape[0]
+        corrections = np.zeros((shots, self._num_observables), dtype=np.uint8)
+
+        for i in range(shots):
+            shot = syndrome[i]
+            self._syndrome_buffer.append(shot)
+            self._shots_since_update += 1
+
+            if self._shots_since_update >= self.update_interval and len(self._syndrome_buffer) >= 20:
+                window_arr = np.array(self._syndrome_buffer)
+                self.update_weights(window_arr)
+                self._shots_since_update = 0
+
+            corrections[i] = self._current_matching.decode(shot)
+
+        return Correction(observable_corrections=corrections)
+
+    def decode_batch(
+        self,
+        syndromes: np.ndarray,
+        observable_flips: np.ndarray,
+    ) -> DecoderMetrics:
+        """Decode a batch and compute performance metrics."""
+        syndromes = np.asarray(syndromes, dtype=np.uint8)
+        observable_flips = np.asarray(observable_flips, dtype=np.uint8)
+        total_shots = syndromes.shape[0]
+
+        if total_shots == 0:
+            return DecoderMetrics(
+                total_shots=0,
+                num_logical_errors=0,
+                logical_error_rate=0.0,
+                decode_time_s=0.0,
+            )
+
+        tracemalloc.start()
+        start_time = time.perf_counter()
+
+        correction = self.decode(syndromes)
+        predicted = correction.observable_corrections
+        if predicted.ndim == 1 and total_shots == 1:
+            predicted = predicted.reshape(1, -1)
+
+        elapsed = time.perf_counter() - start_time
+        _, peak_mem = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        # Check logical errors
+        actual = observable_flips.reshape(total_shots, -1)
+        errors = np.any(predicted != actual, axis=1)
+        num_errors = int(np.sum(errors))
+        ler = float(num_errors / total_shots)
+
+        return DecoderMetrics(
+            total_shots=total_shots,
+            num_logical_errors=num_errors,
+            logical_error_rate=ler,
+            decode_time_s=elapsed,
+            latency_mean_us=(elapsed / total_shots) * 1e6,
+            throughput_shots_per_s=total_shots / max(elapsed, 1e-12),
+            peak_memory_mb=peak_mem / (1024 * 1024),
+            extra={"total_reweights": self.total_reweights},
+        )

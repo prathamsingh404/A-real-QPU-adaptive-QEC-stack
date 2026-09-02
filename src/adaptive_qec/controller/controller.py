@@ -475,3 +475,230 @@ class AdaptiveController:
         self.leakage_threshold = leakage_threshold
         self.distance_crossover = distance_crossover
         self.fast_path_count = 0
+
+        self._current_action: Optional[ControlAction] = None
+        self._action_history: list[ControlAction] = []
+        self._cost_history: list[dict[str, float]] = []
+
+    @property
+    def current_action(self) -> Optional[ControlAction]:
+        """The last action selected by the controller."""
+        return self._current_action
+
+    def _enumerate_candidates(self, state: HardwareState) -> list[ControlAction]:
+        """Generate the set of candidate actions for the current state.
+
+        The candidate set is small and interpretable. We enumerate:
+            - 2 decoders (MWPM, UF)
+            - 4 DD policies (NONE, CPMG, XY4, XY8)
+            - burst mitigation (on/off, but only if burst detected)
+
+        Total: up to 2 * 4 * 2 = 16 candidates (much fewer in practice).
+        """
+        candidates = []
+        decoders = [DecoderChoice.MWPM, DecoderChoice.UNION_FIND]
+        dd_options = [DDSequenceType.NONE, DDSequenceType.XY4]
+
+        # Only consider CPMG and XY8 if drift or leakage is significant
+        if state.drift_magnitude > 1.0 or state.leakage_fraction > 0.01:
+            dd_options.extend([DDSequenceType.CPMG, DDSequenceType.XY8])
+
+        burst_options = [False]
+        if state.burst_active:
+            burst_options = [True, False]
+
+        for dec in decoders:
+            for dd in dd_options:
+                for burst_mit in burst_options:
+                    candidates.append(ControlAction(
+                        decoder=dec,
+                        dd_policy=dd,
+                        burst_mitigation=burst_mit,
+                    ))
+
+        return candidates
+
+    def select_action(self, state: HardwareState) -> ControlAction:
+        """Select the optimal control action for the current hardware state.
+
+        This is the main entry point. Call once per observation window.
+
+        Args:
+            state: Current estimated hardware state.
+
+        Returns:
+            The selected ControlAction.
+        """
+        # Fast-path 1: Under persistent leakage at scaled distances d >= distance_crossover, directly force UF + XY4
+        if getattr(state, "leakage_fraction", 0.0) >= self.leakage_threshold and getattr(state, "code_distance", 3) >= self.distance_crossover:
+            self.fast_path_count += 1
+            fast_action = ControlAction(
+                decoder=DecoderChoice.UNION_FIND,
+                dd_policy=DDSequenceType.XY4,
+                request_recalibration=True,
+                notes="physics_gated_leakage_clustering",
+            )
+            if self._current_action is not None and self._current_action.decoder != fast_action.decoder:
+                self.metrics.total_mode_switches += 1
+            self._current_action = fast_action
+            self._action_history.append(fast_action)
+            self.metrics.total_windows += 1
+            self.metrics.decoder_usage[fast_action.decoder.value] = (
+                self.metrics.decoder_usage.get(fast_action.decoder.value, 0) + 1
+            )
+            self.metrics.dd_usage[fast_action.dd_policy.value] = (
+                self.metrics.dd_usage.get(fast_action.dd_policy.value, 0) + 1
+            )
+            return fast_action
+
+        # Fast-path 2: Cosmic ray or burst event
+        if getattr(state, "burst_active", False) or getattr(state, "burst_detected", False):
+            self.fast_path_count += 1
+            fast_action = ControlAction(
+                decoder=DecoderChoice.MWPM,
+                dd_policy=DDSequenceType.XY4,
+                burst_mitigation=True,
+                request_recalibration=True,
+                notes="physics_gated_burst_mitigation",
+            )
+            if self._current_action is not None and self._current_action.decoder != fast_action.decoder:
+                self.metrics.total_mode_switches += 1
+            self._current_action = fast_action
+            self._action_history.append(fast_action)
+            self.metrics.total_windows += 1
+            self.metrics.decoder_usage[fast_action.decoder.value] = (
+                self.metrics.decoder_usage.get(fast_action.decoder.value, 0) + 1
+            )
+            self.metrics.dd_usage[fast_action.dd_policy.value] = (
+                self.metrics.dd_usage.get(fast_action.dd_policy.value, 0) + 1
+            )
+            return fast_action
+
+        # Fast-path 3: Severe coherent drift
+        if getattr(state, "drift_magnitude", 0.0) > 2.0:
+            self.fast_path_count += 1
+            fast_action = ControlAction(
+                decoder=DecoderChoice.MWPM,
+                dd_policy=DDSequenceType.CPMG,
+                request_recalibration=True,
+                notes="drift_cpmg_mitigation",
+            )
+            if self._current_action is not None and self._current_action.decoder != fast_action.decoder:
+                self.metrics.total_mode_switches += 1
+            self._current_action = fast_action
+            self._action_history.append(fast_action)
+            self.metrics.total_windows += 1
+            self.metrics.decoder_usage[fast_action.decoder.value] = (
+                self.metrics.decoder_usage.get(fast_action.decoder.value, 0) + 1
+            )
+            self.metrics.dd_usage[fast_action.dd_policy.value] = (
+                self.metrics.dd_usage.get(fast_action.dd_policy.value, 0) + 1
+            )
+            return fast_action
+
+        candidates = self._enumerate_candidates(state)
+
+        # Compute cost for each candidate
+        costs: list[tuple[float, ControlAction]] = []
+        for action in candidates:
+            cost = compute_cost(state, action, self._current_action, self.weights)
+            costs.append((cost, action))
+
+        # Sort by cost (lowest first)
+        costs.sort(key=lambda x: x[0])
+        best_cost, best_action = costs[0]
+
+        # Apply hysteresis to prevent oscillation
+        if self._current_action is not None:
+            current_cost = compute_cost(
+                state, self._current_action, self._current_action, self.weights
+            )
+
+            current_mode = f"{self._current_action.decoder.value}:{self._current_action.dd_policy.value}"
+            candidate_mode = f"{best_action.decoder.value}:{best_action.dd_policy.value}"
+
+            if not self.hysteresis.should_switch(
+                current_mode, candidate_mode, current_cost, best_cost
+            ):
+                # Stay with current decoder and DD policy, but keep instantaneous event mitigations
+                best_action = ControlAction(
+                    decoder=self._current_action.decoder,
+                    dd_policy=self._current_action.dd_policy,
+                    burst_mitigation=best_action.burst_mitigation,
+                    request_recalibration=best_action.request_recalibration,
+                    notes=f"Retained {current_mode} via hysteresis",
+                )
+                best_cost = current_cost
+
+        # Check if this is a mode switch
+        if self._current_action is not None:
+            if (
+                best_action.decoder != self._current_action.decoder
+                or best_action.dd_policy != self._current_action.dd_policy
+            ):
+                self.metrics.total_mode_switches += 1
+                logger.info(
+                    f"Controller: mode switch "
+                    f"({self._current_action.decoder.value}:{self._current_action.dd_policy.value}) -> "
+                    f"({best_action.decoder.value}:{best_action.dd_policy.value}) "
+                    f"(cost: {best_cost:.6f})"
+                )
+
+        # Update state
+        self._current_action = best_action
+        self._action_history.append(best_action)
+
+        # Update metrics
+        self.metrics.total_windows += 1
+        self.metrics.decoder_usage[best_action.decoder.value] = (
+            self.metrics.decoder_usage.get(best_action.decoder.value, 0) + 1
+        )
+        self.metrics.dd_usage[best_action.dd_policy.value] = (
+            self.metrics.dd_usage.get(best_action.dd_policy.value, 0) + 1
+        )
+        if best_action.burst_mitigation:
+            self.metrics.burst_mitigations += 1
+        if best_action.request_recalibration:
+            self.metrics.recalibration_requests += 1
+        self.metrics.cost_history.append(best_cost)
+        self.metrics.action_history.append(
+            f"{best_action.decoder.value}:{best_action.dd_policy.value}"
+        )
+
+        return best_action
+
+    def decide(self, state: Optional[HardwareState] = None) -> ControlAction:
+        """Alias for select_action to maintain uniform controller interface."""
+        if state is None:
+            if hasattr(self, "_last_observed_state") and self._last_observed_state is not None:
+                state = self._last_observed_state
+            else:
+                state = HardwareState()
+        self._last_observed_state = state
+        return self.select_action(state)
+
+    def reset(self) -> None:
+        """Reset controller state (for a new experiment run)."""
+        self._current_action = None
+        self._action_history.clear()
+        self._cost_history.clear()
+        self.hysteresis.reset()
+        self.metrics = ControllerMetrics()
+        self.fast_path_count = 0
+
+    def summary(self) -> dict[str, Any]:
+        """Return a summary of controller performance."""
+        return {
+            "weights": self.weights.to_dict(),
+            "metrics": self.metrics.to_dict(),
+            "hysteresis": {
+                "patience": self.hysteresis.patience,
+                "margin": self.hysteresis.margin,
+            },
+        }
+
+
+# Backward-compatible aliases for telemetry and mitigation patterns
+HardwareTelemetry = HardwareState
+DDPattern = DDSequenceType
+

@@ -64,3 +64,38 @@ def create_controller(name: str, **kwargs) -> BaseController:
 
     Returns:
         Instantiated controller.
+
+    Raises:
+        ValueError: If name is not recognized.
+    """
+    if name not in CONTROLLER_REGISTRY:
+        available = ", ".join(sorted(CONTROLLER_REGISTRY.keys()))
+        raise ValueError(
+            f"Unknown controller '{name}'. Available: {available}"
+        )
+    return CONTROLLER_REGISTRY[name](**kwargs)
+
+
+__all__ = [
+    "BaseController",
+    "ControlAction",
+    "HardwareState",
+    "TelemetryRecord",
+    "StaticController",
+    "CostBasedController",
+    "Exp3Controller",
+    "Exp3PController",
+    "DASEController",
+    "SPRTController",
+    "SPRTEngine",
+    "SPRTState",
+    "BanditArm",
+    "build_arm_set",
+    "CGCCADSController",
+    "ControllerDecision",
+    "ControllerStateVector",
+    "AdaptationTax",
+    "AdaptationBudget",
+    "create_controller",
+    "CONTROLLER_REGISTRY",
+]

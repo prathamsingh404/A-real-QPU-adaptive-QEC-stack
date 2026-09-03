@@ -144,3 +144,78 @@ class ConfidenceGatedReweightingController:
         # Standard error of the mean shot defect rate
         se_defect = float(np.std(shot_defect_rates, ddof=1) / np.sqrt(w_size)) if w_size > 1 else 0.01
         z_drift = abs(mean_defect - self.reference_defect_rate) / max(se_defect, 1e-6)
+
+        # Gate 1: Stationarity Check
+        if z_drift <= self.drift_z_threshold:
+            if self.is_reweighted:
+                # Drift has subsided: reset to factory baseline
+                self.is_reweighted = False
+                self.active_matching = self.base_matching
+                self.total_resets += 1
+                stats_obj = GateStatistics(
+                    w_size, mean_defect, z_drift, 0.0, 0.0,
+                    GateDecision.RESET, "gate1_drift_subsided_reset_to_base"
+                )
+                self.last_stats = stats_obj
+                return GateDecision.RESET, self.active_matching, stats_obj
+
+            self.total_stays += 1
+            stats_obj = GateStatistics(
+                w_size, mean_defect, z_drift, 0.0, 0.0,
+                GateDecision.STAY, "gate1_stationary_stay"
+            )
+            self.last_stats = stats_obj
+            return GateDecision.STAY, self.active_matching, stats_obj
+
+        # Drift detected: compute Spitz edge probability estimates from window
+        candidate_matching = calibrate_spitz_matching(self.base_matching, syndromes)
+        candidate_edges = self._extract_matching_probabilities(candidate_matching)
+
+        # Compute max Bonferroni LCB on edge shifts
+        max_shift = 0.0
+        max_lcb = -float("inf")
+
+        for key, p_cand in candidate_edges.items():
+            p_ref = self._reference_edges.get(key, 0.004)
+            shift = abs(p_cand - p_ref)
+            if shift > max_shift:
+                max_shift = shift
+
+            # Conservative standard error under the null reference probability
+            p_se = max(p_ref, p_cand, 1e-4)
+            se_edge = np.sqrt(p_se * (1.0 - p_se) / max(w_size, 1))
+            lcb_edge = shift - self.z_crit * se_edge
+            if lcb_edge > max_lcb:
+                max_lcb = lcb_edge
+
+        # Gate 2: Noise Floor / Deadzone Check
+        if max_lcb <= self.dead_zone_epsilon:
+            self.total_stays += 1
+            stats_obj = GateStatistics(
+                w_size, mean_defect, z_drift, max_shift, max_lcb,
+                GateDecision.STAY, f"gate2_noise_floor_stay(lcb={max_lcb:.4f}<=deadzone={self.dead_zone_epsilon:.4f})"
+            )
+            self.last_stats = stats_obj
+            return GateDecision.STAY, self.active_matching, stats_obj
+
+        # Gate 3: Cost-Constrained Threshold Check
+        required_barrier = self.adaptation_tax + self.dead_zone_epsilon
+        if max_lcb > required_barrier:
+            self.active_matching = candidate_matching
+            self.is_reweighted = True
+            self.total_reweights += 1
+            stats_obj = GateStatistics(
+                w_size, mean_defect, z_drift, max_shift, max_lcb,
+                GateDecision.REWEIGHT, f"gate3_confidence_switch(lcb={max_lcb:.4f}>tax={required_barrier:.4f})"
+            )
+            self.last_stats = stats_obj
+            return GateDecision.REWEIGHT, self.active_matching, stats_obj
+
+        # Fallback: STAY (cost barrier not cleared)
+        self.total_stays += 1
+        stats_obj = GateStatistics(
+            w_size, mean_defect, z_drift, max_shift, max_lcb,
+            GateDecision.STAY, f"gate3_tax_barrier_stay(lcb={max_lcb:.4f}<=tax={required_barrier:.4f})"
+        )
+        self.last_stats = stats_obj
+        return GateDecision.STAY, self.active_matching, stats_obj

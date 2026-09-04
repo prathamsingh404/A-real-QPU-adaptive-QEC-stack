@@ -62,3 +62,32 @@ class StaticController(BaseController):
                 effective_dd = DDSequenceType.NONE
         self._dd_policy = effective_dd
         self._schedule = schedule
+
+    @property
+    def name(self) -> str:
+        dec_str = self._decoder.value if hasattr(self._decoder, "value") else str(self._decoder)
+        dd_str = self._dd_policy.value if hasattr(self._dd_policy, "value") else str(self._dd_policy)
+        return f"static_{dec_str}_{dd_str}"
+
+    def observe(self, state: HardwareState) -> None:
+        self._current_state = state
+
+    def decide(self) -> ControlAction:
+        dec_val = self._decoder.value if hasattr(self._decoder, "value") else str(self._decoder)
+        dd_val = self._dd_policy.value if hasattr(self._dd_policy, "value") else str(self._dd_policy)
+        action = ControlAction(
+            decoder=self._decoder,
+            dd_policy=self._dd_policy,
+            dd_sequence=dd_val,
+            schedule=self._schedule,
+            burst_mitigation=False,
+            request_recalibration=False,
+            notes=f"static policy: {dec_val}+{dd_val}",
+        )
+        self._record_action(action)
+        return action
+
+    def update(self, reward: float) -> None:
+        # Static controller ignores feedback
+        if self._telemetry:
+            self._telemetry[-1].cost = -reward

@@ -144,3 +144,77 @@ class CounterfactualEngine:
                 "err_mask": err_mask,
                 "ci": ci,
             }
+
+        # 2. Extract reference arm error mask
+        ref_mask = None
+        if self.reference_arm in raw_results:
+            ref_mask = raw_results[self.reference_arm]["err_mask"]
+        elif raw_results:
+            first_arm = next(iter(raw_results.keys()))
+            ref_mask = raw_results[first_arm]["err_mask"]
+
+        # 3. Compute paired deltas and significance
+        paired_results: dict[str, PairedEvaluationResult] = {}
+        for name, data in raw_results.items():
+            err_mask = data["err_mask"]
+            num_err = int(np.sum(err_mask))
+            ler = float(num_err / max(shots, 1))
+
+            mean_delta = 0.0
+            delta_se = 0.0
+            p_t = 1.0
+            p_wilcoxon = 1.0
+            delta_arr = None
+
+            if ref_mask is not None:
+                # delta_i: +1 if arm erred and ref didn't; -1 if ref erred and arm didn't; 0 if agreed
+                delta_arr = err_mask.astype(np.int32) - ref_mask.astype(np.int32)
+                mean_delta = float(np.mean(delta_arr))
+                if shots > 1:
+                    delta_se = float(np.std(delta_arr, ddof=1) / np.sqrt(shots))
+                    if np.any(delta_arr != 0):
+                        t_stat, p_t = stats.ttest_1samp(delta_arr, 0.0)
+                        p_t = float(p_t)
+                        try:
+                            # Non-zero differences for Wilcoxon
+                            diffs = delta_arr[delta_arr != 0]
+                            if len(diffs) >= 10:
+                                _, p_wilcoxon = stats.wilcoxon(diffs)
+                                p_wilcoxon = float(p_wilcoxon)
+                        except Exception:
+                            p_wilcoxon = 1.0
+
+            paired_results[name] = PairedEvaluationResult(
+                arm_name=name,
+                total_shots=shots,
+                num_logical_errors=num_err,
+                logical_error_rate=ler,
+                ler_wilson_ci=data["ci"],
+                predictions=data["preds"],
+                error_mask=err_mask,
+                delta_errors=delta_arr,
+                mean_delta_ler=mean_delta,
+                delta_std_err=delta_se,
+                p_value_paired_t=p_t,
+                p_value_wilcoxon=p_wilcoxon,
+                decode_time_s=data["metrics"].decode_time_s,
+                latency_mean_us=data["metrics"].latency_mean_us,
+            )
+
+        # 4. Compute pairwise disagreement matrix
+        arm_names = list(self._decoders.keys())
+        k = len(arm_names)
+        matrix = np.zeros((k, k), dtype=np.float64)
+
+        for i, a in enumerate(arm_names):
+            preds_a = raw_results[a]["preds"]
+            for j, b in enumerate(arm_names):
+                if i == j:
+                    matrix[i, j] = 0.0
+                else:
+                    preds_b = raw_results[b]["preds"]
+                    # Fraction of shots with differing observable corrections
+                    disagreements = np.any(preds_a != preds_b, axis=1)
+                    matrix[i, j] = float(np.mean(disagreements))
+
+        return paired_results, DisagreementMatrix(decoder_names=arm_names, matrix=matrix)

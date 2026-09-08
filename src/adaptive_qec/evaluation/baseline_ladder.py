@@ -82,3 +82,39 @@ class BaselineLadder:
             decoder=b1_dec,
             description="Optimized static MWPM with fixed calibrated baseline weights",
         )
+
+        # B2: Genuine Cluster-Growth Union-Find
+        b2_dec = UnionFindDecoder()
+        b2_dec.configure(circuit=self.circuit)
+        self.arms[BaselineRung.B2_TRUE_UNION_FIND] = BaselineArm(
+            rung=BaselineRung.B2_TRUE_UNION_FIND,
+            decoder=b2_dec,
+            description="True cluster-growth Union-Find decoder (Delfosse & Nickerson)",
+        )
+
+        # B3: Online Reweighted MWPM (Bhardwaj et al. / DGR sliding-window)
+        b3_dec = OnlineReweightedMWPM(window_size=150, update_interval=30)
+        b3_dec.configure(circuit=self.circuit)
+        self.arms[BaselineRung.B3_ONLINE_REWEIGHTED] = BaselineArm(
+            rung=BaselineRung.B3_ONLINE_REWEIGHTED,
+            decoder=b3_dec,
+            description="Online reweighted MWPM via sliding-window syndrome statistics (Bhardwaj et al.)",
+            is_adaptive=True,
+        )
+
+    def register_adaptive_arm(self, rung: BaselineRung, decoder: Decoder, description: str, is_oracle: bool = False) -> None:
+        """Register dynamic arms like B4 (naive), B5 (CG-CCADS), and B6 (oracle)."""
+        self.arms[rung] = BaselineArm(
+            rung=rung,
+            decoder=decoder,
+            description=description,
+            is_oracle=is_oracle,
+            is_adaptive=True,
+        )
+
+    def to_counterfactual_engine(self) -> CounterfactualEngine:
+        """Create a CounterfactualEngine wired to all ladder arms."""
+        engine = CounterfactualEngine(reference_arm=BaselineRung.B0_FACTORY_MWPM.value)
+        for rung, arm in self.arms.items():
+            engine.register_decoder(rung.value, arm.decoder)
+        return engine

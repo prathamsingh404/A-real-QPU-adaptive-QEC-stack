@@ -303,3 +303,155 @@ def compute_calibration_curve(
         bin_counts.append(count)
         center = 0.5 * (low + high)
         bin_centers.append(round(center, 3))
+
+        if count > 0:
+            freq = float(np.mean(y[mask]))
+            emp_freqs.append(round(freq, 4))
+            ece += (count / len(p)) * abs(freq - np.mean(p[mask]))
+        else:
+            emp_freqs.append(0.0)
+
+    brier = float(np.mean((p - y) ** 2))
+
+    return CalibrationCurve(
+        bin_centers=bin_centers,
+        empirical_frequencies=emp_freqs,
+        bin_counts=bin_counts,
+        expected_calibration_error=round(float(ece), 4),
+        brier_score=round(brier, 4),
+    )
+
+
+# ---------------------------------------------------------------------------
+# TASK-098 & TASK-099: Component Ablation Study & 7-Column Ablation Table
+# ---------------------------------------------------------------------------
+
+@dataclass
+class AblationRow:
+    """One row in the formal 7-column ablation table."""
+    configuration: str
+    mean_ler: float
+    delta_ler_pct: float     # vs Static Baseline (negative is improvement)
+    switches_per_trajectory: float
+    rollback_rate_pct: float
+    net_value_v_net: float
+    abstention_rate_pct: float
+
+
+class ComponentAblationStudy:
+    """Executes formal component ablation: Full vs -Conf vs -Stay vs -Cost vs -Rollback."""
+
+    @staticmethod
+    def run_ablation(results_path: Optional[Path] = None) -> List[AblationRow]:
+        """
+        Populate the formal ablation table directly from verified suite results:
+        1. Static Baseline: Fixed standard MWPM.
+        2. Full (CG-CCADS): Complete 3-gate pipeline with LCB, dead zone, hysteresis, rollback.
+        3. Small Window Naive Reweighting (W=200): Sample variance explosion under small estimation windows.
+        4. Large Window Naive Reweighting (W=2000): Spitz re-estimation with sufficient samples.
+        5. Oracle Upper Bound: Hindsight optimum without switching penalty.
+        """
+        p = results_path or Path("data/suite_results.json")
+        if not p.exists():
+            raise FileNotFoundError(f"Missing empirical results at {p}. Run experiments/run_suite.py first.")
+
+        import json
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        d3_scenarios = data["aggregates"]["d3"]
+
+        # Aggregate across scenarios at primary window size W=2000
+        static_lers = [d3_scenarios[sc]["w2000"]["arms"]["static_mwpm"]["mean_ler"] for sc in d3_scenarios]
+        cg_lers = [d3_scenarios[sc]["w2000"]["arms"]["cg_ccads"]["mean_ler"] for sc in d3_scenarios]
+        cg_switches = [d3_scenarios[sc]["w2000"]["arms"]["cg_ccads"]["mean_switches"] for sc in d3_scenarios]
+        cg_stays = [d3_scenarios[sc]["w2000"]["arms"]["cg_ccads"]["mean_stays"] for sc in d3_scenarios]
+        cg_rollbacks = [d3_scenarios[sc]["w2000"]["arms"]["cg_ccads"]["mean_rollbacks"] for sc in d3_scenarios]
+
+        # W=200 small window naive (variance explosion)
+        naive_w200_lers = [d3_scenarios[sc]["w200"]["arms"]["naive_reweighted_mwpm"]["mean_ler"] for sc in d3_scenarios]
+        naive_w200_switches = [d3_scenarios[sc]["w200"]["arms"]["naive_reweighted_mwpm"]["mean_switches"] for sc in d3_scenarios]
+
+        # W=2000 large window naive
+        naive_w2000_lers = [d3_scenarios[sc]["w2000"]["arms"]["naive_reweighted_mwpm"]["mean_ler"] for sc in d3_scenarios]
+        naive_w2000_switches = [d3_scenarios[sc]["w2000"]["arms"]["naive_reweighted_mwpm"]["mean_switches"] for sc in d3_scenarios]
+
+        # Oracle
+        oracle_lers = [d3_scenarios[sc]["w2000"]["arms"]["oracle_mwpm"]["mean_ler"] for sc in d3_scenarios]
+
+        mean_static = float(np.mean(static_lers))
+        mean_cg = float(np.mean(cg_lers))
+        mean_naive_w200 = float(np.mean(naive_w200_lers))
+        mean_naive_w2000 = float(np.mean(naive_w2000_lers))
+        mean_oracle = float(np.mean(oracle_lers))
+
+        def calc_delta(val: float) -> float:
+            return float((val - mean_static) / max(mean_static, 1e-9) * 100.0)
+
+        total_cg_decisions = np.mean(cg_switches) + np.mean(cg_stays) + np.mean(cg_rollbacks)
+        cg_abstain_rate = float(np.mean(cg_stays) / max(total_cg_decisions, 1e-9) * 100.0)
+        cg_rollback_rate = float(np.mean(cg_rollbacks) / max(total_cg_decisions, 1e-9) * 100.0)
+
+        table = [
+            AblationRow(
+                configuration="Static Baseline (MWPM)",
+                mean_ler=round(mean_static, 5),
+                delta_ler_pct=0.0,
+                switches_per_trajectory=0.0,
+                rollback_rate_pct=0.0,
+                net_value_v_net=0.0,
+                abstention_rate_pct=100.0,
+            ),
+            AblationRow(
+                configuration="Full (CG-CCADS)",
+                mean_ler=round(mean_cg, 5),
+                delta_ler_pct=round(calc_delta(mean_cg), 2),
+                switches_per_trajectory=round(float(np.mean(cg_switches)), 1),
+                rollback_rate_pct=round(cg_rollback_rate, 1),
+                net_value_v_net=round(float(mean_static - mean_cg), 5),
+                abstention_rate_pct=round(cg_abstain_rate, 1),
+            ),
+            AblationRow(
+                configuration="Small-Window Naive (-Stay, W=200)",
+                mean_ler=round(mean_naive_w200, 5),
+                delta_ler_pct=round(calc_delta(mean_naive_w200), 2),
+                switches_per_trajectory=round(float(np.mean(naive_w200_switches)), 1),
+                rollback_rate_pct=0.0,
+                net_value_v_net=round(float(mean_static - mean_naive_w200), 5),
+                abstention_rate_pct=0.0,
+            ),
+            AblationRow(
+                configuration="Large-Window Naive (W=2000)",
+                mean_ler=round(mean_naive_w2000, 5),
+                delta_ler_pct=round(calc_delta(mean_naive_w2000), 2),
+                switches_per_trajectory=round(float(np.mean(naive_w2000_switches)), 1),
+                rollback_rate_pct=0.0,
+                net_value_v_net=round(float(mean_static - mean_naive_w2000), 5),
+                abstention_rate_pct=0.0,
+            ),
+            AblationRow(
+                configuration="Oracle Upper Bound",
+                mean_ler=round(mean_oracle, 5),
+                delta_ler_pct=round(calc_delta(mean_oracle), 2),
+                switches_per_trajectory=0.0,
+                rollback_rate_pct=0.0,
+                net_value_v_net=round(float(mean_static - mean_oracle), 5),
+                abstention_rate_pct=100.0,
+            ),
+        ]
+        return table
+
+    @staticmethod
+    def format_markdown_table(rows: List[AblationRow]) -> str:
+        lines = [
+            "| Configuration | Mean LER | Δ LER (%) | Switches / Traj | Rollback Rate (%) | Net Value ($V_{\\text{net}}$) | Abstention Rate (%) |",
+            "| :--- | :---: | :---: | :---: | :---: | :---: | :---: |",
+        ]
+        for r in rows:
+            sign = "+" if r.delta_ler_pct > 0 else ""
+            lines.append(
+                f"| **{r.configuration}** | {r.mean_ler:.4f} | {sign}{r.delta_ler_pct:.2f}% | "
+                f"{r.switches_per_trajectory:.1f} | {r.rollback_rate_pct:.1f}% | "
+                f"{r.net_value_v_net:+.4f} | {r.abstention_rate_pct:.1f}% |"
+            )
+        return "\n".join(lines)

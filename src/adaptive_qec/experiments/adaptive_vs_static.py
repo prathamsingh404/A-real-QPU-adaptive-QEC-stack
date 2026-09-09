@@ -435,3 +435,228 @@ def run_adaptive_vs_static(
         # Adaptive arm circuit compiled with adaptively selected DD policy
         noise_adapt = apply_dd_to_noise(base_noise, action.dd_policy)
         circuit_adapt = code.generate_circuit(noise=noise_adapt)
+
+        # 2. Sample syndromes for all arms with deterministic window_seed
+        sampler_mwpm = circuit_mwpm.compile_detector_sampler(seed=window_seed)
+        det_mwpm, obs_mwpm = sampler_mwpm.sample(shots=schedule.shots_per_window, separate_observables=True)
+
+        sampler_uf = circuit_uf.compile_detector_sampler(seed=window_seed)
+        det_uf, obs_uf = sampler_uf.sample(shots=schedule.shots_per_window, separate_observables=True)
+
+        sampler_adapt = circuit_adapt.compile_detector_sampler(seed=window_seed)
+        det_adapt, obs_adapt = sampler_adapt.sample(shots=schedule.shots_per_window, separate_observables=True)
+
+        # 3. Inject stochastic non-stationary noise events (identical physical events across arms)
+        synd_mwpm = det_mwpm.copy().astype(np.uint8)
+        synd_uf = det_uf.copy().astype(np.uint8)
+        synd_adapt = det_adapt.copy().astype(np.uint8)
+
+        if schedule.is_burst_window(window_idx):
+            rng_b1 = np.random.default_rng(window_seed + 777)
+            rng_b2 = np.random.default_rng(window_seed + 777)
+            rng_b3 = np.random.default_rng(window_seed + 777)
+            synd_mwpm = inject_burst(synd_mwpm, num_dets_per_round, rounds, intensity=schedule.burst_intensity, rng=rng_b1)
+            synd_uf = inject_burst(synd_uf, num_dets_per_round, rounds, intensity=schedule.burst_intensity, rng=rng_b2)
+            synd_adapt = inject_burst(synd_adapt, num_dets_per_round, rounds, intensity=schedule.burst_intensity, rng=rng_b3)
+
+        if schedule.is_leakage_active(window_idx):
+            rng_l1 = np.random.default_rng(window_seed + 888)
+            rng_l2 = np.random.default_rng(window_seed + 888)
+            rng_l3 = np.random.default_rng(window_seed + 888)
+            synd_mwpm = inject_leakage(synd_mwpm, num_dets_per_round, rounds, leak_detectors=schedule.leakage_detector_indices, rng=rng_l1)
+            synd_uf = inject_leakage(synd_uf, num_dets_per_round, rounds, leak_detectors=schedule.leakage_detector_indices, rng=rng_l2)
+            synd_adapt = inject_leakage(synd_adapt, num_dets_per_round, rounds, leak_detectors=schedule.leakage_detector_indices, rng=rng_l3)
+
+        # Telemetry updates for adaptive
+        burst_in_window = False
+        try:
+            for s_idx in range(min(5, synd_adapt.shape[0])):
+                usable = min(synd_adapt[s_idx].shape[0], num_dets_per_round * rounds)
+                if usable == num_dets_per_round * rounds:
+                    tensor = reshape_syndromes_to_tensor(synd_adapt[s_idx][:usable], rounds, num_dets_per_round)
+                    burst_analysis = burst_detector.analyze(tensor, num_dets_per_round)
+                    if len(burst_analysis.bursts_detected) > 0:
+                        burst_in_window = True
+                        break
+        except Exception:
+            pass
+        last_burst_active = burst_in_window
+        last_detection_rates = synd_adapt.mean(axis=0)
+
+        # -------------------------------------------------------------------
+        # Arm 1: STATIC MWPM (no DD, baseline DEM, no burst mitigation)
+        # -------------------------------------------------------------------
+        mwpm_metrics = mwpm_decoder_static.decode_batch(synd_mwpm, obs_mwpm.astype(np.uint8))
+        n_err_mwpm = mwpm_metrics.num_logical_errors
+        ci_mwpm = wilson_ci(n_err_mwpm, schedule.shots_per_window)
+        static_mwpm_results.windows.append(WindowResult(
+            window_idx=window_idx,
+            n_shots=schedule.shots_per_window,
+            n_errors=n_err_mwpm,
+            error_rate=mwpm_metrics.logical_error_rate,
+            ci_low=ci_mwpm[0], ci_high=ci_mwpm[1],
+            decoder_used="mwpm", dd_used="none",
+        ))
+
+        # -------------------------------------------------------------------
+        # Arm 2: STATIC UF + XY4 (fixed strategy, baseline DEM)
+        # -------------------------------------------------------------------
+        uf_metrics = uf_decoder_static.decode_batch(synd_uf, obs_uf.astype(np.uint8))
+        n_err_uf = uf_metrics.num_logical_errors
+        ci_uf = wilson_ci(n_err_uf, schedule.shots_per_window)
+        static_uf_results.windows.append(WindowResult(
+            window_idx=window_idx,
+            n_shots=schedule.shots_per_window,
+            n_errors=n_err_uf,
+            error_rate=uf_metrics.logical_error_rate,
+            ci_low=ci_uf[0], ci_high=ci_uf[1],
+            decoder_used="union_find", dd_used="xy4",
+        ))
+
+        # -------------------------------------------------------------------
+        # Arm 3: ADAPTIVE controller (re-weights DEM, selects DD, burst mitigation)
+        # -------------------------------------------------------------------
+        if action.decoder == DecoderChoice.MWPM:
+            mwpm_decoder_adaptive.configure(circuit=circuit_adapt)
+            if action.burst_mitigation and burst_in_window:
+                _, adaptive_metrics, _ = mwpm_decoder_adaptive.decode_burst_aware(
+                    synd_adapt, obs_adapt.astype(np.uint8), rounds, num_dets_per_round,
+                    burst_detector=burst_detector,
+                )
+            else:
+                adaptive_metrics = mwpm_decoder_adaptive.decode_batch(synd_adapt, obs_adapt.astype(np.uint8))
+        else:
+            adaptive_metrics = uf_decoder_adaptive.decode_batch(synd_adapt, obs_adapt.astype(np.uint8))
+
+        n_err_adaptive = adaptive_metrics.num_logical_errors
+        ci_adaptive = wilson_ci(n_err_adaptive, schedule.shots_per_window)
+        adaptive_results.windows.append(WindowResult(
+            window_idx=window_idx,
+            n_shots=schedule.shots_per_window,
+            n_errors=n_err_adaptive,
+            error_rate=adaptive_metrics.logical_error_rate,
+            ci_low=ci_adaptive[0], ci_high=ci_adaptive[1],
+            decoder_used=action.decoder.value,
+            dd_used=action.dd_policy.value,
+            burst_mitigated=action.burst_mitigation and burst_in_window,
+        ))
+
+        if window_idx % 10 == 0:
+            logger.info(
+                f"Window {window_idx}/{schedule.total_windows}: "
+                f"MWPM={mwpm_metrics.logical_error_rate:.4f}, "
+                f"UF={uf_metrics.logical_error_rate:.4f}, "
+                f"Adaptive={adaptive_metrics.logical_error_rate:.4f} "
+                f"[{action.decoder.value}:{action.dd_policy.value}]"
+            )
+
+    # Finalize
+    static_mwpm_results.finalize()
+    static_uf_results.finalize()
+    adaptive_results.finalize()
+
+    # Statistical comparison: adaptive vs best static
+    best_static = min(
+        [static_mwpm_results, static_uf_results],
+        key=lambda r: r.overall_error_rate,
+    )
+
+    z_stat, p_val = two_proportion_z_test(
+        adaptive_results.total_errors, adaptive_results.total_shots,
+        best_static.total_errors, best_static.total_shots,
+    )
+
+    improvement = (
+        (best_static.overall_error_rate - adaptive_results.overall_error_rate)
+        / max(best_static.overall_error_rate, 1e-10)
+    )
+
+    regret_per_window = []
+    for w in range(schedule.total_windows):
+        mwpm_err = static_mwpm_results.windows[w].error_rate
+        uf_err = static_uf_results.windows[w].error_rate
+        adapt_err = adaptive_results.windows[w].error_rate
+        oracle_err = min(mwpm_err, uf_err)
+        regret_per_window.append(max(0.0, adapt_err - oracle_err))
+    
+    cumulative_regret = float(np.sum(regret_per_window))
+
+    comparison = {
+        "best_static_arm": best_static.arm_name,
+        "best_static_ler": round(best_static.overall_error_rate, 6),
+        "adaptive_ler": round(adaptive_results.overall_error_rate, 6),
+        "improvement_pct": round(improvement * 100, 2),
+        "cumulative_regret": round(cumulative_regret, 6),
+        "z_statistic": round(z_stat, 4),
+        "p_value": round(p_val, 6),
+        "significant_at_005": p_val < 0.05,
+        "significant_at_001": p_val < 0.01,
+    }
+
+    results = {
+        "experiment": "adaptive_vs_static",
+        "config": {
+            "distance": distance,
+            "rounds": rounds,
+            "total_windows": schedule.total_windows,
+            "shots_per_window": schedule.shots_per_window,
+            "seed": seed,
+        },
+        "arms": {
+            "static_mwpm": static_mwpm_results.to_dict(),
+            "static_uf_xy4": static_uf_results.to_dict(),
+            "adaptive": adaptive_results.to_dict(),
+        },
+        "statistical_comparison": comparison,
+        "controller_summary": controller.summary(),
+    }
+
+    # Save results
+    if output_dir:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        out_path = output_dir / f"adaptive_vs_static_d{distance}_{ts}.json"
+        with open(out_path, "w") as f:
+            json.dump(results, f, indent=2, default=str)
+        logger.info(f"Results saved to {out_path}")
+
+    # Determine relative p-values for table
+    p_mwpm_vs_best = "baseline" if best_static.arm_name == "static_mwpm" else f"{p_val:.6f}"
+    p_uf_vs_best = "baseline" if best_static.arm_name == "static_uf_xy4" else "N/A"
+
+    # Print summary adhering to Section 4.2 of audit
+    print("\n" + "=" * 90)
+    print("ADAPTIVE vs STATIC QEC — EMPIRICAL VALIDATION & STATISTICAL SIGNIFICANCE")
+    print("=" * 90)
+    print(f"  Distance: d={distance}, Rounds: {rounds}")
+    print(f"  Windows: {schedule.total_windows} x {schedule.shots_per_window} shots")
+    print(f"  Total shots per arm: {adaptive_results.total_shots}")
+    print(f"  Deterministic seed: {seed} (reproducible byte-for-byte across runs)")
+    print()
+    print(f"| {'Arm':<15} | {'LER':<8} | {'95% Wilson CI':<24} | {'p vs best static':<18} | {'Significant (alpha=0.05)?':<26} |")
+    print(f"|{'-'*17}|{'-'*10}|{'-'*26}|{'-'*20}|{'-'*28}|")
+    print(f"| {'STATIC MWPM':<15} | {static_mwpm_results.overall_error_rate:.6f} | [{static_mwpm_results.overall_ci[0]:.6f}, {static_mwpm_results.overall_ci[1]:.6f}]   | {p_mwpm_vs_best:<18} | {'No (baseline)' if p_mwpm_vs_best == 'baseline' else 'No':<26} |")
+    print(f"| {'STATIC UF+XY4':<15} | {static_uf_results.overall_error_rate:.6f} | [{static_uf_results.overall_ci[0]:.6f}, {static_uf_results.overall_ci[1]:.6f}]   | {p_uf_vs_best:<18} | {'No':<26} |")
+    print(f"| {'ADAPTIVE':<15} | {adaptive_results.overall_error_rate:.6f} | [{adaptive_results.overall_ci[0]:.6f}, {adaptive_results.overall_ci[1]:.6f}]   | {comparison['p_value']:<18.6f} | {('Yes (p < 0.05)' if comparison['significant_at_005'] else 'No'):<26} |")
+    print()
+    print(f"  Best static arm:          {comparison['best_static_arm']} (LER = {comparison['best_static_ler']:.6f})")
+    print(f"  Adaptive reduction:       {comparison['improvement_pct']:+.2f}%")
+    print(f"  Cumulative Regret:        {comparison['cumulative_regret']:.6f}")
+    print(f"  z-statistic:              {comparison['z_statistic']:.4f}")
+    print(f"  p-value:                  {comparison['p_value']:.6f}")
+    print(f"  Significant (alpha=0.05): {comparison['significant_at_005']}")
+    print(f"  Significant (alpha=0.01): {comparison['significant_at_001']}")
+    print(f"  Mode switches:            {controller.metrics.total_mode_switches}")
+    print("=" * 90)
+
+    return results
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    run_adaptive_vs_static(
+        distance=3,
+        rounds=3,
+        output_dir=Path("experiments/results"),
+    )

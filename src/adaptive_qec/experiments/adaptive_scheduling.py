@@ -277,3 +277,144 @@ class AdaptiveSchedulingExperiment:
                 theta_exit=self._config.theta_exit,
             )
         )
+
+        shots_per_window = self._config.shots_per_schedule // self._config.num_windows
+        total_errors = 0
+        total_shots = 0
+
+        import pymatching
+
+        for window_idx in range(self._config.num_windows):
+            current_sched = scheduler.current_schedule
+            circuit = self._build_biased_circuit(p_x, p_z, schedule_type=current_sched.schedule_type)
+            dem = circuit.detector_error_model(decompose_errors=True)
+            matcher = pymatching.Matching.from_detector_error_model(dem)
+
+            window_seed = (self._config.seed * 100_003 + int(eta * 1000) * 53 + window_idx) % (2**31)
+            sampler = circuit.compile_detector_sampler(seed=window_seed)
+            detection_events, observable_flips = sampler.sample(
+                shots=shots_per_window,
+                separate_observables=True,
+            )
+
+            # Extract detector coordinates to separate X and Z checks correctly
+            n_det = detection_events.shape[1]
+            det_coords = circuit.get_detector_coordinates()
+            x_indices: list[int] = []
+            z_indices: list[int] = []
+
+            for d_id, coords in det_coords.items():
+                if len(coords) >= 2:
+                    if int(round(coords[0] + coords[1])) % 4 == 0:
+                        x_indices.append(d_id)
+                    else:
+                        z_indices.append(d_id)
+
+            if not x_indices or not z_indices:
+                x_indices = list(range(0, n_det, 2))
+                z_indices = list(range(1, n_det, 2))
+
+            x_det = int(np.sum(detection_events[:, x_indices]))
+            z_det = int(np.sum(detection_events[:, z_indices]))
+
+            obs = DefectObservation(
+                round_idx=window_idx,
+                x_defects=x_det,
+                z_defects=z_det,
+                total_x_stabilizers=len(x_indices),
+                total_z_stabilizers=len(z_indices),
+            )
+            scheduler.update(obs)
+
+            # Decode
+            predictions = matcher.decode_batch(detection_events)
+            n_obs = observable_flips.shape[1] if observable_flips.ndim > 1 else 1
+            pred_flat = predictions[:, :n_obs] if predictions.ndim > 1 else predictions.reshape(-1, 1)
+            obs_flat = observable_flips if observable_flips.ndim > 1 else observable_flips.reshape(-1, 1)
+
+            logical_errors = int(np.sum(np.any(pred_flat != obs_flat, axis=1)))
+            total_errors += logical_errors
+            total_shots += shots_per_window
+
+        ler = total_errors / total_shots if total_shots > 0 else 0.0
+        ci_low, ci_high = wilson_score_ci(total_errors, total_shots)
+
+        return BiasPointResult(
+            bias_eta=eta,
+            schedule_type="adaptive",
+            total_errors=total_errors,
+            total_shots=total_shots,
+            ler=ler,
+            ci_lower=ci_low,
+            ci_upper=ci_high,
+            adaptive_switches=scheduler.switch_count,
+        )
+
+
+    def _save_results(self) -> None:
+        """Save experiment results to disk."""
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        output_dir = Path(self._config.output_dir) / timestamp
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        results_data = [
+            {
+                "bias_eta": r.bias_eta,
+                "schedule_type": r.schedule_type,
+                "total_errors": r.total_errors,
+                "total_shots": r.total_shots,
+                "ler": r.ler,
+                "ci_lower": r.ci_lower,
+                "ci_upper": r.ci_upper,
+                "adaptive_switches": r.adaptive_switches,
+            }
+            for r in self._results
+        ]
+
+        with open(output_dir / "results.json", "w") as f:
+            json.dump(results_data, f, indent=2)
+
+        logger.info(f"Results saved to {output_dir}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Adaptive scheduling experiment"
+    )
+    parser.add_argument("--distance", type=int, default=3)
+    parser.add_argument("--shots", type=int, default=50000)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--output", type=str,
+                        default="experiments/results/adaptive_scheduling")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    config = SchedulingExperimentConfig(
+        code_distance=args.distance,
+        shots_per_schedule=args.shots,
+        seed=args.seed,
+        output_dir=args.output,
+    )
+
+    experiment = AdaptiveSchedulingExperiment(config)
+    results = experiment.run()
+
+    # Print summary table
+    print(f"\n{'='*70}")
+    print(f"{'Bias eta':>8}  {'Schedule':>12}  {'LER':>10}  {'95% CI':>24}")
+    print(f"{'='*70}")
+    for r in results:
+        print(
+            f"{r.bias_eta:>8.2f}  {r.schedule_type:>12}  "
+            f"{r.ler:>10.6f}  [{r.ci_lower:.6f}, {r.ci_upper:.6f}]"
+        )
+    print(f"{'='*70}")
+
+
+
+if __name__ == "__main__":
+    main()

@@ -31,3 +31,37 @@ noise:
   gate:
     single_qubit: 0.001           # single-qubit gate error rate
     two_qubit: 0.01               # two-qubit gate error rate
+    model: depolarizing           # depolarizing | pauli | custom
+  correlated:
+    enabled: false
+    spatial_range: 1              # nearest-neighbor range
+    strength: 0.001               # correlation strength
+  leakage:
+    enabled: false
+    rate: 0.001                   # leakage probability per gate
+    seepage: 0.01                 # seepage back probability
+  drift:
+    enabled: true
+    model: linear                 # linear | sinusoidal | random_walk
+    rate: 0.0001                  # drift rate per second
+    monitoring_window: 100        # number of experiments to track
+
+decoder:
+  baseline: mwpm                  # mwpm (PyMatching)
+  ml:
+    enabled: false
+    model: cnn                    # cnn | gnn | transformer
+    checkpoint: null              # path to model weights
+    batch_size: 256
+  adaptive:
+    enabled: false
+    noise_estimation: true
+    routing: false
+    uncertainty: false
+
+runtime:
+  cpu:
+    threads: 4
+    affinity: false
+  gpu:
+    enabled: false

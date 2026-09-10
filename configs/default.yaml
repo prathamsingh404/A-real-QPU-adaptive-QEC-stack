@@ -1,0 +1,33 @@
+# ============================================================================
+# AdaptiveQEC — Default Configuration
+# ============================================================================
+# This is the master configuration template. Copy and customize per experiment.
+#
+# Environment variable overrides:
+#   AQEC_HARDWARE__PROVIDER=ibm
+#   AQEC_HARDWARE__BACKEND=ibm_brisbane
+#   AQEC_QEC__DISTANCE=5
+# ============================================================================
+
+hardware:
+  provider: ibm                    # ibm | iqm | quantinuum | simulator
+  backend: ibm_brisbane            # specific backend name
+  qubits: 127                     # total qubits on device
+  topology: heavy_hex             # heavy_hex | square | other
+  api_token_env: IBM_QUANTUM_TOKEN  # env var holding the API token
+
+qec:
+  code: surface                   # repetition | surface | color | qldpc
+  distance: 3                     # code distance: 3, 5, 7, ...
+  rounds: 3                      # QEC rounds: 1, 3, 5, 10, ...
+  logical_basis: Z                # Z | X
+  boundary: planar               # planar | toric
+
+noise:
+  readout:
+    enabled: true
+    p0_given_1: 0.01              # P(measure 0 | state 1)
+    p1_given_0: 0.005             # P(measure 1 | state 0)
+  gate:
+    single_qubit: 0.001           # single-qubit gate error rate
+    two_qubit: 0.01               # two-qubit gate error rate

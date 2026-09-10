@@ -179,3 +179,94 @@ class EWMADriftDetector:
             details={
                 "max_z_score": max_z,
                 "mean_z_score": mean_z,
+                "num_warning": len(warning_dets),
+                "num_alarm": len(alarm_dets),
+                "num_severe": len(severe_dets),
+                "sample_count": self._sample_count,
+            },
+        )
+
+        if status != DriftStatus.STABLE:
+            logger.warning(
+                f"Drift {status.value}: magnitude={max_z:.2f}, "
+                f"affected_detectors={len(alarm_dets)}"
+            )
+
+        return report
+
+
+class CUSUMDriftDetector:
+    """
+    Cumulative Sum (CUSUM) drift detector.
+
+    More sensitive to sudden shifts than EWMA. Tracks cumulative
+    deviations from the baseline mean.
+    """
+
+    def __init__(
+        self,
+        threshold: float = 5.0,
+        drift_allowance: float = 0.5,
+        warmup_samples: int = 20,
+    ) -> None:
+        """
+        Args:
+            threshold: CUSUM decision threshold (h).
+            drift_allowance: minimum shift to detect (k), in units of std.
+            warmup_samples: samples for baseline estimation.
+        """
+        self._threshold = threshold
+        self._allowance = drift_allowance
+        self._warmup = warmup_samples
+
+        # State
+        self._s_plus: Optional[np.ndarray] = None   # upper CUSUM
+        self._s_minus: Optional[np.ndarray] = None   # lower CUSUM
+        self._baseline_mean: Optional[np.ndarray] = None
+        self._baseline_std: Optional[np.ndarray] = None
+        self._sample_count = 0
+        self._history: list[np.ndarray] = []
+
+    def update(self, detection_rates: np.ndarray) -> DriftReport:
+        """
+        Update CUSUM detector with new detection rates.
+
+        Args:
+            detection_rates: P(D_i = 1) for each detector.
+
+        Returns:
+            DriftReport.
+        """
+        self._sample_count += 1
+        self._history.append(detection_rates.copy())
+
+        num_detectors = len(detection_rates)
+
+        if self._baseline_mean is None or self._baseline_mean.shape != detection_rates.shape:
+            self._baseline_mean = detection_rates.copy()
+            self._sample_count = 1
+            self._history = [detection_rates.copy()]
+            self._s_plus = None
+            self._s_minus = None
+            self._baseline_std = None
+            return DriftReport(
+                status=DriftStatus.STABLE,
+                magnitude=0.0,
+                details={"message": f"CUSUM warmup: 1/{self._warmup}"},
+            )
+
+        if self._sample_count <= self._warmup:
+            delta = detection_rates - self._baseline_mean
+            self._baseline_mean += delta / self._sample_count
+
+            if self._sample_count == self._warmup:
+                # Compute baseline standard deviation
+                history_arr = np.array(self._history)
+                self._baseline_std = history_arr.std(axis=0)
+                self._baseline_std[self._baseline_std < 1e-8] = 1e-8
+                self._s_plus = np.zeros(num_detectors)
+                self._s_minus = np.zeros(num_detectors)
+
+            return DriftReport(
+                status=DriftStatus.STABLE,
+                magnitude=0.0,

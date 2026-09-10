@@ -68,3 +68,63 @@ class HardwareDigitalTwin:
         }
         self._topology: list[tuple[int, int]] = []
         self._update_count = 0
+
+    def update_from_calibration(self, calibration: CalibrationSnapshot) -> None:
+        """
+        Update the digital twin from a calibration snapshot.
+
+        Stores the new values and appends to temporal history.
+        """
+        timestamp = calibration.timestamp
+
+        for qc in calibration.qubit_calibrations:
+            idx = qc.qubit_index
+            if idx not in self._qubits:
+                self._qubits[idx] = QubitState(index=idx)
+
+            state = self._qubits[idx]
+            state.last_updated = timestamp
+
+            if qc.t1_us is not None:
+                state.t1_us = qc.t1_us
+                state.t1_history.append((timestamp, qc.t1_us))
+                # Keep last 100 entries
+                if len(state.t1_history) > 100:
+                    state.t1_history = state.t1_history[-100:]
+
+            if qc.t2_us is not None:
+                state.t2_us = qc.t2_us
+                state.t2_history.append((timestamp, qc.t2_us))
+                if len(state.t2_history) > 100:
+                    state.t2_history = state.t2_history[-100:]
+
+            if qc.readout_error is not None:
+                state.readout_error = qc.readout_error
+                state.readout_history.append((timestamp, qc.readout_error))
+                if len(state.readout_history) > 100:
+                    state.readout_history = state.readout_history[-100:]
+
+            if qc.single_qubit_gate_error is not None:
+                state.single_qubit_fidelity = 1.0 - qc.single_qubit_gate_error
+
+        # Update gate fidelities
+        for gc in calibration.gate_calibrations:
+            if len(gc.qubits) == 2 and gc.error is not None:
+                q1, q2 = gc.qubits
+                if q1 in self._qubits:
+                    self._qubits[q1].two_qubit_fidelities[q2] = 1.0 - gc.error
+                if q2 in self._qubits:
+                    self._qubits[q2].two_qubit_fidelities[q1] = 1.0 - gc.error
+
+        self._topology = calibration.coupling_map
+        self._update_count += 1
+
+        logger.info(
+            f"Digital twin updated (update #{self._update_count}): "
+            f"{len(calibration.qubit_calibrations)} qubits, "
+            f"{len(calibration.gate_calibrations)} gates"
+        )
+
+    def predict_logical_failure_rate(
+        self,
+        data_qubits: list[int],

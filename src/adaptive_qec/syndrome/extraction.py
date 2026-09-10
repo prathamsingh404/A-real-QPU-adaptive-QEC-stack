@@ -223,3 +223,79 @@ class SyndromeExtractor:
         """
         Build the detector graph from the circuit's error model.
 
+        Edges represent error mechanisms that flip pairs of detectors.
+        Used for MWPM decoding and noise analysis.
+        """
+        dem = self._circuit.detector_error_model(decompose_errors=True)
+
+        edges = []
+        boundary_edges = []
+
+        for instruction in dem.flattened():
+            if instruction.type == "error":
+                prob = instruction.args_copy()[0]
+                detectors = []
+                has_observable = False
+
+                for target in instruction.targets_copy():
+                    if target.is_relative_detector_id():
+                        detectors.append(target.val)
+                    elif target.is_logical_observable_id():
+                        has_observable = True
+
+                if len(detectors) == 2:
+                    edges.append((detectors[0], detectors[1], prob))
+                elif len(detectors) == 1:
+                    boundary_edges.append((detectors[0], prob))
+                elif len(detectors) == 0 and has_observable:
+                    # Observable-only error — boundary
+                    pass
+
+        # Get detector coordinates
+        coord_dict = self._circuit.get_detector_coordinates()
+        if coord_dict:
+            max_det = max(coord_dict.keys()) + 1
+            max_dim = max(len(c) for c in coord_dict.values())
+            coordinates = np.zeros((max_det, max_dim))
+            for det_id, coord in coord_dict.items():
+                coordinates[det_id, :len(coord)] = coord
+        else:
+            coordinates = None
+
+        logger.info(
+            f"Built detector graph: {self._num_detectors} detectors, "
+            f"{len(edges)} edges, {len(boundary_edges)} boundary edges"
+        )
+        return DetectorGraph(
+            num_detectors=self._num_detectors,
+            num_observables=self._num_observables,
+            edges=edges,
+            boundary_edges=boundary_edges,
+            coordinates=coordinates,
+        )
+
+    def create_detector_record(
+        self,
+        experiment_id: str,
+        detection_events: np.ndarray,
+        observable_flips: np.ndarray,
+        num_rounds: int,
+    ) -> DetectorRecord:
+        """Create a DetectorRecord from extraction results."""
+        coord_dict = self._circuit.get_detector_coordinates()
+        coords = None
+        if coord_dict:
+            max_det = max(coord_dict.keys()) + 1
+            max_dim = max(len(c) for c in coord_dict.values())
+            coords = np.zeros((max_det, max_dim))
+            for det_id, coord in coord_dict.items():
+                coords[det_id, :len(coord)] = coord
+
+        return DetectorRecord(
+            experiment_id=experiment_id,
+            num_rounds=num_rounds,
+            num_detectors=self._num_detectors,
+            syndrome_tensor=detection_events,
+            observable_flips=observable_flips,
+            detector_coordinates=coords,
+        )

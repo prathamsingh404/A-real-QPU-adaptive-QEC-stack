@@ -270,3 +270,94 @@ class CUSUMDriftDetector:
             return DriftReport(
                 status=DriftStatus.STABLE,
                 magnitude=0.0,
+                details={"message": f"CUSUM warmup: {self._sample_count}/{self._warmup}"},
+            )
+
+        # Normalized deviation
+        z = (detection_rates - self._baseline_mean) / self._baseline_std
+
+        # Update CUSUM statistics
+        k = self._allowance
+        self._s_plus = np.maximum(0, self._s_plus + z - k)
+        self._s_minus = np.maximum(0, self._s_minus - z - k)
+
+        # Check for threshold crossings
+        cusum_values = np.maximum(self._s_plus, self._s_minus)
+        max_cusum = float(cusum_values.max())
+
+        alarm_dets = list(np.where(cusum_values > self._threshold)[0])
+
+        if len(alarm_dets) > 0:
+            status = DriftStatus.DRIFT_DETECTED
+            # Reset CUSUM for alarmed detectors
+            self._s_plus[alarm_dets] = 0
+            self._s_minus[alarm_dets] = 0
+        else:
+            status = DriftStatus.STABLE
+
+        return DriftReport(
+            status=status,
+            magnitude=max_cusum,
+            affected_detectors=alarm_dets,
+            detector_drift_values=cusum_values,
+            details={
+                "max_cusum": max_cusum,
+                "num_alarms": len(alarm_dets),
+                "sample_count": self._sample_count,
+            },
+        )
+
+
+class CompositeDriftDetector:
+    """
+    Combines EWMA and CUSUM for robust drift detection.
+
+    EWMA catches gradual drift, CUSUM catches sudden shifts.
+    Reports drift if either detector fires.
+    """
+
+    def __init__(
+        self,
+        ewma_alpha: float = 0.1,
+        cusum_threshold: float = 5.0,
+        warmup_samples: int = 20,
+    ) -> None:
+        self._ewma = EWMADriftDetector(
+            alpha=ewma_alpha,
+            warmup_samples=warmup_samples,
+        )
+        self._cusum = CUSUMDriftDetector(
+            threshold=cusum_threshold,
+            warmup_samples=warmup_samples,
+        )
+
+    def update(self, detection_rates: np.ndarray) -> DriftReport:
+        """
+        Update both detectors and return the more severe report.
+        """
+        ewma_report = self._ewma.update(detection_rates)
+        cusum_report = self._cusum.update(detection_rates)
+
+        # Take the more severe status
+        severity = {
+            DriftStatus.STABLE: 0,
+            DriftStatus.WARNING: 1,
+            DriftStatus.DRIFT_DETECTED: 2,
+            DriftStatus.SEVERE: 3,
+        }
+
+        if severity[ewma_report.status] >= severity[cusum_report.status]:
+            report = ewma_report
+        else:
+            report = cusum_report
+
+        # Merge affected detectors
+        all_affected = list(set(
+            ewma_report.affected_detectors + cusum_report.affected_detectors
+        ))
+        report.affected_detectors = all_affected
+
+        report.details["ewma"] = ewma_report.details
+        report.details["cusum"] = cusum_report.details
+
+        return report

@@ -161,3 +161,73 @@ class ExperimentStore:
 
         logger.info(f"Saved metrics for {metrics.experiment_id}")
 
+    def save_plot(self, experiment_id: str, name: str, fig: Any) -> Path:
+        """Save a matplotlib figure to the plots directory."""
+        plots_dir = self.experiment_path(experiment_id) / "plots"
+        plots_dir.mkdir(parents=True, exist_ok=True)
+        path = plots_dir / f"{name}.png"
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+        logger.info(f"Saved plot: {path}")
+        return path
+
+    def load_experiment(self, experiment_id: str) -> ExperimentRecord:
+        """Load an experiment record from disk."""
+        exp_dir = self.experiment_path(experiment_id)
+        if not exp_dir.exists():
+            raise FileNotFoundError(f"Experiment not found: {experiment_id}")
+
+        with open(exp_dir / "qpu_metadata.json") as f:
+            data = json.load(f)
+
+        record = ExperimentRecord.from_dict(data)
+
+        # Load raw measurements if available
+        raw_path = exp_dir / "raw_results" / "measurement_outcomes.npy"
+        if raw_path.exists():
+            record.measurement_outcomes = np.load(raw_path)
+
+        return record
+
+    def load_detector_data(self, experiment_id: str) -> DetectorRecord:
+        """Load detector data from disk."""
+        detector_dir = self.experiment_path(experiment_id) / "detector_data"
+
+        with open(detector_dir / "detector_metadata.json") as f:
+            meta = json.load(f)
+
+        syndrome = np.load(detector_dir / "syndrome_tensor.npy")
+        obs = np.load(detector_dir / "observable_flips.npy")
+        coords = None
+        coords_path = detector_dir / "detector_coordinates.npy"
+        if coords_path.exists():
+            coords = np.load(coords_path)
+
+        return DetectorRecord(
+            experiment_id=meta["experiment_id"],
+            num_rounds=meta["num_rounds"],
+            num_detectors=meta["num_detectors"],
+            syndrome_tensor=syndrome,
+            observable_flips=obs,
+            detector_coordinates=coords,
+        )
+
+    def load_metrics(self, experiment_id: str) -> dict[str, Any]:
+        """Load experiment metrics from disk."""
+        metrics_path = self.experiment_path(experiment_id) / "metrics.json"
+        with open(metrics_path) as f:
+            return json.load(f)
+
+    def list_experiments(self) -> list[str]:
+        """List all experiment IDs in the store."""
+        experiments = []
+        for path in sorted(self._base.iterdir()):
+            if path.is_dir() and (path / "qpu_metadata.json").exists():
+                experiments.append(path.name)
+        return experiments
+
+    def delete_experiment(self, experiment_id: str) -> None:
+        """Delete an experiment and all its data."""
+        exp_dir = self.experiment_path(experiment_id)
+        if exp_dir.exists():
+            shutil.rmtree(exp_dir)
+            logger.info(f"Deleted experiment: {experiment_id}")

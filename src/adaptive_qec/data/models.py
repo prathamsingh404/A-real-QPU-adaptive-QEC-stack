@@ -90,3 +90,95 @@ class ExperimentRecord:
             software_versions=data["software_versions"],
             compiler_config=data["compiler_config"],
             config_snapshot=data["config_snapshot"],
+            git_commit=data.get("git_commit"),
+            execution_time_s=data.get("execution_time_s"),
+            job_id=data.get("job_id"),
+            metadata=data.get("metadata", {}),
+        )
+
+
+@dataclass
+class DetectorRecord:
+    """Detector extraction results for an experiment."""
+    experiment_id: str
+    num_rounds: int
+    num_detectors: int
+    syndrome_tensor: np.ndarray       # (shots, rounds * detectors) or (shots, R, Nd)
+    observable_flips: np.ndarray      # (shots, num_observables)
+    detector_coordinates: Optional[np.ndarray] = None  # (num_detectors, ndim)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Metadata only — arrays saved separately."""
+        return {
+            "experiment_id": self.experiment_id,
+            "num_rounds": self.num_rounds,
+            "num_detectors": self.num_detectors,
+            "syndrome_shape": list(self.syndrome_tensor.shape),
+            "observable_shape": list(self.observable_flips.shape),
+        }
+
+
+@dataclass
+class DecoderRecord:
+    """Decoder results for an experiment."""
+    experiment_id: str
+    decoder_name: str
+    num_shots: int
+    num_logical_errors: int
+    logical_error_rate: float
+    corrections: np.ndarray            # (shots, num_observables)
+    decode_time_s: float
+    per_shot_latency_us: Optional[np.ndarray] = None  # (shots,)
+    metrics: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "experiment_id": self.experiment_id,
+            "decoder_name": self.decoder_name,
+            "num_shots": self.num_shots,
+            "num_logical_errors": self.num_logical_errors,
+            "logical_error_rate": self.logical_error_rate,
+            "decode_time_s": self.decode_time_s,
+            "metrics": self.metrics,
+        }
+
+
+@dataclass
+class ExperimentMetrics:
+    """Aggregated metrics for an experiment."""
+    experiment_id: str
+    logical_error_rate: float
+    logical_error_rate_ci_low: float
+    logical_error_rate_ci_high: float
+    confidence_level: float
+    physical_error_rate: Optional[float] = None
+    lambda_ratio: Optional[float] = None   # logical / physical
+    per_round_error_rate: Optional[float] = None
+    decoder_latency_mean_us: Optional[float] = None
+    decoder_latency_p99_us: Optional[float] = None
+    decoder_throughput: Optional[float] = None  # syndromes / second
+    total_pipeline_time_s: Optional[float] = None
+    noise_statistics: dict[str, Any] = field(default_factory=dict)
+    drift_report: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "experiment_id": self.experiment_id,
+            "logical_error_rate": self.logical_error_rate,
+            "logical_error_rate_ci": [
+                self.logical_error_rate_ci_low,
+                self.logical_error_rate_ci_high,
+            ],
+            "confidence_level": self.confidence_level,
+            "physical_error_rate": self.physical_error_rate,
+            "lambda_ratio": self.lambda_ratio,
+            "per_round_error_rate": self.per_round_error_rate,
+            "decoder_latency_mean_us": self.decoder_latency_mean_us,
+            "decoder_latency_p99_us": self.decoder_latency_p99_us,
+            "decoder_throughput": self.decoder_throughput,
+            "total_pipeline_time_s": self.total_pipeline_time_s,
+            "noise_statistics": self.noise_statistics,
+            "drift_report": self.drift_report,
+        }

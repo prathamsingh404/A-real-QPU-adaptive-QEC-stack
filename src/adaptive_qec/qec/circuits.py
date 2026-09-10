@@ -146,3 +146,67 @@ class CircuitGenerator:
 
             elif name == "M" or name == "MR":
                 for target in instruction.targets_copy():
+                    qc.measure(target.value, meas_idx)
+                    meas_idx += 1
+                    if name == "MR":
+                        qc.reset(target.value)
+
+            elif name == "MX":
+                for target in instruction.targets_copy():
+                    qc.h(target.value)
+                    qc.measure(target.value, meas_idx)
+                    meas_idx += 1
+                    qc.h(target.value)
+
+            elif name == "MY":
+                for target in instruction.targets_copy():
+                    qc.sdg(target.value)
+                    qc.h(target.value)
+                    qc.measure(target.value, meas_idx)
+                    meas_idx += 1
+                    qc.h(target.value)
+                    qc.s(target.value)
+
+            elif name == "TICK":
+                qc.barrier()
+
+            elif name in (
+                "DETECTOR", "OBSERVABLE_INCLUDE", "QUBIT_COORDS",
+                "SHIFT_COORDS", "REPEAT",
+                "DEPOLARIZE1", "DEPOLARIZE2", "X_ERROR", "Y_ERROR",
+                "Z_ERROR", "PAULI_CHANNEL_1", "PAULI_CHANNEL_2",
+                "E", "ELSE_CORRELATED_ERROR",
+            ):
+                # Annotations and noise instructions — skip in Qiskit circuit
+                pass
+
+            else:
+                logger.warning(f"Unhandled Stim instruction: {name}")
+
+        logger.info(
+            f"Converted Stim→Qiskit: {num_qubits} qubits, "
+            f"{meas_idx} measurements, depth={qc.depth()}"
+        )
+        return qc
+
+    def get_measurement_mapping(self, stim_circuit: stim.Circuit) -> dict[str, Any]:
+        """
+        Build the mapping from Stim measurement indices to
+        detector/observable definitions.
+
+        This is critical for reconstructing detection events from
+        raw QPU measurement outcomes.
+        """
+        mapping: dict[str, Any] = {
+            "num_measurements": stim_circuit.num_measurements,
+            "num_detectors": stim_circuit.num_detectors,
+            "num_observables": stim_circuit.num_observables,
+            "detector_coords": {},
+        }
+
+        # Extract detector coordinates
+        coord_dict = stim_circuit.get_detector_coordinates()
+        for det_id, coords in coord_dict.items():
+            mapping["detector_coords"][int(det_id)] = coords.tolist()
+
+        return mapping

@@ -106,3 +106,111 @@ class HypothesisTest(str, Enum):
 
 
 # ---------------------------------------------------------------------------
+# Configuration sub-models
+# ---------------------------------------------------------------------------
+
+class HardwareConfig(BaseModel):
+    """QPU hardware configuration."""
+    provider: HardwareProvider = HardwareProvider.IBM
+    backend: str = "ibm_brisbane"
+    qubits: int = Field(default=127, ge=1)
+    topology: str = "heavy_hex"
+    api_token_env: str = "IBM_QUANTUM_TOKEN"
+
+    @property
+    def api_token(self) -> Optional[str]:
+        """Retrieve API token from environment variable."""
+        return os.environ.get(self.api_token_env)
+
+
+class ReadoutNoiseConfig(BaseModel):
+    """Readout noise parameters."""
+    enabled: bool = True
+    p0_given_1: float = Field(default=0.01, ge=0.0, le=1.0)
+    p1_given_0: float = Field(default=0.005, ge=0.0, le=1.0)
+
+
+class GateNoiseConfig(BaseModel):
+    """Gate noise parameters."""
+    single_qubit: float = Field(default=0.001, ge=0.0, le=1.0)
+    two_qubit: float = Field(default=0.01, ge=0.0, le=1.0)
+    model: NoiseModel = NoiseModel.DEPOLARIZING
+
+
+class CorrelatedNoiseConfig(BaseModel):
+    """Correlated noise parameters."""
+    enabled: bool = False
+    spatial_range: int = Field(default=1, ge=0)
+    strength: float = Field(default=0.001, ge=0.0, le=1.0)
+
+
+class LeakageConfig(BaseModel):
+    """Leakage noise parameters."""
+    enabled: bool = False
+    rate: float = Field(default=0.001, ge=0.0, le=1.0)
+    seepage: float = Field(default=0.01, ge=0.0, le=1.0)
+
+
+class DriftConfig(BaseModel):
+    """Noise drift parameters."""
+    enabled: bool = True
+    model: DriftModel = DriftModel.LINEAR
+    rate: float = Field(default=0.0001, ge=0.0)
+    monitoring_window: int = Field(default=100, ge=1)
+
+
+class NoiseConfig(BaseModel):
+    """Complete noise configuration."""
+    readout: ReadoutNoiseConfig = Field(default_factory=ReadoutNoiseConfig)
+    gate: GateNoiseConfig = Field(default_factory=GateNoiseConfig)
+    correlated: CorrelatedNoiseConfig = Field(default_factory=CorrelatedNoiseConfig)
+    leakage: LeakageConfig = Field(default_factory=LeakageConfig)
+    drift: DriftConfig = Field(default_factory=DriftConfig)
+
+
+class QECConfig(BaseModel):
+    """QEC experiment configuration."""
+    code: QECCode = QECCode.SURFACE
+    distance: int = Field(default=3, ge=1)
+    rounds: int = Field(default=3, ge=1)
+    logical_basis: LogicalBasis = LogicalBasis.Z
+    boundary: Boundary = Boundary.PLANAR
+
+    @field_validator("distance")
+    @classmethod
+    def distance_must_be_odd(cls, v: int) -> int:
+        if v % 2 == 0:
+            raise ValueError(f"Code distance must be odd, got {v}")
+        return v
+
+
+class MLDecoderConfig(BaseModel):
+    """ML decoder configuration."""
+    enabled: bool = False
+    model: MLModel = MLModel.CNN
+    checkpoint: Optional[str] = None
+    batch_size: int = Field(default=256, ge=1)
+
+
+class AdaptiveDecoderConfig(BaseModel):
+    """Adaptive decoder configuration."""
+    enabled: bool = False
+    noise_estimation: bool = True
+    routing: bool = False
+    uncertainty: bool = False
+
+
+class DecoderConfig(BaseModel):
+    """Complete decoder configuration."""
+    baseline: DecoderType = DecoderType.MWPM
+    ml: MLDecoderConfig = Field(default_factory=MLDecoderConfig)
+    adaptive: AdaptiveDecoderConfig = Field(default_factory=AdaptiveDecoderConfig)
+
+
+class CPUConfig(BaseModel):
+    """CPU runtime configuration."""
+    threads: int = Field(default=4, ge=1)
+    affinity: bool = False
+
+
+class GPUConfig(BaseModel):

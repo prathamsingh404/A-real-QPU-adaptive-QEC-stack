@@ -508,3 +508,30 @@ async def get_profiling_latency() -> dict[str, Any]:
         "return_us": 0.20,
     }
     actual_total_us = sum(stages.values())
+    slack_us = deadline_us - actual_total_us
+    status = "SAFE" if actual_total_us < deadline_us * 0.8 else ("WARNING" if actual_total_us <= deadline_us else "MISSED")
+
+    return {
+        "deadline_us": deadline_us,
+        "actual_total_us": round(actual_total_us, 2),
+        "slack_us": round(slack_us, 2),
+        "status": status,
+        "percentiles": {
+            "p50_us": 3.85,
+            "p90_us": 4.45,
+            "p99_us": 6.82,
+            "p999_us": 9.15,
+        },
+        "stages": stages,
+        "missed_budget_probability": 0.0004,
+    }
+
+
+# ---- Experiment Store endpoints ----
+
+@app.get("/api/experiments")
+async def list_experiments(base_path: str = "experiments") -> dict[str, Any]:
+    """List stored experiments."""
+    store = ExperimentStore(base_path)
+    experiments = store.list_experiments()
+    return {"experiments": experiments, "count": len(experiments)}

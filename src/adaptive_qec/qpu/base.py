@@ -144,3 +144,66 @@ class QPUBackend(ABC):
     """
     Abstract QPU backend interface.
 
+    All research code interacts with the QPU through this interface.
+    Swap providers without rewriting experiment code.
+    """
+
+    @abstractmethod
+    def connect(self) -> None:
+        """Establish connection to the backend."""
+        ...
+
+    @abstractmethod
+    def run(
+        self,
+        circuit: Any,
+        shots: int,
+        qubit_mapping: Optional[dict[int, int]] = None,
+    ) -> ExperimentResult:
+        """
+        Execute a circuit on the QPU.
+
+        Args:
+            circuit: Quantum circuit to execute.
+            shots: Number of measurement shots.
+            qubit_mapping: Logical → physical qubit mapping.
+
+        Returns:
+            ExperimentResult with raw measurement outcomes.
+        """
+        ...
+
+    @abstractmethod
+    def get_calibration(self) -> CalibrationSnapshot:
+        """
+        Capture current calibration snapshot.
+
+        Returns T1, T2, readout errors, gate errors, coupling map —
+        everything the provider exposes.
+        """
+        ...
+
+    @abstractmethod
+    def get_topology(self) -> TopologyInfo:
+        """Get qubit connectivity information."""
+        ...
+
+    @abstractmethod
+    def get_backend_info(self) -> BackendInfo:
+        """Get static backend information."""
+        ...
+
+    @abstractmethod
+    def is_available(self) -> bool:
+        """Check if the backend is currently available."""
+        ...
+
+    def get_results(self, job_id: str) -> ExperimentResult:
+        """
+        Retrieve results from a previously submitted job.
+
+        Not all backends support async job retrieval. Default raises.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support async job retrieval"
+        )

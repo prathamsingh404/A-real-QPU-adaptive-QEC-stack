@@ -63,3 +63,68 @@ class NoiseInjector:
                     )
             elif instruction.name in ("CX", "CNOT", "CZ", "SWAP"):
                 targets = instruction.targets_copy()
+                qubit_pairs = [(targets[i].value, targets[i + 1].value)
+                               for i in range(0, len(targets), 2)]
+                if p_x + p_y + p_z > 0:
+                    for q1, q2 in qubit_pairs:
+                        noisy.append("DEPOLARIZE2", [q1, q2], [p_x + p_y + p_z])
+
+        return noisy
+
+    def inject_readout_noise(
+        self,
+        circuit: stim.Circuit,
+        p0_given_1: Optional[float] = None,
+        p1_given_0: Optional[float] = None,
+    ) -> stim.Circuit:
+        """
+        Inject readout noise before measurements.
+
+        p0_given_1: probability of reading 0 when state is 1
+        p1_given_0: probability of reading 1 when state is 0
+        """
+        p01 = p0_given_1 if p0_given_1 is not None else self._config.readout.p0_given_1
+        p10 = p1_given_0 if p1_given_0 is not None else self._config.readout.p1_given_0
+
+        # Symmetric readout noise as X_ERROR before measurement
+        p_flip = (p01 + p10) / 2
+
+        noisy = stim.Circuit()
+        for instruction in circuit.flattened():
+            if instruction.name in ("M", "MR", "MX", "MY") and p_flip > 0:
+                targets = instruction.targets_copy()
+                qubit_targets = [t.value for t in targets]
+                noisy.append("X_ERROR", qubit_targets, [p_flip])
+            noisy.append(instruction)
+
+        return noisy
+
+    def inject_correlated_noise(
+        self,
+        circuit: stim.Circuit,
+        correlation_pairs: list[tuple[int, int]],
+        strength: Optional[float] = None,
+    ) -> stim.Circuit:
+        """
+        Inject correlated two-qubit noise on specified pairs.
+
+        This models spatial correlations between neighboring qubits.
+        """
+        p = strength if strength is not None else self._config.correlated.strength
+
+        noisy = stim.Circuit()
+        for instruction in circuit.flattened():
+            noisy.append(instruction)
+
+            if instruction.name == "TICK" and p > 0:
+                for q1, q2 in correlation_pairs:
+                    noisy.append("DEPOLARIZE2", [q1, q2], [p])
+
+        return noisy
+
+    def inject_drift(
+        self,
+        circuit: stim.Circuit,
+        base_error: float,
+        drift_rate: float,
+        time_step: float = 1.0,

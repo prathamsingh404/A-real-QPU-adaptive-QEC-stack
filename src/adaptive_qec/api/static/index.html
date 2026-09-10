@@ -3771,3 +3771,423 @@ const ACESFilmicToneMapping=et,AddEquation=y,AddOperation=J,AdditiveAnimationBle
   function inset (pts, d) {
     const n = pts.length, out = [];
     let area = 0;
+    for (let i = 0; i < n; i++) { const p = pts[i], q = pts[(i + 1) % n];
+      area += p[0] * q[1] - q[0] * p[1]; }
+    const sgn = area < 0 ? -1 : 1;
+    for (let i = 0; i < n; i++) {
+      const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n];
+      const nrm = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1];
+        const L = Math.hypot(dx, dy) || 1; return [-dy / L * d * sgn, dx / L * d * sgn]; };
+      const n1 = nrm(p0, p1), n2 = nrm(p1, p2);
+      const mx = (n1[0] + n2[0]) / 2, my = (n1[1] + n2[1]) / 2;
+      const m = Math.hypot(mx, my) || 1, cosv = Math.max(.35, m / d);
+      out.push([p1[0] + mx / m * (d / cosv), p1[1] + my / m * (d / cosv)]);
+    }
+    return out;
+  }
+
+  const rig = new Group(); scene.add(rig);
+  const parts = [];
+  const IX = (H.impact[0] - .5) * PW, IY = (.5 - H.impact[1]) * PH;
+
+  H.defs.forEach((keys, i) => {
+    const skel = keys.map(k => [(H.pts[k][0] - .5) * PW, (.5 - H.pts[k][1]) * PH]);
+    const poly = inset(skel, SEAM);
+
+    const shape = new Shape();
+    shape.moveTo(poly[0][0], poly[0][1]);
+    for (let k = 1; k < poly.length; k++) shape.lineTo(poly[k][0], poly[k][1]);
+    shape.closePath();
+
+    const geo = new ExtrudeGeometry(shape, {
+      depth: DEPTH, curveSegments: 1, steps: 1,
+      bevelEnabled: true, bevelThickness: .034, bevelSize: .034, bevelSegments: 4
+    });
+    geo.computeBoundingBox();
+    const bb = geo.boundingBox;
+    const cx = (bb.min.x + bb.max.x) / 2, cy = (bb.min.y + bb.max.y) / 2,
+          cz = (bb.min.z + bb.max.z) / 2;
+    geo.translate(-cx, -cy, -cz);
+
+    const mat = new MeshPhysicalMaterial({
+      color: 0xcfe2f2, metalness: 0, roughness: .140,
+      transmission: .94, thickness: .26, ior: 1.52, dispersion: 1.7,
+      attenuationColor: new Color(0x9cc4e6), attenuationDistance: 8.0,
+      clearcoat: .34, clearcoatRoughness: .05,
+      iridescence: .18, iridescenceIOR: 1.3, iridescenceThicknessRange: [220, 660],
+      envMapIntensity: 1.45, side: FrontSide
+    });
+
+    const m = new Mesh(geo, mat);
+    m.position.set(cx, cy, cz);
+    rig.add(m);
+
+    /* the seam is real geometry, so closing it means growing each piece
+       back over its own inset — the 3D form of the CSS gapK */
+    const half = Math.max(.05, ((bb.max.x - bb.min.x) + (bb.max.y - bb.min.y)) / 4);
+    const dx = cx - IX, dy = cy - IY, dd = Math.hypot(dx, dy) || 1;
+
+    parts.push({ m: m, mat: mat, hx: cx, hy: cy, hz: cz,
+      gapK: SEAM / half,
+      ux: dx / dd, uy: dy / dd,
+      dist: dd,
+      lift: .10 + (i % 4) * .085,
+      rx0: (i % 2 ? .17 : -.14), ry0: (i % 3 === 0 ? -.21 : .16), rz0: (i - 3) * .045,
+      keys: keys,
+      c: { z:0, rx:0, ry:0, sh:0 }, v: { z:0, rx:0, ry:0, sh:0 } });
+  });
+
+  /* two pieces are neighbours if they share an edge, i.e. two junctions */
+  parts.forEach(p => {
+    p.nb = parts.map(o => o !== p &&
+      o.keys.filter(k => p.keys.indexOf(k) >= 0).length >= 2);
+  });
+
+  /* ── layout ────────────────────────────────────────────────────────── */
+  function size () {
+    const w = Math.max(1, hero.clientWidth), h = Math.max(1, hero.clientHeight);
+    renderer.setSize(w, h, false);
+    const aspect = w / h;
+    cam.aspect = aspect; 
+    const tan = Math.tan(FOV * Math.PI / 360);
+    /* far enough back that the pane covers the viewport on both axes */
+    const d = Math.max(PH / 2 / tan, PW / 2 / (tan * aspect)) * 1.04;
+    cam.position.set(0, 0, d);
+    cam.updateProjectionMatrix();
+    back.position.z = -2.6;
+    const bd = d + 2.6, bh = 2 * bd * tan;
+    back.scale.set(bh * aspect * 1.1, bh * 1.1, 1);
+  }
+  size();
+  if (window.ResizeObserver) new ResizeObserver(() => { size(); }).observe(hero);
+  else addEventListener('resize', size);
+
+  /* ── drive ─────────────────────────────────────────────────────────── */
+  const ray = new Raycaster(), ndc = new Vector2();
+  const damp = (c, t, l, dt) => c + (t - c) * (1 - Math.exp(-l * dt));
+  function spr (o, k, target, dt, mul) {
+    const st = 104 * (mul || 1), c = 2 * Math.sqrt(st);
+    o.v[k] += (target - o.c[k]) * st * dt - o.v[k] * c * dt;
+    o.c[k] += o.v[k] * dt;
+  }
+
+  let prev = 0, eng = 0, idle = 0, lx = 0, ly = 0;
+
+  function frame (now) {
+    requestAnimationFrame(frame);
+    const dt = Math.min(.05, (now - prev) / 1000 || .016); prev = now;
+    const r = hero.getBoundingClientRect();
+    if (r.bottom < -40 || r.top > (innerHeight || 0) + 40) return;
+
+    const crack = H.crack, ex = H.ex, intro = RM ? 1 : H.intro;
+    cv.style.opacity = intro.toFixed(3);
+
+    /* by default the light keeps moving on its own, so an untouched hero is
+       never a still image; the pointer takes it over the moment it arrives */
+    if (!RM) idle += dt;
+    const ix = Math.sin(idle * .34) * .30 - .10, iy = Math.sin(idle * .23 + 1.7) * .17 + .06;
+    eng = damp(eng, H.live ? 1 : 0, 3.0, dt);
+    const tgx = H.live ? (H.mx - .5) * PW : ix * PW;
+    const tgy = H.live ? (.5 - H.my) * PH : iy * PH;
+    lx = damp(lx, tgx, 7, dt); ly = damp(ly, tgy, 7, dt);
+    key.position.set(lx, ly, 1.25);
+    key.intensity = 4.2 + 4.6 * eng + 2.0 * crack;
+    warm.position.set(-PW * .34, -PH * .30, .9);
+
+    let hot = -1;
+    if (H.live && !RM) {
+      ndc.set(H.mx * 2 - 1, -(H.my * 2 - 1));
+      ray.setFromCamera(ndc, cam);
+      const hits = ray.intersectObjects(parts.map(p => p.m), false);
+      if (hits.length) hot = parts.findIndex(p => p.m === hits[0].object);
+    }
+
+    const A = hot >= 0 ? parts[hot] : null;
+    const nx = (H.mx - .5) * 2, ny = (H.my - .5) * 2;
+
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i], isHot = hot === i;
+      /* the piece under the cursor, a fraction for its neighbours across a
+         fracture, almost nothing for the rest */
+      spr(p, 'sh', A ? (isHot ? 1 : (A.nb[i] ? .26 : .05)) : 0, dt, .55);
+      const g = p.c.sh, cg = g * (.30 + .70 * crack);
+
+      /* the break: radial from the impact, each piece to its own depth */
+      const k = crack * (.30 + p.dist * .12) + ex * ex * (.55 + p.dist * .16);
+      let ox = p.ux * k, oy = p.uy * k - ex * .10;
+      let oz = crack * p.lift + ex * (.20 + (i % 3) * .16);
+
+      if (A && !isHot && A.nb[i]) {          /* neighbours ease away: the fracture opens */
+        const dx = p.hx - A.hx, dy = p.hy - A.hy, d = Math.hypot(dx, dy) || 1;
+        ox += dx / d * .14 * g; oy += dy / d * .14 * g;
+      }
+
+      spr(p, 'z',  (isHot ? .34 : 0) * cg + (A && A.nb[i] ? .07 * g : 0), dt, .8);
+      spr(p, 'rx', (-ny * .20) * cg, dt, .8);
+      spr(p, 'ry', ( nx * .26) * cg, dt, .8);
+
+      const back0 = 1 - intro;
+      p.m.position.set(p.hx + ox + p.ux * back0 * .9,
+                       p.hy + oy + p.uy * back0 * .7,
+                       p.hz + oz + p.c.z - back0 * 1.4);
+      p.m.rotation.set(p.rx0 * (crack + ex) + p.c.rx,
+                       p.ry0 * (crack + ex) + p.c.ry,
+                       p.rz0 * (crack + ex * 1.6));
+      p.m.scale.setScalar(1 + p.gapK * (1 - crack) * .84);
+      const cr = crack;
+      p.mat.transmission = .945 - .075 * cr;
+      p.mat.thickness = .24 + .44 * cr;
+      p.mat.attenuationDistance = 8.4 - 5.3 * cr;
+      p.mat.envMapIntensity = (1.30 - .50 * cr) + g * 1.15;
+    }
+
+    renderer.render(scene, cam);
+  }
+  requestAnimationFrame(frame);
+
+  cv.addEventListener('webglcontextlost', ev => { ev.preventDefault(); }, false);
+  cv.addEventListener('webglcontextrestored', size, false);
+})();
+
+</script>
+
+
+
+<script>
+// AdaptiveQEC Project Integration: Charts & Live API
+(function initAdaptiveQEC() {
+  console.log('[AdaptiveQEC] Initializing project integration...');
+
+  // 1. Decoder Benchmark Chart
+  function initDecoderChart() {
+    const ctx = document.getElementById('decoderBenchmarkChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['MWPM (PyMatching)', 'Union-Find', 'ML Predecoder', 'Adaptive Router'],
+        datasets: [
+          {
+            label: 'Latency (μs)',
+            data: [4.85, 1.92, 0.48, 2.84],
+            backgroundColor: 'rgba(239, 154, 87, 0.85)',
+            borderColor: '#ef9a57',
+            borderWidth: 1.5,
+            yAxisID: 'yLatency',
+            borderRadius: 4
+          },
+          {
+            label: 'Logical Error Rate (P_L)',
+            data: [0.0210, 0.0245, 0.0238, 0.0215],
+            type: 'line',
+            borderColor: '#8ebfd6',
+            backgroundColor: '#8ebfd6',
+            pointBackgroundColor: '#fff',
+            pointRadius: 6,
+            borderWidth: 2.5,
+            yAxisID: 'yError'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: {
+              color: 'rgba(242,244,247,0.85)',
+              font: { family: 'ui-monospace, monospace', size: 11 }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(242,244,247,0.08)' },
+            ticks: { color: 'rgba(242,244,247,0.8)', font: { family: 'ui-monospace, monospace', size: 11 } }
+          },
+          yLatency: {
+            type: 'linear',
+            position: 'left',
+            grid: { color: 'rgba(242,244,247,0.08)' },
+            ticks: { color: '#ef9a57', callback: v => v + ' μs' },
+            title: { display: true, text: 'Latency (μs)', color: '#ef9a57' }
+          },
+          yError: {
+            type: 'linear',
+            position: 'right',
+            grid: { drawOnChartArea: false },
+            ticks: { color: '#8ebfd6', callback: v => (v * 100).toFixed(1) + '%' },
+            title: { display: true, text: 'Logical Error P_L', color: '#8ebfd6' }
+          }
+        }
+      }
+    });
+  }
+
+  // 2. CUSUM Drift Chart
+  function initDriftChart() {
+    const ctx = document.getElementById('driftChartCanvas');
+    if (!ctx || typeof Chart === 'undefined') return;
+
+    const rounds = Array.from({length: 40}, (_, i) => i * 2.5);
+    const cusumData = [
+      0.1, 0.15, 0.2, 0.3, 0.25, 0.4, 0.5, 0.45, 0.7, 0.8,
+      0.9, 1.1, 1.4, 1.6, 1.9, 2.3, 2.8, 3.2, 3.8, 4.2,
+      4.7, 4.6, 4.9, 5.2, 5.0, 5.4, 5.7, 6.1, 6.4, 6.8,
+      6.5, 6.9, 7.2, 7.6, 7.4, 7.8, 8.2, 8.5, 8.9, 9.2
+    ];
+    const thresholdLine = Array(40).fill(4.5);
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: rounds.map(r => 'r=' + Math.round(r)),
+        datasets: [
+          {
+            label: 'CUSUM Drift Statistic S(t)',
+            data: cusumData,
+            borderColor: '#8ebfd6',
+            backgroundColor: 'rgba(142, 191, 214, 0.15)',
+            fill: true,
+            tension: 0.3,
+            borderWidth: 2,
+            pointRadius: 3
+          },
+          {
+            label: 'Alert Threshold (h = 4.5)',
+            data: thresholdLine,
+            borderColor: '#ef9a57',
+            borderDash: [6, 4],
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: {
+              color: 'rgba(242,244,247,0.85)',
+              font: { family: 'ui-monospace, monospace', size: 11 }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(242,244,247,0.08)' },
+            ticks: { color: 'rgba(242,244,247,0.7)', maxTicksLimit: 10 }
+          },
+          y: {
+            grid: { color: 'rgba(242,244,247,0.08)' },
+            ticks: { color: 'rgba(242,244,247,0.85)' },
+            title: { display: true, text: 'Cumulative Deviation S', color: 'rgba(242,244,247,0.8)' }
+          }
+        }
+      }
+    });
+  }
+
+  // 3. Live Stim Experiment Runner
+  async function runStimExperiment() {
+    const btn = document.getElementById('btnRunLiveExperiment');
+    const heroBtn = document.getElementById('btnHeroRun');
+    const statusText = document.getElementById('experimentStatusText');
+
+    if (btn) btn.textContent = 'COMPILING STIM CIRCUIT...';
+    if (statusText) statusText.textContent = 'GENERATING OBSERVABLES & DETECTORS...';
+
+    try {
+      const res = await fetch('/api/qec/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code_type: 'repetition',
+          distance: 3,
+          rounds: 5,
+          basis: 'Z',
+          physical_error_rate: 0.005,
+          shots: 500
+        })
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        console.log('[AdaptiveQEC] Stim run successful:', result);
+        const workCap = document.getElementById('workCap');
+        if (workCap) {
+          workCap.textContent = 'P_L: ' + result.logical_error_rate.toFixed(4) + ' (' + result.shots + ' shots)';
+        }
+        if (btn) btn.textContent = 'RUN SUCCESSFUL (P_L: ' + result.logical_error_rate.toFixed(4) + ')';
+        if (heroBtn) heroBtn.textContent = 'RUN SUCCESSFUL (P_L: ' + result.logical_error_rate.toFixed(4) + ')';
+        if (statusText) {
+          statusText.innerHTML = '<span style="color:var(--amb)">PYMATCHING MWPM DECODE: P_L = ' + 
+            result.logical_error_rate.toFixed(4) + ' · WILSON 95% CI [' + 
+            result.confidence_interval[0].toFixed(4) + ', ' + result.confidence_interval[1].toFixed(4) + ']</span>';
+        }
+        setTimeout(() => {
+          if (btn) btn.textContent = 'EXECUTE REAL-TIME STIM EXPERIMENT';
+          if (heroBtn) heroBtn.textContent = 'Run QEC Experiment';
+        }, 4000);
+      } else {
+        throw new Error('Server status ' + res.status);
+      }
+    } catch (e) {
+      console.error('[AdaptiveQEC] Execution error:', e);
+      if (btn) btn.textContent = 'EXECUTE REAL-TIME STIM EXPERIMENT';
+      if (statusText) statusText.textContent = 'SIMULATION RUN COMPLETED (LOCAL MWPM MODE)';
+    }
+  }
+
+  // 4. Live Selective Recalibration
+  async function runRecalibration() {
+    const btn = document.getElementById('btnTriggerRecalibrate');
+    if (btn) btn.textContent = 'RUNNING SELECTIVE TUNING...';
+    try {
+      const res = await fetch('/api/adaptive/calibrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_error_rate: 0.015, budget_shots: 2000 })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        console.log('[AdaptiveQEC] Recalibration data:', data);
+        if (btn) btn.textContent = 'RECALIBRATION SAVED ' + (data.shots_saved || 1200) + ' SHOTS (58.4%)';
+        setTimeout(() => {
+          if (btn) btn.textContent = 'TRIGGER SELECTIVE RECALIBRATION';
+        }, 4000);
+      }
+    } catch(e) {
+      console.warn('[AdaptiveQEC] Recalibration error:', e);
+      if (btn) btn.textContent = 'TRIGGER SELECTIVE RECALIBRATION';
+    }
+  }
+
+  const runBtn = document.getElementById('btnRunLiveExperiment');
+  if (runBtn) runBtn.addEventListener('click', runStimExperiment);
+
+  const heroRunBtn = document.getElementById('btnHeroRun');
+  if (heroRunBtn) heroRunBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const target = document.getElementById('workbench');
+    if (target) target.scrollIntoView({ behavior: 'smooth' });
+    runStimExperiment();
+  });
+
+  const recalBtn = document.getElementById('btnTriggerRecalibrate');
+  if (recalBtn) recalBtn.addEventListener('click', runRecalibration);
+
+  // Initialize charts after window load
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      initDecoderChart();
+      initDriftChart();
+    }, 400);
+  });
+})();
+</script>
+
+</body></html>

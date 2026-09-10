@@ -225,3 +225,101 @@ class ExperimentManager:
             calibration_snapshot=calibration_dict,
             software_versions=repro_info["software_versions"],
             compiler_config={"optimization_level": 1},
+            config_snapshot=self._config.model_dump(),
+            git_commit=repro_info.get("git_commit"),
+            execution_time_s=qpu_result.execution_time_s,
+            job_id=qpu_result.job_id,
+        )
+
+        self._store.save_experiment(experiment_record)
+        self._store.save_detector_data(detector_record)
+
+        decoder_record = DecoderRecord(
+            experiment_id=experiment_id,
+            decoder_name=decoder.name,
+            num_shots=actual_shots,
+            num_logical_errors=decoder_metrics.num_logical_errors,
+            logical_error_rate=decoder_metrics.logical_error_rate,
+            corrections=np.zeros((actual_shots, 1), dtype=np.uint8),  # placeholder
+            decode_time_s=decoder_metrics.decode_time_s,
+            per_shot_latency_us=decoder_metrics.per_shot_latency_us,
+            metrics=decoder_metrics.to_dict(),
+        )
+        self._store.save_decoder_results(decoder_record)
+        self._store.save_metrics(metrics)
+        profiler.end_stage("saving")
+
+        # ---- Summary ----
+        logger.info(
+            f"\n{'='*60}\n"
+            f"  EXPERIMENT COMPLETE: {experiment_id}\n"
+            f"{'='*60}\n"
+            f"  Code:     {self._config.qec.code.value} d={self._config.qec.distance}\n"
+            f"  Rounds:   {self._config.qec.rounds}\n"
+            f"  Backend:  {self._config.hardware.backend}\n"
+            f"  Shots:    {actual_shots}\n"
+            f"  LER:      {metrics.logical_error_rate:.6f} "
+            f"[{ci_low:.6f}, {ci_high:.6f}] ({self._config.analysis.confidence_level*100:.0f}% CI)\n"
+            f"  Drift:    {drift_report.status.value}\n"
+            f"  Latency:  mean={decoder_metrics.latency_mean_us:.1f}μs, "
+            f"P99={decoder_metrics.latency_p99_us:.1f}μs\n"
+            f"  Pipeline: {pipeline_timing}\n"
+            f"{'='*60}"
+        )
+
+        return metrics
+
+    def run_distance_sweep(
+        self,
+        distances: list[int],
+        shots: Optional[int] = None,
+    ) -> list[ExperimentMetrics]:
+        """
+        Run experiments across multiple code distances.
+
+        For threshold estimation and scaling analysis.
+        """
+        results = []
+        for d in distances:
+            logger.info(f"--- Distance sweep: d={d} ---")
+            # Create modified config
+            import copy
+            sweep_config = copy.deepcopy(self._config)
+            sweep_config.qec.distance = d
+
+            # Temporarily swap config
+            original_config = self._config
+            self._config = sweep_config
+
+            try:
+                metrics = self.run_experiment(shots=shots)
+                results.append(metrics)
+            finally:
+                self._config = original_config
+
+        return results
+
+    def run_temporal_series(
+        self,
+        num_experiments: int,
+        interval_seconds: float = 0,
+        shots: Optional[int] = None,
+    ) -> list[ExperimentMetrics]:
+        """
+        Run a time series of experiments for drift analysis.
+
+        Each experiment captures the hardware state at that point in time.
+        """
+        import time
+        results = []
+
+        for i in range(num_experiments):
+            logger.info(f"--- Temporal series: experiment {i+1}/{num_experiments} ---")
+            metrics = self.run_experiment(shots=shots)
+            results.append(metrics)
+
+            if interval_seconds > 0 and i < num_experiments - 1:
+                logger.info(f"Waiting {interval_seconds}s before next experiment...")
+                time.sleep(interval_seconds)
+
+        return results

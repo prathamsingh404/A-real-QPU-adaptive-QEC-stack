@@ -133,3 +133,61 @@ class PipelineProfiler:
         Generate a complete timing report.
 
         Returns:
+            Dict with per-stage timing and total.
+        """
+        report = {}
+        total = 0.0
+
+        for name in self._stage_order:
+            if name in self._stages:
+                timing = self._stages[name]
+                report[name] = {
+                    "duration_s": timing.duration_s,
+                    "duration_ms": timing.duration_s * 1000,
+                }
+                total += timing.duration_s
+
+        report["total_time_s"] = total
+        report["total_time_ms"] = total * 1000
+
+        # Round latency statistics
+        if self._round_latencies:
+            lat = np.array(self._round_latencies)
+            report["round_latency"] = {
+                "mean_us": float(lat.mean()),
+                "p50_us": float(np.percentile(lat, 50)),
+                "p95_us": float(np.percentile(lat, 95)),
+                "p99_us": float(np.percentile(lat, 99)),
+                "p999_us": float(np.percentile(lat, 99.9)),
+                "min_us": float(lat.min()),
+                "max_us": float(lat.max()),
+                "count": len(self._round_latencies),
+            }
+
+        return report
+
+    def print_report(self) -> None:
+        """Print a formatted timing report."""
+        report = self.get_report()
+
+        print("\n" + "=" * 50)
+        print("  PIPELINE TIMING REPORT")
+        print("=" * 50)
+
+        for name in self._stage_order:
+            if name in report:
+                stage = report[name]
+                print(f"  {name:.<30s} {stage['duration_ms']:>8.2f} ms")
+
+        print("-" * 50)
+        print(f"  {'TOTAL':.<30s} {report.get('total_time_ms', 0):>8.2f} ms")
+
+        if "round_latency" in report:
+            rl = report["round_latency"]
+            print(f"\n  Round Latency:")
+            print(f"    Mean:  {rl['mean_us']:.1f} μs")
+            print(f"    P50:   {rl['p50_us']:.1f} μs")
+            print(f"    P99:   {rl['p99_us']:.1f} μs")
+            print(f"    P999:  {rl['p999_us']:.1f} μs")
+
+        print("=" * 50 + "\n")

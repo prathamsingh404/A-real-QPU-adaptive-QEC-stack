@@ -148,3 +148,78 @@ class SyndromeExtractor:
         shots = raw_measurements.shape[0]
 
         # Use Stim's compiled measurement-to-detection converter
+        converter = self._circuit.compile_m2d_converter()
+
+        # Convert measurements to detection events
+        detection_events = np.zeros(
+            (shots, self._num_detectors), dtype=np.uint8
+        )
+        observable_flips = np.zeros(
+            (shots, self._num_observables), dtype=np.uint8
+        )
+
+        # Process in batches for memory efficiency
+        batch_size = min(shots, 10000)
+        for start in range(0, shots, batch_size):
+            end = min(start + batch_size, shots)
+            batch = raw_measurements[start:end].astype(np.bool_)
+
+            result = converter.convert(
+                measurements=batch,
+                separate_observables=True,
+            )
+
+            detection_events[start:end] = np.array(result[0], dtype=np.uint8)
+            observable_flips[start:end] = np.array(result[1], dtype=np.uint8)
+
+        logger.info(
+            f"Extracted detectors from {shots} raw measurements: "
+            f"{self._num_detectors} detectors, "
+            f"{self._num_observables} observables"
+        )
+        return detection_events, observable_flips
+
+    def build_syndrome_tensor(
+        self,
+        detection_events: np.ndarray,
+        num_rounds: int,
+    ) -> np.ndarray:
+        """
+        Reshape flat detection events into the syndrome tensor.
+
+        S ∈ {0,1}^{shots × R × N_d_per_round}
+
+        Args:
+            detection_events: shape (shots, total_detectors)
+            num_rounds: number of QEC rounds
+
+        Returns:
+            Syndrome tensor of shape (shots, rounds+1, detectors_per_round)
+            The +1 accounts for the final round of detectors from data measurement.
+        """
+        shots, total_detectors = detection_events.shape
+
+        # Number of detectors per round (approximate — may vary for boundary)
+        detectors_per_round = total_detectors // (num_rounds + 1)
+        remainder = total_detectors % (num_rounds + 1)
+
+        if remainder == 0:
+            tensor = detection_events.reshape(shots, num_rounds + 1, detectors_per_round)
+        else:
+            # Pad to make reshapeable
+            padded_total = detectors_per_round * (num_rounds + 1)
+            if padded_total > total_detectors:
+                padded = np.zeros((shots, padded_total), dtype=np.uint8)
+                padded[:, :total_detectors] = detection_events
+                tensor = padded.reshape(shots, num_rounds + 1, detectors_per_round)
+            else:
+                # Use flat representation
+                tensor = detection_events.reshape(shots, 1, total_detectors)
+
+        logger.info(f"Built syndrome tensor: shape {tensor.shape}")
+        return tensor
+
+    def build_detector_graph(self) -> DetectorGraph:
+        """
+        Build the detector graph from the circuit's error model.
+

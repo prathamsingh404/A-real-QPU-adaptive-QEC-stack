@@ -62,3 +62,68 @@ class MWPMDecoder(Decoder):
         self._matching = pymatching.Matching.from_detector_error_model(dem)
         self._num_detectors = dem.num_detectors
         self._num_observables = dem.num_observables
+
+        logger.info(
+            f"MWPM decoder configured: {self._num_detectors} detectors, "
+            f"{self._num_observables} observables"
+        )
+
+    def decode(self, syndrome: np.ndarray) -> Correction:
+        """
+        Decode a single syndrome or batch.
+
+        Args:
+            syndrome: shape (num_detectors,) or (batch, num_detectors)
+
+        Returns:
+            Correction with observable predictions.
+        """
+        if self._matching is None:
+            raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        if syndrome.ndim == 1:
+            prediction = self._matching.decode(syndrome.astype(np.uint8))
+            return Correction(
+                observable_corrections=prediction.astype(np.uint8),
+            )
+
+        # Batch decode
+        predictions = self._matching.decode_batch(syndrome.astype(np.uint8))
+        return Correction(
+            observable_corrections=predictions.astype(np.uint8),
+        )
+
+    def decode_batch(
+        self,
+        syndromes: np.ndarray,
+        observable_flips: np.ndarray,
+    ) -> DecoderMetrics:
+        """
+        Decode a batch and compute comprehensive metrics.
+
+        Args:
+            syndromes: shape (shots, num_detectors)
+            observable_flips: shape (shots, num_observables) — actual flips
+
+        Returns:
+            DecoderMetrics with error rate, latency distribution, throughput.
+        """
+        if self._matching is None:
+            raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        shots = syndromes.shape[0]
+
+        # Track memory
+        tracemalloc.start()
+
+        # Per-shot timing for latency distribution
+        per_shot_times = np.zeros(shots)
+
+        # Batch decode with timing
+        t_start = time.perf_counter()
+
+        # Decode in mini-batches for latency measurement
+        batch_size = min(1000, shots)
+        all_predictions = []
+
+        for start in range(0, shots, batch_size):

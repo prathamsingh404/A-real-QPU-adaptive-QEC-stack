@@ -113,3 +113,53 @@ def estimate_threshold(
         ThresholdEstimate with fitted threshold.
     """
     if len(distances) < 2:
+        logger.warning("Need at least 2 distances for threshold estimation")
+        return ThresholdEstimate(
+            distances=distances,
+            error_rates=error_rates,
+        )
+
+    d_arr = np.array(distances, dtype=float)
+    p_arr = np.array(error_rates, dtype=float)
+
+    # Filter out zero error rates (can't take log)
+    mask = p_arr > 0
+    if mask.sum() < 2:
+        logger.warning("Too few non-zero error rates for threshold estimation")
+        return ThresholdEstimate(distances=distances, error_rates=error_rates)
+
+    d_fit = d_arr[mask]
+    p_fit = p_arr[mask]
+
+    # Log-linear fit: log(p_L) = a + b * d
+    # b = log(p/p_th) / 2
+    try:
+        log_p = np.log(p_fit)
+        coeffs = np.polyfit(d_fit, log_p, 1)
+        b, a = coeffs
+
+        # p_th = p * exp(-2b) — but we need the physical error rate
+        # Instead, just report the scaling exponent
+        scaling_exponent = b
+
+        # R² for fit quality
+        predicted = a + b * d_fit
+        ss_res = np.sum((log_p - predicted) ** 2)
+        ss_tot = np.sum((log_p - log_p.mean()) ** 2)
+        r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0
+
+        logger.info(
+            f"Threshold estimation: scaling_exponent={scaling_exponent:.4f}, "
+            f"R²={r_squared:.4f}"
+        )
+
+        return ThresholdEstimate(
+            scaling_exponent=float(scaling_exponent),
+            distances=distances,
+            error_rates=error_rates,
+            fit_quality=float(r_squared),
+        )
+
+    except Exception as e:
+        logger.warning(f"Threshold estimation failed: {e}")
+        return ThresholdEstimate(distances=distances, error_rates=error_rates)

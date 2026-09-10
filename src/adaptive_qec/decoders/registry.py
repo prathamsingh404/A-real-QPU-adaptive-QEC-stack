@@ -38,3 +38,17 @@ def get_decoder(name: str) -> Decoder:
 
     if name_lower not in _DECODERS:
         available = list(_DECODERS.keys()) or ["none registered"]
+        raise ValueError(
+            f"Unknown decoder '{name}'. "
+            f"Available: {', '.join(available)}. "
+            f"Register new decoders with register_decoder()."
+        )
+
+    decoder = _DECODERS[name_lower]()
+    logger.info(f"Created decoder: {decoder.name}")
+    return decoder
+
+
+def list_decoders() -> list[str]:
+    """List all registered decoder names."""
+    return list(_DECODERS.keys())

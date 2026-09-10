@@ -1046,3 +1046,1051 @@ function buildShards (host, PTS, DEFS, opt) {
   const gap = opt.gap == null ? 6.5 : opt.gap, rim = opt.rim == null ? 1.6 : opt.rim;
   const cls = opt.cls || 'tsh';
   const r = host.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return null;
+  host.textContent = '';
+  const TONE = [1, .88, 1.14, .94, 1.06];
+  return DEFS.map((d, i) => {
+    const skel = d.map(k => [PTS[k][0] * r.width, PTS[k][1] * r.height]);
+    const outer = insetPoly(skel, gap / 2);
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    outer.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]);
+                         y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
+    const bw = x1 - x0, bh = y1 - y0;
+    const loc = outer.map(p => [p[0] - x0, p[1] - y0]);
+    const c = polyCentre(loc);
+    const el = document.createElement('div');
+    el.className = cls;
+    el.style.cssText = 'left:' + x0 + 'px;top:' + y0 + 'px;width:' + bw + 'px;height:' + bh +
+                       'px;transform-origin:' + c[0].toFixed(1) + 'px ' + c[1].toFixed(1) + 'px';
+    el.style.setProperty('--ang',  (30 + (i * 67) % 300) + 'deg');
+    el.style.setProperty('--ang2', (120 + (i * 41) % 110) + 'deg');
+    el.style.setProperty('--tone', String(TONE[i % TONE.length]));
+    el.style.setProperty('--vx', (c[0] / bw * 100).toFixed(1) + '%');
+    el.style.setProperty('--vy', (c[1] / bh * 100).toFixed(1) + '%');
+    const e = document.createElement('div'); e.className = 'e'; e.style.clipPath = clipOf(loc);
+    const f = document.createElement('div'); f.className = 'f'; f.style.clipPath = clipOf(insetPoly(loc, rim));
+    el.append(e, f);
+    host.appendChild(el);
+    return { el: el, poly: outer, cx: x0 + c[0], cy: y0 + c[1], i: i,
+             bx: x0, by: y0, bw: bw, bh: bh,
+             c: { x:0, y:0, z:0, rx:0, ry:0, rz:0, ed:0 },
+             v: { x:0, y:0, z:0, rx:0, ry:0, rz:0, ed:0 } };
+  });
+}
+
+/* three pieces around one junction — the card and the ray plate */
+const F3_PTS = { tl:[-.03,-.03], tr:[1.03,-.03], bl:[-.03,1.03], br:[1.03,1.03],
+                 a:[.62,-.03], b:[-.03,.46], c:[.42,.40], d:[1.03,.62] };
+const F3 = [['tl','a','c','b'], ['a','tr','d','c'], ['b','c','d','br','bl']];
+
+/* five pieces — the closing pane, which has further to come back from */
+const F5_PTS = { tl:[-.04,-.04], tr:[1.04,-.04], bl:[-.04,1.04], br:[1.04,1.04],
+                 a:[.38,-.04], b:[-.04,.40], c:[.46,.46], d:[1.04,.34],
+                 e:[.72,.70], f:[.30,1.04], g:[1.04,.86] };
+const F5 = [['tl','a','c','b'], ['a','tr','d','c'], ['c','d','g','e'],
+            ['b','c','e','f','bl'], ['e','g','br','f']];
+
+/* every scroll-driven glass group is read, never written, by one loop */
+const GROUPS = [];
+let heroIntroStart = null;          /* the boot sequence fires this */
+function spr (o, k, target, dt, mul) {
+  const st = 96 * (mul || 1), c = 2 * Math.sqrt(st);
+  o.v[k] += (target - o.c[k]) * st * dt - o.v[k] * c * dt;
+  o.c[k] += o.v[k] * dt;
+}
+let gLast = performance.now();
+function glassLoop (now) {
+  requestAnimationFrame(glassLoop);
+  const dt = Math.min(1 / 30, (now - gLast) / 1000); gLast = now;
+  for (let g = 0; g < GROUPS.length; g++) GROUPS[g](dt);
+}
+requestAnimationFrame(glassLoop);
+
+/* =========================================================================
+   01 · PRIME — the fractured plate
+   Four flat sibling layers; only an individual shard ever transforms. The
+   glass layer takes no pointer events, so the copy stays selectable and
+   the CTAs and nav stay clickable.
+   ========================================================================= */
+(function hero () {
+  const hero = q('.hero'), sect = q('#prime');
+  const content = q('.hero-content'), foot = q('.hero-foot');
+  if (!hero || !sect) return;
+
+  /* Seven pieces. An impact junction up and right of centre with radial
+     cracks, one transverse crack across the top-left, and a four-way
+     junction low-centre. The big calm plate carries the headline, so no
+     crack runs through the type. Coordinates bleed past the frame. */
+  const P_WIDE = {
+    tl:[-.025,-.044], tr:[1.025,-.044], bl:[-.025,1.044], br:[1.025,1.044],
+    C:[.5125,-.044], A:[-.025,.278], B:[.350,.167], K:[-.025,.733],
+    D:[.700,.367],   E:[1.025,.200], F:[1.025,.767], H:[.5375,.667], N:[.700,1.044]
+  };
+  const S_WIDE = [
+    ['tl','C','B','A'],
+    ['A','B','H','K'],                                   /* headline plate */
+    ['C','D','H','B'],
+    ['C','tr','E','D'],
+    ['D','E','F'],
+    ['D','F','br','N','H'],
+    ['K','H','N','bl']
+  ];
+
+  /* One writer. hero-gl.js reads this and never writes it. */
+  const HERO = window.__HERO = {
+    p:0, crack:0, ex:0, intro:0, mx:.5, my:.5, live:false,
+    pts:P_WIDE, defs:S_WIDE, impact:[.66,.34]
+  };
+
+  let intro = 0, introGo = false;
+  heroIntroStart = function () { introGo = true; };
+
+  hero.addEventListener('pointermove', e => {
+    if (!FINE || REDUCED) return;
+    const r = hero.getBoundingClientRect();
+    HERO.mx = (e.clientX - r.left) / (r.width  || 1);
+    HERO.my = (e.clientY - r.top)  / (r.height || 1);
+    HERO.live = true;
+  }, { passive: true });
+  hero.addEventListener('pointerleave', () => { HERO.live = false; });
+
+  const beats = Array.prototype.slice.call(document.querySelectorAll('.hero-story b'));
+  const SPAN = .15;                       /* each beat owns this much of the hero scroll,
+                                             so all three land before the copy fades */
+
+  function applyExit () {
+    const r = sect.getBoundingClientRect();
+    const p0 = clamp(-r.top / Math.max(1, r.height - innerHeight), 0, 1);
+    HERO.p = p0;
+    HERO.crack = REDUCED ? 1 : sstep(.03, .30, p0);
+    HERO.ex = sstep(.46, .94, p0);
+    const fade = sstep(.62, .98, p0);
+    hero.style.opacity = (1 - fade).toFixed(3);
+    content.style.setProperty('--exit', (-44 * HERO.ex).toFixed(1) + 'px');
+    content.style.opacity = (1 - sstep(.30, .74, p0)).toFixed(3);
+    foot.style.opacity = (1 - sstep(.10, .34, p0)).toFixed(3);
+
+    /* the story crossfades in one slot: no reflow, no stacking */
+    for (let i = 0; i < beats.length; i++) {
+      const a0 = i * SPAN, b0 = a0 + SPAN;
+      const o = (i === 0 ? 1 : sstep(a0 - .01, a0 + .09, p0)) *
+                (i === beats.length - 1 ? 1 : 1 - sstep(b0 - .09, b0 + .01, p0));
+      beats[i].style.opacity = o.toFixed(3);
+      beats[i].style.transform = 'translateY(' + ((1 - o) * 9).toFixed(1) + 'px)';
+    }
+  }
+  addEventListener('scroll', applyExit, { passive: true });
+  applyExit();
+
+  GROUPS.push(function (dt) {
+    if (introGo && intro < 1) intro = Math.min(1, intro + dt / 1.35);
+    else if (REDUCED) intro = 1;
+    HERO.intro = intro;
+    applyExit();
+  });
+})();
+
+/* =========================================================================
+   02 · FRACTURE — one bounded experiment
+   Four fragments of one small pane. They separate once, on entry, and then
+   they are still. No cursor following, no full-screen sculpture.
+   ========================================================================= */
+(function fracturePane () {
+  const pane = q('.fx-pane');
+  if (!pane) return;
+  const PTS = { a:[-.04,.30], b:[.62,-.04], c:[1.04,.24], d:[.44,.52], e:[-.04,.78], f:[1.04,.74], g:[.36,1.04] };
+  const DEF = [
+    { pts:['a','b','d'],            off:[-7, -5], ang: 104 },
+    { pts:['b','c','f','d'],        off:[ 8, -4], ang: 142 },
+    { pts:['a','d','e'],            off:[-6,  6], ang:  76 },
+    { pts:['e','d','f','g'],        off:[ 5,  8], ang: 128 }
+  ];
+  let opened = false, built = false;
+
+  function build () {
+    const r = pane.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    DEF.forEach((o, i) => {
+      const skel = o.pts.map(k => [PTS[k][0] * r.width, PTS[k][1] * r.height]);
+      const outer = insetPoly(skel, 3.2);
+      const el = o.el || document.createElement('div');
+      if (!o.el) {
+        el.className = 'frag';
+        el.style.setProperty('--i', i);
+        el.style.setProperty('--ang', o.ang + 'deg');
+        el.style.setProperty('--ang2', (120 + i * 24) + 'deg');
+        el.append(document.createElement('div'), document.createElement('div'));
+        el.children[0].className = 'e'; el.children[1].className = 'f';
+        pane.insertBefore(el, pane.firstChild);
+        o.el = el;
+      }
+      el.children[0].style.clipPath = clipOf(outer);
+      el.children[1].style.clipPath = clipOf(insetPoly(outer, 1.4));
+      el.style.transform = opened ? 'translate(' + o.off[0] + 'px,' + o.off[1] + 'px)' : 'translate(0,0)';
+    });
+    built = true;
+    return true;
+  }
+  build();
+
+  /* the impact, the crack front, then the separation */
+  const NS = 'http://www.w3.org/2000/svg';
+  const HIT = [.44, .38];
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'fx-cracks');
+  svg.setAttribute('preserveAspectRatio', 'none');
+  const hit = document.createElement('div'); hit.className = 'fx-hit';
+  const stress = document.createElement('div'); stress.className = 'fx-stress';
+  pane.append(svg, hit, stress);
+  let paths = [];
+
+  function cracks () {
+    const r = pane.getBoundingClientRect();
+    if (r.width < 2) return;
+    svg.setAttribute('viewBox', '0 0 ' + r.width + ' ' + r.height);
+    svg.style.width = r.width + 'px'; svg.style.height = r.height + 'px';
+    svg.textContent = '';
+    paths = [];
+    hit.style.left = (HIT[0] * r.width) + 'px';
+    hit.style.top  = (HIT[1] * r.height) + 'px';
+    const rand = rng(60613);
+    for (let i = 0; i < 7; i++) {
+      let x = HIT[0] * r.width, y = HIT[1] * r.height;
+      let a2 = (i / 7) * Math.PI * 2 + rand() * .5;
+      let d = 'M' + x.toFixed(1) + ' ' + y.toFixed(1);
+      const segs = 3 + Math.floor(rand() * 3);
+      for (let k = 0; k < segs; k++) {
+        a2 += (rand() - .5) * .7;
+        const len = r.width * (.10 + rand() * .20);
+        x += Math.cos(a2) * len; y += Math.sin(a2) * len * .82;
+        d += ' L' + x.toFixed(1) + ' ' + y.toFixed(1);
+      }
+      const p2 = document.createElementNS(NS, 'path');
+      p2.setAttribute('d', d);
+      p2.style.strokeWidth = (.7 + rand() * 1.1).toFixed(2);
+      p2.style.opacity = (.34 + rand() * .40).toFixed(2);
+      svg.appendChild(p2);
+      const L = p2.getTotalLength ? p2.getTotalLength() : 400;
+      p2.style.strokeDasharray = L;
+      p2.style.strokeDashoffset = L;
+      paths.push(p2);
+    }
+  }
+  cracks();
+
+  if (HAS_GSAP) ScrollTrigger.create({ trigger: pane, start: 'top 86%', once: true, onEnter () {
+    if (!built && !build()) return;
+    if (REDUCED) { opened = true; DEF.forEach(o => { o.el.style.transform =
+      'translate(' + o.off[0] + 'px,' + o.off[1] + 'px)'; }); return; }
+    if (opened) return;
+    opened = true;
+    gsap.fromTo(hit, { opacity: 0, scale: .2 },
+      { opacity: 1, scale: 1, duration: .16, ease: 'power2.out' });
+    gsap.to(hit, { opacity: 0, scale: 1.9, duration: .95, delay: .16, ease: 'power2.out' });
+    paths.forEach((p2, k) => {                        /* the front runs outward */
+      const L = parseFloat(p2.style.strokeDasharray) || 400;
+      gsap.fromTo(p2, { strokeDashoffset: L },
+        { strokeDashoffset: 0, duration: .42 + k * .04, delay: .07 + k * .035, ease: 'power2.out' });
+      gsap.to(p2, { opacity: .12, duration: .9, delay: .7 });
+    });
+    gsap.delayedCall(.34, () => {                     /* only then does it come apart */
+      DEF.forEach(o => { o.el.style.transform = 'translate(' + o.off[0] + 'px,' + o.off[1] + 'px)'; });
+    });
+  }});
+
+  /* photoelastic stress, only where the pointer presses on the plate */
+  let sx = 0, sy = 0, slive = false;
+  pane.addEventListener('pointermove', e => {
+    if (!FINE || REDUCED) return;
+    const r = pane.getBoundingClientRect();
+    sx = e.clientX - r.left; sy = e.clientY - r.top; slive = true;
+  }, { passive: true });
+  pane.addEventListener('pointerleave', () => { slive = false; });
+  const sv = { c: { o:0, x:0, y:0 }, v: { o:0, x:0, y:0 } };
+  GROUPS.push(function (dt) {
+    spr(sv, 'o', slive ? 1 : 0, dt, .5);
+    if (sv.c.o < .004) { if (stress.style.opacity !== '0') stress.style.opacity = '0'; return; }
+    spr(sv, 'x', sx, dt, 1.1); spr(sv, 'y', sy, dt, 1.1);
+    stress.style.opacity = (sv.c.o * .9).toFixed(3);
+    stress.style.left = sv.c.x.toFixed(1) + 'px';
+    stress.style.top = sv.c.y.toFixed(1) + 'px';
+  });
+  let ct; addEventListener('resize', () => { clearTimeout(ct); ct = setTimeout(cracks, 200); });
+
+  let rt;
+  addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(build, 160); });
+})();
+
+/* =========================================================================
+   SPECIMEN — one small refraction renderer, used by INDEX and WORKBENCH
+   A technical backdrop is drawn once; the glass coupon then resamples it
+   per pixel with a per-channel offset from the surface normal. Index bends,
+   Abbe splits the channels, roughness blurs the sample, absorption darkens
+   along the path, thin film tints, bevel sets the width of the edge zone.
+   It renders on interaction only — never on a timer.
+   ========================================================================= */
+function Specimen (host, opts) {
+  opts = opts || {};
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  if (!ctx) return null;
+  host.appendChild(cv);
+
+  const SHAPE = [[.16,.06],[.86,.14],[.95,.52],[.80,.92],[.28,.95],[.05,.60]];
+  const RS = .70;                                 /* raster scale — soft optics, cheap */
+  const raster = document.createElement('canvas'), rctx = raster.getContext('2d');
+  const back   = document.createElement('canvas'), bctx = back.getContext('2d');
+
+  const P = { ior: 1.520, abbe: 58.6, rough: .06, absorb: .12, film: 0, bevel: 1.4 };
+  const T = Object.assign({}, P);
+  let Wp = 0, Hp = 0, rw = 0, rh = 0, poly = [], edges = [], bdata = null, raf = 0;
+
+  function backdrop () {
+    bctx.setTransform(1, 0, 0, 1, 0, 0);
+    const g = bctx.createLinearGradient(0, 0, rw * .4, rh);
+    g.addColorStop(0, '#0a0e14'); g.addColorStop(1, '#050609');
+    bctx.fillStyle = g; bctx.fillRect(0, 0, rw, rh);
+
+    const step = Math.max(7, rh / 22);             /* the ruled field the glass bends */
+    bctx.lineWidth = 1.4;
+    for (let y = step * .5, i = 0; y < rh; y += step, i++) {
+      bctx.strokeStyle = 'rgba(206,224,242,' + (i % 4 === 0 ? .20 : .085) + ')';
+      bctx.beginPath(); bctx.moveTo(0, y); bctx.lineTo(rw, y); bctx.stroke();
+    }
+    for (let k = 1; k < 4; k++) {
+      bctx.strokeStyle = 'rgba(142,191,214,.05)';
+      bctx.beginPath(); bctx.moveTo(rw * k / 4, 0); bctx.lineTo(rw * k / 4, rh); bctx.stroke();
+    }
+    bctx.strokeStyle = 'rgba(239,154,87,.20)'; bctx.lineWidth = 1.2;
+    bctx.beginPath(); bctx.moveTo(0, rh * .86); bctx.lineTo(rw, rh * .18); bctx.stroke();
+    bdata = bctx.getImageData(0, 0, rw, rh).data;
+  }
+
+  function size () {
+    const r = host.getBoundingClientRect();
+    const w = Math.max(80, r.width), h = Math.max(80, r.height);
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    Wp = Math.round(w * dpr); Hp = Math.round(h * dpr);
+    cv.width = Wp; cv.height = Hp; cv.style.width = w + 'px'; cv.style.height = h + 'px';
+    rw = Math.max(40, Math.round(w * RS)); rh = Math.max(40, Math.round(h * RS));
+    raster.width = rw; raster.height = rh; back.width = rw; back.height = rh;
+
+    poly = SHAPE.map(p => [p[0] * rw, p[1] * rh]);
+    edges = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      let ex = b[0] - a[0], ey = b[1] - a[1];
+      const l = Math.hypot(ex, ey) || 1; ex /= l; ey /= l;
+      edges.push([a[0], a[1], -ey, ex]);           /* point + inward normal (cw polygon) */
+    }
+    backdrop();
+  }
+
+  function render () {
+    const img = rctx.createImageData(rw, rh), d = img.data;
+    const bend  = (T.ior - 1) * rw * .10;       /* the edge bend  */
+    const mag   = (T.ior - 1) * .17;             /* and the plate's own magnification */
+    const split = clamp((70 - T.abbe) / 70, 0, 1) * .55;
+    const blur  = T.rough * rw * .05;
+    const bev   = Math.max(10, (18 + T.bevel * 9) * (rw / 300));
+    const film  = T.film;
+    const ox = rw * .5, oy = rh * .5;
+
+    const px = (x, y, o) => {                      /* nearest sample of the backdrop */
+      const xi = clamp(x | 0, 0, rw - 1), yi = clamp(y | 0, 0, rh - 1);
+      return bdata[(yi * rw + xi) * 4 + o];
+    };
+
+    for (let y = 0; y < rh; y++) {
+      for (let x = 0; x < rw; x++) {
+        const o = (y * rw + x) * 4;
+        let dist = 1e9, nx = 0, ny = 0;
+        for (let i = 0; i < edges.length; i++) {
+          const e = edges[i];
+          const s = (x - e[0]) * e[2] + (y - e[1]) * e[3];
+          if (s < dist) { dist = s; nx = e[2]; ny = e[3]; }
+        }
+        if (dist <= 0) { d[o] = bdata[o]; d[o + 1] = bdata[o + 1]; d[o + 2] = bdata[o + 2]; d[o + 3] = 255; continue; }
+
+        const t  = clamp(dist / bev, 0, 1);
+        const k  = Math.pow(1 - t, 1.5) * bend;    /* strongest through the bevel */
+        /* the whole interior also samples inward: a thick plate compresses
+           what is behind it, which is what makes the ruling step at the rim */
+        const mx = ox + (x - ox) * (1 - mag), my = oy + (y - oy) * (1 - mag);
+        const jr = blur * (1 - t * .5);
+        let r = 0, g = 0, b = 0, taps = 0;
+        const N = jr > .6 ? 5 : 1;
+        for (let s = 0; s < N; s++) {
+          const a = s * 1.9, jx = N > 1 ? Math.cos(a) * jr : 0, jy = N > 1 ? Math.sin(a) * jr : 0;
+          r += px(mx - nx * k * (1 - split) + jx, my - ny * k * (1 - split) + jy, 0);
+          g += px(mx - nx * k + jx,               my - ny * k + jy,               1);
+          b += px(mx - nx * k * (1 + split) + jx, my - ny * k * (1 + split) + jy, 2);
+          taps++;
+        }
+        r /= taps; g /= taps; b /= taps;
+
+        const att = Math.exp(-T.absorb * 2.0 * t); /* thickest in the middle */
+        r *= att; g *= att; b *= att;
+        if (film > 0) {                            /* restrained thin-film tint */
+          const ph = Math.cos(dist / (film * .045) + 1.1) * (1 - t) * (film / 640) * 16;
+          r += ph * .5; g += ph * .9; b -= ph * .7;
+        }
+        const rim = Math.pow(1 - t, 5) * 44;       /* the polished edge catching light */
+        d[o] = clamp(r + rim, 0, 255);
+        d[o + 1] = clamp(g + rim * 1.02, 0, 255);
+        d[o + 2] = clamp(b + rim * 1.08, 0, 255);
+        d[o + 3] = 255;
+      }
+    }
+    rctx.putImageData(img, 0, 0);
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, Wp, Hp);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(raster, 0, 0, Wp, Hp);
+
+    const sx = Wp / rw;                            /* crisp vector rim over the soft raster */
+    ctx.save(); ctx.scale(sx, Hp / rh);
+    ctx.beginPath();
+    poly.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+    ctx.closePath();
+    const rg = ctx.createLinearGradient(0, 0, rw, rh);
+    rg.addColorStop(0, 'rgba(226,236,248,.80)');
+    rg.addColorStop(.42, 'rgba(142,191,214,.34)');
+    rg.addColorStop(.72, 'rgba(226,236,248,.55)');
+    rg.addColorStop(1, 'rgba(239,154,87,.22)');
+    ctx.strokeStyle = rg; ctx.lineWidth = 1.1 / (sx / (devicePixelRatio || 1)); ctx.stroke();
+    ctx.restore();
+  }
+
+  function step () {
+    let moving = false;
+    for (const k in P) {
+      const d = P[k] - T[k];
+      if (Math.abs(d) > Math.abs(P[k]) * 1e-3 + 1e-4) { T[k] += d * .16; moving = true; }
+      else T[k] = P[k];
+    }
+    render();
+    raf = moving && !REDUCED ? requestAnimationFrame(step) : 0;
+  }
+  function set (patch) {
+    Object.assign(P, patch);
+    /* snap when there are no frames to tween with — a backgrounded tab must
+       not come back showing the previous material */
+    if (REDUCED || document.hidden) { Object.assign(T, P); render(); return; }
+    if (!raf) raf = requestAnimationFrame(step);
+  }
+
+  size(); Object.assign(T, P); render();
+  let rt;
+  addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { size(); render(); }, 160); });
+  return { set, el: cv };
+}
+
+/* =========================================================================
+   03 · INDEX — a static table, one specimen. Nothing moves across the page.
+   ========================================================================= */
+(function indexTable () {
+  const host = q('#specIndex'), rows = qq('#matRows .row');
+  if (!host || !rows.length) return;
+  const sp = Specimen(host);
+  const nm = q('#specName'), nv = q('#specN');
+
+  function pick (row) {
+    rows.forEach(r => r.classList.toggle('on', r === row));
+    const n = parseFloat(row.dataset.n);
+    nm.textContent = row.dataset.nm;
+    nv.textContent = 'n ' + n.toFixed(3);
+    if (sp) sp.set({ ior: n });
+  }
+  rows.forEach(r => {
+    r.addEventListener('pointerenter', () => pick(r));
+    r.addEventListener('click', () => pick(r));
+  });
+})();
+
+/* =========================================================================
+   04 · DISPERSION — one ray, one specimen, three thin exits.
+   ========================================================================= */
+(function rayFigure () {
+  const svg = q('#rayFig');
+  if (!svg) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+
+  svg.appendChild(mk('path', { class: 'beam', d: 'M4 92 L226 134', fill: 'none' }));
+  svg.appendChild(mk('path', { class: 'body', d: 'M226 68 L300 52 L332 216 L252 232 Z' }));
+
+  const OUT = [['#6f9ad6', 150, 'F  486.1'], ['#e6e9ee', 168, 'd  587.6'], ['#d68a72', 188, 'C  656.3']];
+  OUT.forEach((o, i) => {
+    const p = mk('path', { class: 'out draw', fill: 'none', stroke: o[0],
+                           d: 'M320 172 L616 ' + o[1] });
+    const L = Math.hypot(616 - 320, o[1] - 172);
+    p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+    p.style.transition = 'stroke-dashoffset 1.15s cubic-bezier(.22,.61,.36,1) ' + (.25 + i * .16) + 's';
+    svg.appendChild(p);
+    svg.appendChild(mk('text', { class: 'lbl', x: 560, y: o[1] - 9, 'text-anchor': 'end' })).textContent = o[2];
+  });
+  svg.appendChild(mk('text', { class: 'lbl', x: 4, y: 80 })).textContent = 'WHITE';
+  svg.appendChild(mk('text', { class: 'lbl', x: 236, y: 262 })).textContent = 'BK7';
+
+  if (HAS_GSAP) ScrollTrigger.create({ trigger: svg, start: 'top 82%', once: true,
+    onEnter () { qq('#rayFig .draw').forEach(p => { p.style.strokeDashoffset = 0; }); } });
+})();
+
+/* =========================================================================
+   05 · WORKBENCH — one specimen, one instrument panel.
+   Selecting a property exposes its scale; stepping the scale updates both
+   the printed value and the glass. Only the one specimen ever reacts.
+   ========================================================================= */
+(function workbench () {
+  const host = q('#specWork'), rows = qq('#propRows .row'), scale = q('#roughScale'), cap = q('#workCap');
+  if (!host || !rows.length) return;
+  const sp = Specimen(host);
+
+  const SCALES = {
+    index:      { unit: '', key: 'ior',    vals: [1.333, 1.520, 1.770, 2.417], fmt: v => v.toFixed(3), lab: 'Index' },
+    dispersion: { unit: '', key: 'abbe',   vals: [64.2, 58.6, 41.0, 25.4],     fmt: v => 'Abbe ' + v.toFixed(1), lab: 'Dispersion' },
+    roughness:  { unit: '', key: 'rough',  vals: [0, .06, .16, .30, .44, .58], fmt: v => v.toFixed(2), lab: 'Roughness' },
+    absorption: { unit: '', key: 'absorb', vals: [0, .12, .28, .48],           fmt: v => v.toFixed(2), lab: 'Absorption' },
+    film:       { unit: '', key: 'film',   vals: [0, 180, 420, 640],           fmt: v => v.toFixed(0) + ' nm', lab: 'Thin film' },
+    bevel:      { unit: '', key: 'bevel',  vals: [0.4, 1.4, 2.6, 4.0],         fmt: v => v.toFixed(1) + ' mm', lab: 'Bevel' }
+  };
+  const chosen = { index: 1, dispersion: 1, roughness: 1, absorption: 1, film: 0, bevel: 1 };
+
+  function apply () {
+    const patch = {};
+    for (const k in SCALES) patch[SCALES[k].key] = SCALES[k].vals[chosen[k]];
+    if (sp) sp.set(patch);
+    rows.forEach(r => {
+      const s = SCALES[r.dataset.p];
+      r.querySelector('.vl').textContent = s.fmt(s.vals[chosen[r.dataset.p]]);
+    });
+  }
+  function select (row) {
+    rows.forEach(r => r.classList.toggle('on', r === row));
+    const p = row.dataset.p, s = SCALES[p];
+    scale.hidden = false;
+    scale.textContent = '';
+    s.vals.forEach((v, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = s.fmt(v);
+      b.className = i === chosen[p] ? 'on' : '';
+      b.addEventListener('click', () => { chosen[p] = i; select(row); apply(); });
+      scale.appendChild(b);
+    });
+    row.after(scale);
+    cap.textContent = s.lab + ' ' + s.fmt(s.vals[chosen[p]]);
+  }
+  rows.forEach(r => {
+    r.addEventListener('pointerenter', () => select(r));
+    r.addEventListener('click', () => select(r));
+  });
+  select(rows[0]); apply();
+
+  if (HAS_GSAP) ScrollTrigger.create({ trigger: '#workbench', start: 'top 70%', once: true, onEnter () {
+    qq('.stats b').forEach(el => {
+      const to = +el.dataset.count;
+      if (REDUCED || !to || document.hidden) { el.textContent = to; return; }
+      const t0 = performance.now();
+      (function run (now) {
+        const t = clamp((now - t0) / 1200, 0, 1);
+        el.textContent = Math.round(to * (1 - Math.pow(1 - t, 3)));
+        if (t < 1) requestAnimationFrame(run);
+      })(t0);
+    });
+  }});
+})();
+
+/* =========================================================================
+   06 · ANNEAL — three seams fade. That is the whole animation.
+   ========================================================================= */
+
+
+/* ------------------------------------------------------------- grain ---- */
+(function grain () {
+  const cv = q('#grain');
+  if (!cv) return;
+  function paint () {
+    const w = Math.max(2, Math.ceil(innerWidth / 2)), h = Math.max(2, Math.ceil(innerHeight / 2));
+    cv.width = w; cv.height = h;
+    const c = cv.getContext('2d');
+    if (!c) return;
+    const img = c.createImageData(w, h), d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = 128 + (Math.random() - .5) * 190;
+      d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+    }
+    c.putImageData(img, 0, 0);
+  }
+  let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(paint, 200); });
+  paint();
+})();
+
+/* =========================================================================
+   06 · FIELD NOTES — testimonial cards built from 3D broken pieces
+   Each card is one small pane split around a junction. The pieces fly in
+   and lock as the card crosses the viewport, and the piece under the
+   cursor takes a little pressure. The copy sits above the glass, so it
+   stays readable and selectable.
+   ========================================================================= */
+(function notes () {
+  const cards = qq('#notes .tcard');
+  if (!cards.length) return;
+
+  cards.forEach(card => {
+    const host = card.querySelector('.tshards');
+    let pieces = null, st = null, px = -1e5, py = -1e5, live = false;
+
+    function make () {
+      pieces = buildShards(host, F3_PTS, F3, { gap: 6.4, rim: 1.5, cls: 'tsh' });
+      if (!pieces) return;
+      const r = host.getBoundingClientRect();
+      pieces.forEach(p => {                       /* where it flies in from */
+        const dx = p.cx - r.width * .5, dy = p.cy - r.height * .5;
+        const d = Math.hypot(dx, dy) || 1;
+        p.ox = dx / d * 34 + (p.i % 2 ? 10 : -10);
+        p.oy = dy / d * 30 - 14;
+        p.orx = (p.i % 2 ? 9 : -7); p.ory = (p.i === 1 ? 12 : -10);
+        p.orz = (p.i - 1) * 3.2; p.oz = -70 + p.i * 46;
+      });
+    }
+    make();
+
+    if (HAS_GSAP) st = ScrollTrigger.create({ trigger: card, start: 'top 94%', end: 'top 38%', scrub: .8 });
+
+    card.addEventListener('pointermove', e => {
+      if (!FINE || REDUCED) return;
+      const r = host.getBoundingClientRect();
+      px = e.clientX - r.left; py = e.clientY - r.top; live = true;
+    }, { passive: true });
+    card.addEventListener('pointerleave', () => { live = false; });
+
+    GROUPS.push(function (dt) {
+      if (!pieces) { make(); return; }
+      const asm = REDUCED ? 1 : (st ? st.progress : 1);
+      const back = 1 - asm;
+      let hot = -1;
+      if (live) for (let i = 0; i < pieces.length; i++) if (polyHas(pieces[i].poly, px, py)) { hot = i; break; }
+
+      for (let i = 0; i < pieces.length; i++) {
+        const p = pieces[i];
+        const near = hot === i ? 1 : (hot >= 0 ? .18 : 0);
+        spr(p, 'ed', .26 + .30 * near, dt, .6);
+        const nx = hot >= 0 ? clamp((px - p.cx) / 90, -1, 1) : 0;
+        const ny = hot >= 0 ? clamp((py - p.cy) / 90, -1, 1) : 0;
+        spr(p, 'x',  nx * 5.5 * near, dt, 1);
+        spr(p, 'y',  ny * 4.5 * near, dt, 1);
+        spr(p, 'z',  14 * near, dt, 1);
+        spr(p, 'ry', nx * 3.4 * near, dt, 1);
+        spr(p, 'rx', -ny * 2.6 * near, dt, 1);
+
+        p.el.style.transform =
+          'translate3d(' + (p.c.x + p.ox * back).toFixed(2) + 'px,' +
+          (p.c.y + p.oy * back).toFixed(2) + 'px,' + (p.c.z + p.oz * back).toFixed(2) + 'px)' +
+          ' rotateX(' + (p.c.rx + p.orx * back).toFixed(2) + 'deg) rotateY(' +
+          (p.c.ry + p.ory * back).toFixed(2) + 'deg) rotateZ(' + (p.orz * back).toFixed(2) + 'deg)';
+        p.el.style.opacity = (asm < .04 ? asm / .04 : 1).toFixed(3);
+        p.el.style.setProperty('--edge', p.c.ed.toFixed(3));
+      }
+    });
+
+    let rt;
+    addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(make, 180); });
+  });
+})();
+
+/* =========================================================================
+   04 · the ray plate is cracked too — three pieces at three depths, each
+   drifting at its own rate as the section passes.
+   ========================================================================= */
+(function rayPlate () {
+  const host = q('#dispersion .rp');
+  if (!host) return;
+  let pieces = null, st = null;
+  const make = () => { pieces = buildShards(host, F3_PTS, F3, { gap: 7, rim: 1.5, cls: 'rps' }); };
+  make();
+  if (HAS_GSAP) st = ScrollTrigger.create({ trigger: '#dispersion', start: 'top bottom', end: 'bottom top', scrub: .6 });
+
+  GROUPS.push(function () {
+    if (!pieces) { make(); return; }
+    const t = (st ? st.progress : .5) - .5;      /* -0.5 … 0.5 through the section */
+    for (let i = 0; i < pieces.length; i++) {
+      const p = pieces[i], k = [1, -.55, .35][i];
+      p.el.style.transform = 'translate3d(' + (t * 26 * k).toFixed(2) + 'px,' +
+        (t * 44 * k).toFixed(2) + 'px,' + (i * 16 - 16) + 'px) rotateY(' +
+        (t * 3.2 * k).toFixed(2) + 'deg) rotateX(' + (t * -2.1 * k).toFixed(2) + 'deg)';
+    }
+  });
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(make, 180); });
+})();
+
+/* =========================================================================
+   07 · ANNEAL — five pieces, one pane. They arrive apart and lock together
+   as you reach the end. That is the whole closing animation.
+   ========================================================================= */
+(function annealPane () {
+  const sect = q('#anneal'), pane = q('#anneal .pane');
+  if (!sect || !pane) return;
+
+  let st = null;
+  if (HAS_GSAP) st = ScrollTrigger.create({
+    trigger: '#anneal', start: 'top 92%', end: 'top 18%', scrub: .9 });
+
+  /* One writer. anneal-gl.js reads this and never writes it. The fracture
+     pattern travels with it so both halves cut the plate the same way. */
+  const ANN = window.__ANN = { p: 0, pts: F5_PTS, defs: F5 };
+  GROUPS.push(function () {
+    ANN.p = REDUCED ? 1 : (st ? st.progress : 1);
+  });
+})();
+
+/* =========================================================================
+   03 · LOUPE — a real glass loupe over a specimen plate
+   The plate is drawn to canvas once and read back as pixels. The lens then
+   resamples that buffer every frame: magnified toward its centre, bent
+   harder toward the rim, and offset per channel so the edge fringes. The
+   type genuinely deforms — nothing here is a pre-rendered distortion map.
+   ========================================================================= */
+(function loupe () {
+  const stage = q('#loupeStage'), pw = q('#loupePw');
+  if (!stage) return;
+  const base = document.createElement('canvas'); base.className = 'base';
+  const lens = document.createElement('canvas'); lens.className = 'lens';
+  stage.append(base, lens);
+  const bx = base.getContext('2d'), lx = lens.getContext('2d');
+  if (!bx || !lx) return;
+
+  const LS = .70;                       /* lens raster scale — soft optics, cheap */
+  let W = 0, H = 0, DPR = 1, bw = 0, bh = 0, bdata = null;
+  let R = 0, lw = 0, img = null;
+  let cx = 0, cy = 0, tx = 0, ty = 0, live = false, dirty = true;
+  let power = 2.0, prog = 0, st = null;
+
+  function plate () {
+    const r = stage.getBoundingClientRect();
+    if (r.width < 8) return false;
+    W = r.width; H = r.height;
+    DPR = Math.min(2, devicePixelRatio || 1);
+    bw = Math.round(W * DPR); bh = Math.round(H * DPR);
+    base.width = bw; base.height = bh;
+    bx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    const g = bx.createLinearGradient(0, 0, W * .5, H);
+    g.addColorStop(0, '#0a0e14'); g.addColorStop(1, '#050609');
+    bx.fillStyle = g; bx.fillRect(0, 0, W, H);
+
+    bx.lineWidth = 1;                                   /* the ruled field */
+    const step = Math.max(9, H / 26);
+    for (let y = step * .5, i = 0; y < H; y += step, i++) {
+      bx.strokeStyle = 'rgba(206,224,242,' + (i % 4 === 0 ? .17 : .06) + ')';
+      bx.beginPath(); bx.moveTo(0, y); bx.lineTo(W, y); bx.stroke();
+    }
+    for (let k = 1; k < 8; k++) {
+      bx.strokeStyle = 'rgba(142,191,214,' + (k === 4 ? .12 : .045) + ')';
+      bx.beginPath(); bx.moveTo(W * k / 8, 0); bx.lineTo(W * k / 8, H); bx.stroke();
+    }
+    bx.strokeStyle = 'rgba(239,154,87,.24)'; bx.lineWidth = 1.2;
+    bx.beginPath(); bx.moveTo(0, H * .88); bx.lineTo(W, H * .12); bx.stroke();
+
+    bx.fillStyle = 'rgba(242,244,247,.90)';             /* the specimen legend */
+    bx.font = '500 ' + (W * .105).toFixed(0) + 'px ' + DISP;
+    bx.textAlign = 'center';
+    bx.fillText('REFRACTION', W * .5, H * .46);
+    bx.fillStyle = 'rgba(242,244,247,.44)';
+    bx.font = '400 ' + (W * .030).toFixed(0) + 'px ' + MONO;
+    bx.fillText('n  =  sin θi / sin θr', W * .5, H * .60);
+    bx.fillStyle = 'rgba(142,191,214,.55)';
+    bx.font = '400 ' + (W * .018).toFixed(0) + 'px ' + MONO;
+    bx.fillText('B K 7      n D   1 . 5 1 6 8      V d   6 4 . 1 7', W * .5, H * .72);
+    bx.textAlign = 'left';
+    bdata = bx.getImageData(0, 0, bw, bh).data;
+
+    R = Math.max(70, Math.min(W, H) * .21);
+    lw = Math.round(R * 2 * LS);
+    lens.width = lw; lens.height = lw;
+    lens.style.width = (R * 2) + 'px'; lens.style.height = (R * 2) + 'px';
+    img = lx.createImageData(lw, lw);
+    cx = tx = W * .5; cy = ty = H * .5;
+    dirty = true;
+    return true;
+  }
+
+  stage.addEventListener('pointermove', e => {
+    if (!FINE || REDUCED) return;
+    const r = stage.getBoundingClientRect();
+    tx = e.clientX - r.left; ty = e.clientY - r.top; live = true; dirty = true;
+  }, { passive: true });
+  stage.addEventListener('pointerleave', () => { live = false; dirty = true; });
+
+  function draw () {
+    const d = img.data, M = power, B = .34, DIS = .020;
+    const half = lw * .5, inv = 1 / LS;
+    for (let j = 0; j < lw; j++) {
+      const v = (j * inv - R);
+      for (let i = 0; i < lw; i++) {
+        const o = (j * lw + i) * 4;
+        const u = (i * inv - R);
+        const rr = Math.sqrt(u * u + v * v) / R;
+        if (rr > 1) { d[o + 3] = 0; continue; }
+        const bend = 1 + Math.pow(rr, 4) * B;           /* the rim works hardest */
+        const k = bend / M;
+        const sx = cx + u * k, sy = cy + v * k;
+        const fr = 1 + DIS * rr * rr * rr, fb = 1 - DIS * rr * rr * rr;
+        const px1 = ((cx + u * k * fr) * DPR) | 0, py1 = ((cy + v * k * fr) * DPR) | 0;
+        const px2 = (sx * DPR) | 0,                py2 = (sy * DPR) | 0;
+        const px3 = ((cx + u * k * fb) * DPR) | 0, py3 = ((cy + v * k * fb) * DPR) | 0;
+        const s1 = (clamp(py1, 0, bh - 1) * bw + clamp(px1, 0, bw - 1)) * 4;
+        const s2 = (clamp(py2, 0, bh - 1) * bw + clamp(px2, 0, bw - 1)) * 4;
+        const s3 = (clamp(py3, 0, bh - 1) * bw + clamp(px3, 0, bw - 1)) * 4;
+        const rim = Math.pow(rr, 9) * 60;               /* the polished edge */
+        d[o]     = clamp(bdata[s1] + rim, 0, 255);
+        d[o + 1] = clamp(bdata[s2 + 1] + rim, 0, 255);
+        d[o + 2] = clamp(bdata[s3 + 2] + rim * 1.1, 0, 255);
+        d[o + 3] = 255;
+      }
+    }
+    lx.putImageData(img, 0, 0);
+    lx.save();                                          /* rim + a single specular */
+    lx.scale(lw / (R * 2), lw / (R * 2));
+    lx.beginPath(); lx.arc(R, R, R - 1.2, 0, Math.PI * 2);
+    const rg = lx.createLinearGradient(0, 0, R * 2, R * 2);
+    rg.addColorStop(0, 'rgba(232,242,252,.85)'); rg.addColorStop(.4, 'rgba(142,191,214,.34)');
+    rg.addColorStop(.72, 'rgba(232,242,252,.55)'); rg.addColorStop(1, 'rgba(239,154,87,.26)');
+    lx.strokeStyle = rg; lx.lineWidth = 1.6; lx.stroke();
+    lx.beginPath(); lx.arc(R, R, R - 5, Math.PI * 1.08, Math.PI * 1.46);
+    lx.strokeStyle = 'rgba(255,255,255,.30)'; lx.lineWidth = 2.2; lx.stroke();
+    lx.restore();
+    lens.style.transform = 'translate(' + (cx - R).toFixed(1) + 'px,' + (cy - R).toFixed(1) + 'px)';
+  }
+
+  if (HAS_GSAP) st = ScrollTrigger.create({ trigger: '#loupe', start: 'top bottom', end: 'bottom top' });
+  if (!plate()) { /* retried in the loop */ }
+
+  GROUPS.push(function (dt) {
+    if (!img && !plate()) return;
+    const p = st ? clamp((st.progress - .18) / .5, 0, 1) : .5;
+    const want = 1.7 + p * 1.9;
+    if (Math.abs(want - power) > .002) { power = damp(power, want, 5, dt); dirty = true; }
+    if (pw) pw.textContent = power.toFixed(1) + '×';
+    const gx = live ? tx : W * .5, gy = live ? ty : H * .5;
+    if (Math.abs(gx - cx) > .15 || Math.abs(gy - cy) > .15) {
+      cx = damp(cx, gx, 9, dt); cy = damp(cy, gy, 9, dt); dirty = true;
+    }
+    if (dirty) { draw(); dirty = false; }
+  });
+
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(plate, 180); });
+})();
+
+/* =========================================================================
+   06 · ASSEMBLY — the blown-up view
+   The stack itself is real glass, rendered in WebGL by assembly-gl.js at the
+   end of the file. This half owns only the pin, the callouts and the
+   separation readout, and publishes the eased progress on window.__ASM for
+   the renderer to read — one writer, as everywhere else.
+   ========================================================================= */
+(function assembly () {
+  const stage = q('#asmStage'), cap = q('#asmCap');
+  if (!stage) return;
+  const EL = [
+    { lab:'Front element',    val:'n 1.617' },
+    { lab:'Cemented doublet', val:'1.52 · 1.72' },
+    { lab:'Aperture',         val:'f / 1.4' },
+    { lab:'Field flattener',  val:'n 1.583' },
+    { lab:'Coating',          val:'λ/4 · 420 nm' },
+    { lab:'Image plane',      val:'36 × 24' }
+  ];
+  const labs = EL.map(o => {
+    const l = document.createElement('div');
+    l.className = 'asm-lab';
+    l.innerHTML = '<i></i><b>' + o.lab + '</b><em>' + o.val + '</em>';
+    stage.appendChild(l);
+    return l;
+  });
+
+  let st = null;
+  if (HAS_GSAP) st = ScrollTrigger.create({
+    trigger: '#assembly', start: 'top top', end: 'bottom bottom',
+    pin: '.asm-pin', pinSpacing: false });
+
+  /* One writer. The WebGL module reads this and never writes it. */
+  const ASM = window.__ASM = { p: 0, w: 0, h: 0 };
+
+  GROUPS.push(function () {
+    const p = REDUCED ? 1 : (st ? st.progress : 0);
+    const e = p * p * (3 - 2 * p);
+    const box = stage.getBoundingClientRect();
+    ASM.p = e; ASM.w = box.width; ASM.h = box.height;
+    for (let i = 0; i < labs.length; i++) {
+      const t = clamp((e - .22 - i * .07) / .3, 0, 1);
+      labs[i].style.opacity = t.toFixed(3);
+      labs[i].style.transform = 'translate(' + (box.width * .19) + 'px,' +
+        (-box.height * .31 + i * box.height * .118).toFixed(0) + 'px)';
+      labs[i].firstChild.style.width = (58 * t).toFixed(0) + 'px';
+    }
+    if (cap) cap.textContent = e < .01 ? 'Seated · 0.00 mm separation'
+      : 'Exploded · ' + (e * 41.5).toFixed(2) + ' mm separation';
+  });
+})();
+
+/* =========================================================================
+   08 · CAUSTICS — the field is drawn from the scroll position, not a clock
+   Folding the domain a few times and taking the crests gives the filament
+   network light leaves on a floor. 240 × 135, upscaled and blurred half a
+   pixel, so it costs almost nothing and stops dead when you do.
+   ========================================================================= */
+(function caustics () {
+  const host = q('#caustics .cau');
+  if (!host) return;
+  const cv = document.createElement('canvas');
+  const cx2 = cv.getContext('2d');
+  if (!cx2) return;
+  host.appendChild(cv);
+  const W = 240, H = 135;
+  cv.width = W; cv.height = H;
+  const img = cx2.createImageData(W, H);
+  let st = null, last = -1e9, mx = 0, my = 0;
+
+  addEventListener('pointermove', e => {
+    if (!FINE || REDUCED) return;
+    mx = (e.clientX / (innerWidth || 1) - .5) * .8;
+    my = (e.clientY / (innerHeight || 1) - .5) * .8;
+  }, { passive: true });
+
+  function render (t) {
+    const d = img.data;
+    for (let y = 0; y < H; y++) {
+      const fy = y / H * 2.1;
+      for (let x = 0; x < W; x++) {
+        const fx = x / W * 3.5;
+        const a = Math.sin(fx * 5.1 + t * 1.7) + Math.sin(fy * 4.3 - t * 1.3)
+                + Math.sin((fx + fy) * 3.2 + t * .9);
+        const b = Math.sin(fx * 2.6 - t * .8 + mx) + Math.sin(fy * 3.1 + t * .6 + my);
+        const f = Math.abs(Math.sin(a * 1.15 + b * .65));
+        let c = Math.pow(1 - f, 9);
+        const o = (y * W + x) * 4;
+        const hot = c > .72 ? (c - .72) * 3.6 : 0;      /* amber only in the cores */
+        d[o]     = clamp(c * 176 + hot * 74, 0, 255);
+        d[o + 1] = clamp(c * 202 + hot * 30, 0, 255);
+        d[o + 2] = clamp(c * 232, 0, 255);
+        d[o + 3] = 255;
+      }
+    }
+    cx2.putImageData(img, 0, 0);
+  }
+  render(0);
+  if (HAS_GSAP) st = ScrollTrigger.create({ trigger: '#caustics', start: 'top bottom', end: 'bottom top' });
+
+  GROUPS.push(function () {
+    const t = (st ? st.progress : .5) * 7.4 + mx * .4;
+    if (Math.abs(t - last) < .004) return;              /* still when you are */
+    last = t; render(t);
+  });
+})();
+
+/* =========================================================================
+   TEXT · a decode pass for one headline. Characters resolve left to right
+   out of a technical charset — used once, where the section is about what
+   light leaves behind.
+   ========================================================================= */
+(function scramble () {
+  const el = q('[data-scramble]');
+  if (!el || !HAS_GSAP) return;
+  const GLYPH = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789λθnΔ∇/·';
+  const lines = el.innerHTML.split(/<br\s*\/?>/i).map(l => l.trim());
+  el.innerHTML = lines.map(l => '<span class="ln"><span>' + l + '</span></span>').join('');
+  const spans = qq('[data-scramble] .ln > span');
+  const src = spans.map(s2 => s2.textContent);
+  if (REDUCED) return;
+  spans.forEach((s2, i) => s2.textContent = src[i].replace(/\S/g, ' '));
+  ScrollTrigger.create({ trigger: el, start: 'top 84%', once: true, onEnter () {
+    const t0 = performance.now(), total = src.join('').length;
+    (function run (now) {
+      const p = clamp((now - t0) / 1500, 0, 1);
+      const shown = p * total;
+      let seen = 0;
+      spans.forEach((s2, i) => {
+        let out = '';
+        for (let k = 0; k < src[i].length; k++, seen++) {
+          const ch = src[i][k];
+          if (ch === ' ') { out += ' '; continue; }
+          if (seen < shown - 6) out += ch;
+          else if (seen < shown + 2) out += GLYPH[(Math.random() * GLYPH.length) | 0];
+          else out += ' ';
+        }
+        s2.textContent = out;
+      });
+      if (p < 1) requestAnimationFrame(run);
+      else spans.forEach((s2, i) => s2.textContent = src[i]);
+    })(t0);
+  }});
+})();
+
+/* =========================================================================
+   POINTER · magnetic targets, and a chromatic shear tied to scroll speed.
+   The shear is a text-shadow, never a transform, so it cannot collide with
+   anything the timelines already own. Both settle to nothing at rest.
+   ========================================================================= */
+(function pointerFx () {
+  if (!HAS_GSAP || !FINE || REDUCED) return;
+
+  const heads = qq('h1,h2');
+  let vel = 0, cur = 0;
+  ScrollTrigger.create({ onUpdate: self => { vel = self.getVelocity(); } });
+  GROUPS.push(function (dt) {
+    const want = clamp(Math.abs(vel) / 1100, 0, 1) * 2.4;
+    cur = damp(cur, want, 7, dt);
+    if (cur < .02) { if (heads[0].style.textShadow) heads.forEach(h => h.style.textShadow = ''); return; }
+    const o = cur.toFixed(2);
+    const sh = '-' + o + 'px 0 rgba(214,138,114,.42), ' + o + 'px 0 rgba(111,154,214,.42)';
+    heads.forEach(h => h.style.textShadow = sh);
+  });
+})();
+
+/* -------------------------------------------------------------- HUD ---- */
+(function hud () {
+  const el = q('#hud'), ch = q('#hudCh'), pct = q('#hudPct'), tick = q('#hudTick');
+  if (!el || !HAS_GSAP) return;
+  const NAMES = [['prime','01 Prime'], ['fracture','02 Fracture'], ['loupe','03 Loupe'],
+    ['index','04 Index'], ['dispersion','05 Dispersion'], ['assembly','06 Assembly'],
+    ['coating','07 Coating'], ['specimens','08 Specimens'], ['workbench','09 Workbench'],
+    ['caustics','10 Caustics'], ['notes','11 Field notes'], ['export','12 Export'],
+    ['anneal','13 Anneal']];
+  NAMES.forEach(n => {
+    const t = document.getElementById(n[0]);
+    if (t) ScrollTrigger.create({ trigger: t, start: 'top 55%', end: 'bottom 55%',
+      onToggle: s2 => { if (s2.isActive) ch.textContent = n[1]; } });
+  });
+  ScrollTrigger.create({ start: 0, end: 'max', onUpdate: s2 => {
+    const p = s2.progress;
+    pct.textContent = String(Math.round(p * 100)).padStart(3, '0') + ' %';
+    tick.style.top = (p * 100).toFixed(1) + '%';
+    gsap.to(el, { opacity: p > .02 ? 1 : 0, duration: .4, overwrite: true });
+  }});
+})();
+
+
+/* =========================================================================
+   08 · SPECIMENS — one plate, five materials, broken by the pointer
+   The pieces share edges and sit seated at rest, each scaled up by its own
+   share of the seam so the plate reads as whole. Bring the pointer in and
+   the whole thing fractures: every piece separates along its own radial,
+   the one under the cursor separates furthest, tilts, and fills its entire
+   frame with a photograph of that material.
+   ========================================================================= */
+(function specimens () {
+  const sect = q('#specimens'), field = q('#spField');
+  if (!field) return;
+
+  const PL = { tl:[-.02,-.02], tr:[1.02,-.02], bl:[-.02,1.02], br:[1.02,1.02],
+               A:[.46,-.02], B:[-.02,.42], C:[.40,.44], D:[1.02,.30],
+               E:[.70,.72], F:[.26,1.02], G:[1.02,.80] };
+  const PC = [
+    { pts:['tl','A','C','B'],        nm:'Fused silica', sub:'SiO₂ · UV grade',    val:'n 1.4585', ior:1.4585 },
+    { pts:['A','tr','D','C'],        nm:'BK7',          sub:'Borosilicate crown', val:'n 1.5168', ior:1.5168 },
+    { pts:['C','D','G','E'],         nm:'SF11',         sub:'Dense flint',        val:'n 1.7847', ior:1.7847 },
+    { pts:['B','C','E','F','bl'],    nm:'Sapphire',     sub:'Al₂O₃ · c-axis',     val:'n 1.7682', ior:1.7682 },
+    { pts:['E','G','br','F'],        nm:'CaF₂',         sub:'Calcium fluoride',   val:'n 1.4338', ior:1.4338 }
+  ];
+  const PLATE = { x:.395, y:.035, w:.635, h:.855 };   /* right of the copy, clear of the HUD */

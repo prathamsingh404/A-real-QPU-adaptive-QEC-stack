@@ -236,3 +236,106 @@ class IBMQuantumBackend(QPUBackend):
                                 gate_length_ns=(
                                     gate_props.duration * 1e9
                                     if gate_props.duration is not None
+                                    else None
+                                ),
+                            )
+                            gate_calibrations.append(gc)
+
+                            # Update qubit single-qubit gate error
+                            if len(qargs) == 1 and gate_props.error is not None:
+                                qcal = qubit_calibrations[qargs[0]]
+                                if qcal.single_qubit_gate_error is None:
+                                    qcal.single_qubit_gate_error = gate_props.error
+                    except Exception:
+                        pass
+
+        # Coupling map
+        coupling_map = []
+        if hasattr(self._backend, 'coupling_map') and self._backend.coupling_map:
+            coupling_map = [
+                (int(edge[0]), int(edge[1]))
+                for edge in self._backend.coupling_map.get_edges()
+            ]
+
+        return CalibrationSnapshot(
+            timestamp=timestamp,
+            backend_name=self._backend_name,
+            qubit_calibrations=qubit_calibrations,
+            gate_calibrations=gate_calibrations,
+            coupling_map=coupling_map,
+        )
+
+    def get_topology(self) -> TopologyInfo:
+        """Get qubit connectivity from the IBM backend."""
+        if self._backend is None:
+            raise RuntimeError("Backend not connected. Call connect() first.")
+
+        coupling_map = []
+        if hasattr(self._backend, 'coupling_map') and self._backend.coupling_map:
+            coupling_map = [
+                (int(edge[0]), int(edge[1]))
+                for edge in self._backend.coupling_map.get_edges()
+            ]
+
+        return TopologyInfo(
+            num_qubits=self._backend.num_qubits,
+            coupling_map=coupling_map,
+        )
+
+    def get_backend_info(self) -> BackendInfo:
+        """Get static backend information."""
+        if self._backend is None:
+            raise RuntimeError("Backend not connected. Call connect() first.")
+
+        status = self._backend.status()
+        config = self._backend.configuration() if hasattr(self._backend, 'configuration') else None
+
+        return BackendInfo(
+            name=self._backend_name,
+            provider="ibm",
+            num_qubits=self._backend.num_qubits,
+            topology_type=self._config.topology,
+            version=getattr(self._backend, 'version', 'unknown'),
+            status=status.status_msg if status else "unknown",
+            max_shots=config.max_shots if config and hasattr(config, 'max_shots') else 100000,
+            max_circuits=config.max_experiments if config and hasattr(config, 'max_experiments') else 300,
+            basis_gates=list(self._backend.target.operation_names) if self._backend.target else [],
+        )
+
+    def is_available(self) -> bool:
+        """Check if the IBM backend is currently operational."""
+        if self._backend is None:
+            return False
+        try:
+            status = self._backend.status()
+            return status.operational
+        except Exception:
+            return False
+
+    def get_results(self, job_id: str) -> ExperimentResult:
+        """Retrieve results from a previously submitted job."""
+        if self._service is None:
+            raise RuntimeError("Service not connected. Call connect() first.")
+
+        job = self._service.job(job_id)
+        result = job.result()
+
+        pub_result = result[0]
+        bitstrings = pub_result.data.meas
+        outcomes = np.array(
+            [[int(b) for b in bits] for bits in bitstrings.get_bitstrings()],
+            dtype=np.uint8,
+        )
+
+        counts: dict[str, int] = {}
+        for bitstring in bitstrings.get_bitstrings():
+            counts[bitstring] = counts.get(bitstring, 0) + 1
+
+        return ExperimentResult(
+            experiment_id=job_id[:12],
+            backend_name=self._backend_name,
+            shots=sum(counts.values()),
+            measurement_outcomes=outcomes,
+            counts=counts,
+            job_id=job_id,
+        )

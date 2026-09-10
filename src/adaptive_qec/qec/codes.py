@@ -212,3 +212,119 @@ class SurfaceCode(QECCode):
     """
     Rotated surface code.
 
+    The workhorse code for near-term QEC. Uses Stim's built-in
+    surface code circuit generation for correctness, with custom
+    noise injection.
+    """
+
+    def __init__(self, distance: int, rounds: int) -> None:
+        if distance < 3 or distance % 2 == 0:
+            raise ValueError(f"Distance must be odd and >= 3, got {distance}")
+        if rounds < 1:
+            raise ValueError(f"Rounds must be >= 1, got {rounds}")
+
+        self.distance = distance
+        self.rounds = rounds
+
+    def generate_circuit(
+        self,
+        noise: Optional[NoiseConfig] = None,
+    ) -> stim.Circuit:
+        """
+        Generate rotated surface code circuit.
+
+        Uses Stim's generated circuit with appropriate noise parameters.
+        """
+        # Determine noise level for Stim's circuit generation
+        p = 0.0
+        if noise:
+            # Use the two-qubit gate error as the primary noise parameter
+            p = noise.gate.two_qubit
+
+        if p > 0:
+            circuit = stim.Circuit.generated(
+                "surface_code:rotated_memory_z",
+                distance=self.distance,
+                rounds=self.rounds,
+                after_clifford_depolarization=p,
+                before_round_data_depolarization=p,
+                before_measure_flip_probability=p,
+                after_reset_flip_probability=p,
+            )
+        else:
+            circuit = stim.Circuit.generated(
+                "surface_code:rotated_memory_z",
+                distance=self.distance,
+                rounds=self.rounds,
+            )
+
+        logger.info(
+            f"Generated surface code circuit: d={self.distance}, R={self.rounds}, "
+            f"detectors={circuit.num_detectors}, observables={circuit.num_observables}, "
+            f"noise_p={p:.6f}"
+        )
+        return circuit
+
+    def get_info(self) -> CodeInfo:
+        """Get surface code info."""
+        d = self.distance
+        num_data = d * d
+        num_ancilla = (d * d - 1)  # approximate for rotated code
+        # Detector count: ancillas * (rounds + 1) approximately
+        # Exact count comes from the Stim circuit
+        return CodeInfo(
+            name="surface",
+            distance=d,
+            rounds=self.rounds,
+            num_data_qubits=num_data,
+            num_ancilla_qubits=num_ancilla,
+            num_detectors=(d * d - 1) * self.rounds + (d * d - 1) // 2,
+            num_observables=1,
+        )
+
+    def get_detector_coordinates(self) -> np.ndarray:
+        """
+        Get detector coordinates from the generated Stim circuit.
+
+        Returns coordinates from the circuit itself for accuracy.
+        """
+        circuit = self.generate_circuit()
+        dem = circuit.detector_error_model()
+        coords = []
+        for instruction in dem:
+            if instruction.type == "error":
+                for target in instruction.targets_copy():
+                    if target.is_relative_detector_id():
+                        pass  # coordinates come from circuit
+        # Use Stim's built-in coordinate extraction
+        coord_dict = circuit.get_detector_coordinates()
+        result = np.zeros((len(coord_dict), 3))
+        for det_id, coord in coord_dict.items():
+            if det_id < len(result):
+                result[det_id, :len(coord)] = coord[:3]
+        return result
+
+
+def create_code(code_type: str, distance: int, rounds: int) -> QECCode:
+    """
+    Factory function to create a QEC code.
+
+    Args:
+        code_type: "repetition" or "surface"
+        distance: Code distance (must be odd, >= 3)
+        rounds: Number of QEC rounds
+
+    Returns:
+        QECCode instance.
+    """
+    codes = {
+        "repetition": RepetitionCode,
+        "surface": SurfaceCode,
+    }
+
+    if code_type not in codes:
+        raise ValueError(
+            f"Unknown code type '{code_type}'. Available: {list(codes.keys())}"
+        )
+
+    return codes[code_type](distance=distance, rounds=rounds)

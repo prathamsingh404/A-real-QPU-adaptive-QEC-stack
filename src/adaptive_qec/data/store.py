@@ -79,3 +79,85 @@ class ExperimentStore:
         decoder_dir.mkdir(exist_ok=True)
         plots_dir = exp_dir / "plots"
         plots_dir.mkdir(exist_ok=True)
+
+        # Save config snapshot
+        with open(exp_dir / "config.yaml", "w") as f:
+            yaml.dump(record.config_snapshot, f, default_flow_style=False)
+
+        # Save circuit QASM
+        with open(exp_dir / "circuit.qasm", "w") as f:
+            f.write(record.circuit_qasm)
+
+        # Save QPU metadata (everything except raw measurements)
+        with open(exp_dir / "qpu_metadata.json", "w") as f:
+            json.dump(record.to_dict(), f, indent=2, default=str)
+
+        # Save calibration snapshot
+        with open(exp_dir / "calibration.json", "w") as f:
+            json.dump(record.calibration_snapshot, f, indent=2, default=str)
+
+        # Save raw measurement outcomes as numpy array
+        if record.measurement_outcomes.size > 0:
+            np.save(raw_dir / "measurement_outcomes.npy", record.measurement_outcomes)
+
+        # Save git commit
+        if record.git_commit:
+            with open(exp_dir / "git_commit.txt", "w") as f:
+                f.write(record.git_commit)
+
+        logger.info(f"Saved experiment {record.experiment_id} to {exp_dir}")
+        return exp_dir
+
+    def save_detector_data(self, record: DetectorRecord) -> None:
+        """Save detector extraction results."""
+        detector_dir = self.experiment_path(record.experiment_id) / "detector_data"
+        detector_dir.mkdir(parents=True, exist_ok=True)
+
+        np.save(detector_dir / "syndrome_tensor.npy", record.syndrome_tensor)
+        np.save(detector_dir / "observable_flips.npy", record.observable_flips)
+
+        if record.detector_coordinates is not None:
+            np.save(detector_dir / "detector_coordinates.npy", record.detector_coordinates)
+
+        with open(detector_dir / "detector_metadata.json", "w") as f:
+            json.dump(record.to_dict(), f, indent=2)
+
+        logger.info(
+            f"Saved detector data for {record.experiment_id}: "
+            f"{record.num_detectors} detectors, {record.num_rounds} rounds"
+        )
+
+    def save_decoder_results(self, record: DecoderRecord) -> None:
+        """Save decoder results."""
+        decoder_dir = self.experiment_path(record.experiment_id) / "decoder_results"
+        decoder_dir.mkdir(parents=True, exist_ok=True)
+
+        np.save(
+            decoder_dir / f"{record.decoder_name}_corrections.npy",
+            record.corrections,
+        )
+
+        if record.per_shot_latency_us is not None:
+            np.save(
+                decoder_dir / f"{record.decoder_name}_latency.npy",
+                record.per_shot_latency_us,
+            )
+
+        with open(decoder_dir / f"{record.decoder_name}_results.json", "w") as f:
+            json.dump(record.to_dict(), f, indent=2, default=str)
+
+        logger.info(
+            f"Saved decoder results for {record.experiment_id}: "
+            f"{record.decoder_name} — LER={record.logical_error_rate:.6f}"
+        )
+
+    def save_metrics(self, metrics: ExperimentMetrics) -> None:
+        """Save experiment metrics."""
+        exp_dir = self.experiment_path(metrics.experiment_id)
+        exp_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(exp_dir / "metrics.json", "w") as f:
+            json.dump(metrics.to_dict(), f, indent=2, default=str)
+
+        logger.info(f"Saved metrics for {metrics.experiment_id}")
+

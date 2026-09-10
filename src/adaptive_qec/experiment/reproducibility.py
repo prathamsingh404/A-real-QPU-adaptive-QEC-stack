@@ -50,3 +50,56 @@ def get_git_diff_status() -> str | None:
             return "dirty" if result.stdout.strip() else "clean"
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
+    return None
+
+
+def get_software_versions() -> dict[str, str]:
+    """Capture versions of all relevant software packages."""
+    versions: dict[str, str] = {
+        "python": sys.version,
+        "platform": platform.platform(),
+    }
+
+    packages = [
+        "stim",
+        "pymatching",
+        "qiskit",
+        "qiskit_ibm_runtime",
+        "numpy",
+        "scipy",
+        "pydantic",
+        "matplotlib",
+        "torch",
+        "adaptive_qec",
+    ]
+
+    for pkg in packages:
+        try:
+            mod = __import__(pkg)
+            versions[pkg] = getattr(mod, "__version__", "unknown")
+        except ImportError:
+            pass
+
+    return versions
+
+
+def capture_reproducibility_info() -> dict[str, Any]:
+    """
+    Capture all reproducibility information.
+
+    Returns a dict suitable for JSON serialization.
+    """
+    info: dict[str, Any] = {
+        "git_commit": get_git_commit(),
+        "git_status": get_git_diff_status(),
+        "software_versions": get_software_versions(),
+        "python_executable": sys.executable,
+    }
+
+    if info["git_status"] == "dirty":
+        logger.warning(
+            "Working directory has uncommitted changes. "
+            "Experiment may not be fully reproducible."
+        )
+
+    return info

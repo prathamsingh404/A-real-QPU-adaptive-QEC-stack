@@ -65,3 +65,32 @@ runtime:
     affinity: false
   gpu:
     enabled: false
+    device: 0
+    backend: pytorch              # pytorch | tensorrt | cuda
+  batch_size: 1000                # number of syndromes per batch
+  latency_budget:
+    deadline_us: 1000             # microseconds per QEC round
+    warning_threshold: 0.8        # fraction of deadline to trigger WARNING
+    tracking: true
+
+experiment:
+  output_dir: experiments
+  shots: 10000                    # shots per circuit execution
+  repetitions: 1                  # number of times to repeat experiment
+  save_raw: true                  # save individual shot outcomes
+  save_circuits: true             # save QASM circuits
+  save_calibration: true          # save calibration snapshot
+  save_plots: true                # auto-generate plots
+  name_template: "{code}_d{distance}_r{rounds}_{backend}_{timestamp}"
+
+data:
+  storage_backend: filesystem     # filesystem | postgresql
+  base_path: experiments          # base directory for experiment data
+  compression: false              # compress raw data
+  format: json                   # json | parquet | hdf5
+
+analysis:
+  confidence_level: 0.95          # for confidence intervals
+  min_shots: 1000                 # minimum shots for statistical validity
+  bootstrap_samples: 10000        # bootstrap resampling count
+  hypothesis_test: two_sided     # two_sided | one_sided

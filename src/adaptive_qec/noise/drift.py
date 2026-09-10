@@ -88,3 +88,94 @@ class EWMADriftDetector:
         # State
         self._ewma: Optional[np.ndarray] = None
         self._baseline_mean: Optional[np.ndarray] = None
+        self._baseline_var: Optional[np.ndarray] = None
+        self._sample_count = 0
+        self._history: list[np.ndarray] = []
+
+    def update(self, detection_rates: np.ndarray) -> DriftReport:
+        """
+        Update the drift detector with new detection rates.
+
+        Args:
+            detection_rates: P(D_i = 1) for each detector from latest experiment.
+
+        Returns:
+            DriftReport with current status.
+        """
+        self._sample_count += 1
+        self._history.append(detection_rates.copy())
+
+        if self._ewma is None or self._ewma.shape != detection_rates.shape:
+            self._ewma = detection_rates.copy()
+            self._baseline_mean = detection_rates.copy()
+            self._baseline_var = np.zeros_like(detection_rates)
+            self._sample_count = 1
+            self._history = [detection_rates.copy()]
+            return DriftReport(
+                status=DriftStatus.STABLE,
+                magnitude=0.0,
+                details={"message": "Initializing baseline"},
+            )
+
+        # Update EWMA
+        self._ewma = self._alpha * detection_rates + (1 - self._alpha) * self._ewma
+
+        # Update baseline statistics (Welford's online algorithm)
+        if self._sample_count <= self._warmup:
+            delta = detection_rates - self._baseline_mean
+            self._baseline_mean += delta / self._sample_count
+            delta2 = detection_rates - self._baseline_mean
+            self._baseline_var += delta * delta2
+
+            return DriftReport(
+                status=DriftStatus.STABLE,
+                magnitude=0.0,
+                details={"message": f"Warmup: {self._sample_count}/{self._warmup}"},
+            )
+
+        # Compute baseline standard deviation
+        baseline_std = np.sqrt(self._baseline_var / (self._warmup - 1))
+        baseline_std[baseline_std < 1e-8] = 1e-8  # prevent division by zero
+
+        # Compute z-scores for EWMA deviation from baseline
+        # EWMA variance is reduced by factor alpha / (2 - alpha)
+        ewma_std = baseline_std * np.sqrt(self._alpha / (2 - self._alpha))
+        z_scores = np.abs(self._ewma - self._baseline_mean) / ewma_std
+
+        # Classify drift
+        max_z = float(z_scores.max())
+        mean_z = float(z_scores.mean())
+
+        severe_dets = list(np.where(z_scores > self._severe_sigma)[0])
+        alarm_dets = list(np.where(z_scores > self._alarm_sigma)[0])
+        warning_dets = list(np.where(z_scores > self._warning_sigma)[0])
+
+        if len(severe_dets) > 0:
+            status = DriftStatus.SEVERE
+        elif len(alarm_dets) > 0:
+            status = DriftStatus.DRIFT_DETECTED
+        elif len(warning_dets) > 0:
+            status = DriftStatus.WARNING
+        else:
+            status = DriftStatus.STABLE
+
+        # Determine affected parameters
+        affected_params = []
+        if len(alarm_dets) > 0:
+            affected_params.append("detection_rate")
+            # Check if drift is in readout (all detectors) or specific region
+            fraction_affected = len(alarm_dets) / len(detection_rates)
+            if fraction_affected > 0.5:
+                affected_params.append("global_noise")
+            else:
+                affected_params.append("local_noise")
+
+        report = DriftReport(
+            status=status,
+            magnitude=max_z,
+            affected_detectors=alarm_dets,
+            affected_parameters=affected_params,
+            detector_drift_values=z_scores,
+            details={
+                "max_z_score": max_z,
+                "mean_z_score": mean_z,

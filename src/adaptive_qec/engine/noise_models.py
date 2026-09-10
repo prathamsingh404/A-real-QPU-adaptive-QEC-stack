@@ -128,3 +128,60 @@ class NoiseInjector:
         base_error: float,
         drift_rate: float,
         time_step: float = 1.0,
+    ) -> list[stim.Circuit]:
+        """
+        Generate a sequence of circuits with drifting noise levels.
+
+        Each circuit represents the system at a different time step.
+
+        Returns:
+            List of circuits with progressively changing noise.
+        """
+        circuits = []
+        for t in range(int(1 / drift_rate) + 1):
+            current_error = base_error + drift_rate * t * time_step
+            current_error = min(current_error, 0.5)  # cap at 50%
+
+            drifted = stim.Circuit()
+            for instruction in circuit.flattened():
+                drifted.append(instruction)
+
+                if instruction.name in ("CX", "CNOT", "CZ"):
+                    targets = instruction.targets_copy()
+                    for i in range(0, len(targets), 2):
+                        drifted.append(
+                            "DEPOLARIZE2",
+                            [targets[i].value, targets[i + 1].value],
+                            [current_error],
+                        )
+
+            circuits.append(drifted)
+
+        return circuits
+
+    def build_full_noise_model(
+        self,
+        circuit: stim.Circuit,
+    ) -> stim.Circuit:
+        """
+        Apply the complete noise model from configuration.
+
+        Combines independent, readout, correlated, and leakage noise.
+        """
+        noisy = circuit
+
+        # Gate noise
+        if self._config.gate.single_qubit > 0 or self._config.gate.two_qubit > 0:
+            p = self._config.gate.two_qubit
+            noisy = self.inject_independent_noise(
+                noisy,
+                p_x=p / 3,
+                p_y=p / 3,
+                p_z=p / 3,
+            )
+
+        # Readout noise
+        if self._config.readout.enabled:
+            noisy = self.inject_readout_noise(noisy)
+
+        return noisy

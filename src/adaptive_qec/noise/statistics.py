@@ -119,3 +119,152 @@ def compute_detector_statistics(
     logger.info(
         f"Detector statistics: mean_rate={mean_rate:.6f}, "
         f"std={std_rate:.6f}, hotspots={len(hotspots)}"
+    )
+    return result
+
+
+def compute_temporal_correlation(
+    detection_events: np.ndarray,
+    num_rounds: int,
+    max_lag: int = 10,
+) -> TemporalCorrelation:
+    """
+    Compute temporal autocorrelation C(k) = corr(D_t, D_{t+k}).
+
+    This reveals whether errors persist across QEC rounds, which is
+    a signature of correlated noise, leakage, or drift.
+
+    Args:
+        detection_events: shape (shots, num_detectors)
+        num_rounds: number of QEC rounds
+        max_lag: maximum temporal lag to compute
+
+    Returns:
+        TemporalCorrelation with per-detector and mean autocorrelation.
+    """
+    shots, total_detectors = detection_events.shape
+    detectors_per_round = total_detectors // (num_rounds + 1)
+
+    if detectors_per_round == 0:
+        logger.warning("Cannot compute temporal correlation: too few detectors per round")
+        return TemporalCorrelation(
+            max_lag=0,
+            autocorrelation=np.array([]),
+            mean_autocorrelation=np.array([]),
+        )
+
+    max_lag = min(max_lag, num_rounds)
+
+    # Reshape to (shots, rounds+1, detectors_per_round)
+    usable = detectors_per_round * (num_rounds + 1)
+    reshaped = detection_events[:, :usable].reshape(
+        shots, num_rounds + 1, detectors_per_round
+    ).astype(np.float64)
+
+    # Compute autocorrelation for each detector
+    autocorr = np.zeros((detectors_per_round, max_lag))
+
+    for d in range(detectors_per_round):
+        series = reshaped[:, :, d]  # (shots, rounds+1)
+        mean_d = series.mean()
+        var_d = series.var()
+
+        if var_d < 1e-12:
+            continue
+
+        for k in range(1, max_lag + 1):
+            if k >= num_rounds + 1:
+                break
+            # C(k) = E[D_t * D_{t+k}] - E[D_t]^2, normalized
+            products = series[:, :-k] * series[:, k:]
+            autocorr[d, k - 1] = (products.mean() - mean_d ** 2) / var_d
+
+    mean_autocorr = autocorr.mean(axis=0)
+
+    # Identify detectors with persistent correlations
+    persistence_threshold = 0.1
+    persistence_detectors = []
+    for d in range(detectors_per_round):
+        if autocorr[d, 0] > persistence_threshold:
+            persistence_detectors.append(d)
+
+    logger.info(
+        f"Temporal correlation: max_lag={max_lag}, "
+        f"persistent_detectors={len(persistence_detectors)}"
+    )
+    return TemporalCorrelation(
+        max_lag=max_lag,
+        autocorrelation=autocorr,
+        mean_autocorrelation=mean_autocorr,
+        persistence_detectors=persistence_detectors,
+    )
+
+
+def compute_spatial_correlation(
+    detection_events: np.ndarray,
+    detector_coordinates: Optional[np.ndarray] = None,
+    significance_level: float = 0.01,
+) -> SpatialCorrelation:
+    """
+    Compute spatial correlations between detectors.
+
+    Identifies which qubits/errors influence one another.
+
+    Args:
+        detection_events: shape (shots, num_detectors)
+        detector_coordinates: optional (num_detectors, ndim) for distance weighting
+        significance_level: p-value threshold for significant correlations
+
+    Returns:
+        SpatialCorrelation with correlation matrix and significant pairs.
+    """
+    shots, num_detectors = detection_events.shape
+    detection_float = detection_events.astype(np.float64)
+
+    # Pearson correlation matrix
+    if num_detectors <= 500:
+        correlation_matrix = np.corrcoef(detection_float.T)
+        # Handle NaN from zero-variance detectors
+        correlation_matrix = np.nan_to_num(correlation_matrix, nan=0.0)
+    else:
+        # Approximate for large detector counts
+        correlation_matrix = np.zeros((num_detectors, num_detectors))
+        means = detection_float.mean(axis=0)
+        stds = detection_float.std(axis=0)
+        stds[stds < 1e-12] = 1.0  # avoid division by zero
+
+        batch = 100
+        for i in range(0, num_detectors, batch):
+            i_end = min(i + batch, num_detectors)
+            normed_i = (detection_float[:, i:i_end] - means[i:i_end]) / stds[i:i_end]
+            for j in range(i, num_detectors, batch):
+                j_end = min(j + batch, num_detectors)
+                normed_j = (detection_float[:, j:j_end] - means[j:j_end]) / stds[j:j_end]
+                block = (normed_i.T @ normed_j) / shots
+                correlation_matrix[i:i_end, j:j_end] = block
+                if i != j:
+                    correlation_matrix[j:j_end, i:i_end] = block.T
+
+    # Find significant pairs (above threshold, excluding diagonal)
+    significant_pairs = []
+    # Use Bonferroni correction for multiple testing
+    corrected_alpha = significance_level / max(1, num_detectors * (num_detectors - 1) // 2)
+    # Critical correlation value for significance
+    t_crit = stats.t.ppf(1 - corrected_alpha / 2, df=shots - 2)
+    r_crit = t_crit / np.sqrt(t_crit ** 2 + shots - 2)
+
+    for i in range(num_detectors):
+        for j in range(i + 1, min(i + 50, num_detectors)):  # limit search range
+            r = abs(correlation_matrix[i, j])
+            if r > r_crit:
+                significant_pairs.append((i, j, float(correlation_matrix[i, j])))
+
+    logger.info(
+        f"Spatial correlation: {num_detectors} detectors, "
+        f"{len(significant_pairs)} significant pairs"
+    )
+    return SpatialCorrelation(
+        num_detectors=num_detectors,
+        correlation_matrix=correlation_matrix,
+        significant_pairs=significant_pairs,
+    )

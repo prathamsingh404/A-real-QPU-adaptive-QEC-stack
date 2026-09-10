@@ -304,3 +304,57 @@ def _apply_env_overrides(data: dict[str, Any], prefix: str = "AQEC") -> dict[str
         for part in parts[:-1]:
             if part not in current:
                 current[part] = {}
+            current = current[part]
+
+        # Type coercion for common cases
+        raw = value
+        if raw.lower() in ("true", "false"):
+            raw = raw.lower() == "true"  # type: ignore[assignment]
+        else:
+            try:
+                raw = int(raw)  # type: ignore[assignment]
+            except ValueError:
+                try:
+                    raw = float(raw)  # type: ignore[assignment]
+                except ValueError:
+                    pass
+
+        current[parts[-1]] = raw
+
+    return data
+
+
+def load_config(path: str | Path) -> AdaptiveQECConfig:
+    """
+    Load configuration from a YAML file with environment variable overrides.
+
+    Args:
+        path: Path to YAML configuration file.
+
+    Returns:
+        Validated AdaptiveQECConfig instance.
+
+    Raises:
+        FileNotFoundError: If the config file doesn't exist.
+        pydantic.ValidationError: If the config is invalid.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Configuration file not found: {path}")
+
+    with open(path) as f:
+        data = yaml.safe_load(f) or {}
+
+    data = _apply_env_overrides(data)
+    return AdaptiveQECConfig(**data)
+
+
+def load_config_from_dict(data: dict[str, Any]) -> AdaptiveQECConfig:
+    """Load configuration from a dictionary."""
+    data = _apply_env_overrides(data)
+    return AdaptiveQECConfig(**data)
+
+
+def default_config() -> AdaptiveQECConfig:
+    """Return the default configuration."""
+    return AdaptiveQECConfig()

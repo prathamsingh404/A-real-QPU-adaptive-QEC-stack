@@ -214,3 +214,93 @@ class CPUConfig(BaseModel):
 
 
 class GPUConfig(BaseModel):
+    """GPU runtime configuration."""
+    enabled: bool = False
+    device: int = Field(default=0, ge=0)
+    backend: GPUBackendType = GPUBackendType.PYTORCH
+
+
+class LatencyBudgetConfig(BaseModel):
+    """Latency budget configuration for real-time QEC."""
+    deadline_us: float = Field(default=1000.0, gt=0)
+    warning_threshold: float = Field(default=0.8, gt=0.0, le=1.0)
+    tracking: bool = True
+
+
+class RuntimeConfig(BaseModel):
+    """Complete runtime configuration."""
+    cpu: CPUConfig = Field(default_factory=CPUConfig)
+    gpu: GPUConfig = Field(default_factory=GPUConfig)
+    batch_size: int = Field(default=1000, ge=1)
+    latency_budget: LatencyBudgetConfig = Field(default_factory=LatencyBudgetConfig)
+
+
+class ExperimentConfig(BaseModel):
+    """Experiment management configuration."""
+    output_dir: str = "experiments"
+    shots: int = Field(default=10000, ge=1)
+    repetitions: int = Field(default=1, ge=1)
+    save_raw: bool = True
+    save_circuits: bool = True
+    save_calibration: bool = True
+    save_plots: bool = True
+    name_template: str = "{code}_d{distance}_r{rounds}_{backend}_{timestamp}"
+
+
+class DataConfig(BaseModel):
+    """Data storage configuration."""
+    storage_backend: StorageBackend = StorageBackend.FILESYSTEM
+    base_path: str = "experiments"
+    compression: bool = False
+    format: DataFormat = DataFormat.JSON
+
+
+class AnalysisConfig(BaseModel):
+    """Statistical analysis configuration."""
+    confidence_level: float = Field(default=0.95, gt=0.0, lt=1.0)
+    min_shots: int = Field(default=1000, ge=1)
+    bootstrap_samples: int = Field(default=10000, ge=100)
+    hypothesis_test: HypothesisTest = HypothesisTest.TWO_SIDED
+
+
+# ---------------------------------------------------------------------------
+# Root configuration
+# ---------------------------------------------------------------------------
+
+class AdaptiveQECConfig(BaseModel):
+    """
+    Root configuration for the entire AdaptiveQEC platform.
+
+    Validates the complete configuration tree. Supports loading from YAML
+    with environment variable overrides.
+    """
+    hardware: HardwareConfig = Field(default_factory=HardwareConfig)
+    qec: QECConfig = Field(default_factory=QECConfig)
+    noise: NoiseConfig = Field(default_factory=NoiseConfig)
+    decoder: DecoderConfig = Field(default_factory=DecoderConfig)
+    runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    experiment: ExperimentConfig = Field(default_factory=ExperimentConfig)
+    data: DataConfig = Field(default_factory=DataConfig)
+    analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
+
+
+# ---------------------------------------------------------------------------
+# Loading utilities
+# ---------------------------------------------------------------------------
+
+def _apply_env_overrides(data: dict[str, Any], prefix: str = "AQEC") -> dict[str, Any]:
+    """
+    Apply environment variable overrides to configuration data.
+
+    Convention: AQEC_SECTION__KEY=value
+    Double underscore separates nesting levels.
+    """
+    for key, value in os.environ.items():
+        if not key.startswith(f"{prefix}_"):
+            continue
+
+        parts = key[len(prefix) + 1:].lower().split("__")
+        current = data
+        for part in parts[:-1]:
+            if part not in current:
+                current[part] = {}

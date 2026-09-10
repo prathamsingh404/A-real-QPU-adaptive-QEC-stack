@@ -168,3 +168,34 @@ class HardwareDigitalTwin:
         return float(p_logical)
 
     def get_qubit_state(self, qubit: int) -> Optional[QubitState]:
+        """Get the current state of a qubit."""
+        return self._qubits.get(qubit)
+
+    def get_worst_qubits(self, metric: str = "readout_error", n: int = 10) -> list[int]:
+        """
+        Find the N worst-performing qubits by a given metric.
+
+        Useful for qubit selection and calibration targeting.
+        """
+        values = []
+        for idx, state in self._qubits.items():
+            val = getattr(state, metric, 0.0)
+            values.append((idx, val))
+
+        values.sort(key=lambda x: x[1], reverse=True)
+        return [idx for idx, _ in values[:n]]
+
+    def summary(self) -> dict[str, Any]:
+        """Get a summary of the current hardware state."""
+        t1s = [s.t1_us for s in self._qubits.values() if s.t1_us > 0]
+        t2s = [s.t2_us for s in self._qubits.values() if s.t2_us > 0]
+        readouts = [s.readout_error for s in self._qubits.values() if s.readout_error > 0]
+
+        return {
+            "num_qubits": self._num_qubits,
+            "update_count": self._update_count,
+            "t1_mean_us": float(np.mean(t1s)) if t1s else 0.0,
+            "t2_mean_us": float(np.mean(t2s)) if t2s else 0.0,
+            "readout_error_mean": float(np.mean(readouts)) if readouts else 0.0,
+            "num_edges": len(self._topology),
+        }

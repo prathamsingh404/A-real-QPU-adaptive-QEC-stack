@@ -72,3 +72,77 @@ class CircuitGenerator:
         dem = circuit.detector_error_model(decompose_errors=True)
         logger.info(f"Generated DEM with {dem.num_detectors} detectors")
         return dem
+
+    def stim_to_qiskit(self, stim_circuit: stim.Circuit) -> Any:
+        """
+        Convert a Stim circuit to a Qiskit QuantumCircuit.
+
+        This is necessary for executing QEC experiments on real IBM QPU hardware.
+        The conversion preserves the logical structure while mapping to
+        Qiskit's representation.
+
+        Args:
+            stim_circuit: The Stim circuit to convert.
+
+        Returns:
+            A Qiskit QuantumCircuit ready for transpilation and execution.
+        """
+        from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
+
+        num_qubits = stim_circuit.num_qubits
+        num_measurements = stim_circuit.num_measurements
+
+        qr = QuantumRegister(num_qubits, "q")
+        cr = ClassicalRegister(num_measurements, "meas")
+        qc = QuantumCircuit(qr, cr)
+
+        meas_idx = 0
+
+        for instruction in stim_circuit.flattened():
+            name = instruction.name
+
+            if name == "R":
+                for target in instruction.targets_copy():
+                    qc.reset(target.value)
+
+            elif name == "H":
+                for target in instruction.targets_copy():
+                    qc.h(target.value)
+
+            elif name == "S":
+                for target in instruction.targets_copy():
+                    qc.s(target.value)
+
+            elif name == "S_DAG":
+                for target in instruction.targets_copy():
+                    qc.sdg(target.value)
+
+            elif name == "X":
+                for target in instruction.targets_copy():
+                    qc.x(target.value)
+
+            elif name == "Y":
+                for target in instruction.targets_copy():
+                    qc.y(target.value)
+
+            elif name == "Z":
+                for target in instruction.targets_copy():
+                    qc.z(target.value)
+
+            elif name in ("CX", "CNOT", "ZCX"):
+                targets = instruction.targets_copy()
+                for i in range(0, len(targets), 2):
+                    qc.cx(targets[i].value, targets[i + 1].value)
+
+            elif name == "CZ":
+                targets = instruction.targets_copy()
+                for i in range(0, len(targets), 2):
+                    qc.cz(targets[i].value, targets[i + 1].value)
+
+            elif name == "SWAP":
+                targets = instruction.targets_copy()
+                for i in range(0, len(targets), 2):
+                    qc.swap(targets[i].value, targets[i + 1].value)
+
+            elif name == "M" or name == "MR":
+                for target in instruction.targets_copy():

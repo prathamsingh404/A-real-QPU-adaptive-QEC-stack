@@ -181,3 +181,94 @@ class DeterministicTeleportation:
                     shots_0 += freq
                 else:
                     shots_1 += freq
+
+            valid_shots = shots_0 + shots_1
+            if valid_shots == 0:
+                return 0.0, 0, sum(counts.values())
+            exp_val = (shots_0 - shots_1) / valid_shots
+            return exp_val, valid_shots, sum(counts.values())
+
+        exp_x, valid_x, total_x = _get_expectation(counts_x)
+        exp_y, valid_y, total_y = _get_expectation(counts_y)
+        exp_z, valid_z, total_z = _get_expectation(counts_z)
+
+        measured_bloch = np.array([exp_x, exp_y, exp_z])
+        ideal_bloch = np.array(self.target_state.ideal_bloch_vector)
+
+        # Quantum state fidelity for single-qubit states:
+        # F = (1 + r_ideal . r_measured) / 2
+        fidelity = float(np.clip((1.0 + np.dot(ideal_bloch, measured_bloch)) / 2.0, 0.0, 1.0))
+        total_valid = valid_x + valid_y + valid_z
+        total_submitted = total_x + total_y + total_z
+        yield_rate = total_valid / total_submitted if total_submitted > 0 else 0.0
+
+        surpasses_classical = fidelity > CLASSICAL_TELEPORTATION_BOUND
+
+        return {
+            "target_state": self.target_state.name,
+            "regime": self.regime,
+            "measured_bloch_vector": [float(exp_x), float(exp_y), float(exp_z)],
+            "ideal_bloch_vector": list(self.target_state.ideal_bloch_vector),
+            "state_fidelity": fidelity,
+            "classical_bound": CLASSICAL_TELEPORTATION_BOUND,
+            "surpasses_classical_limit": surpasses_classical,
+            "deterministic_yield_rate": yield_rate,
+            "valid_shots": total_valid,
+            "total_submitted_shots": total_submitted,
+        }
+
+    def compute_fidelity_from_bitstrings(
+        self,
+        out_x: List[str],
+        bsm_x: Optional[List[str]],
+        out_y: List[str],
+        bsm_y: Optional[List[str]],
+        out_z: List[str],
+        bsm_z: Optional[List[str]],
+    ) -> Dict[str, Any]:
+        """
+        Reconstruct fidelity directly from raw SamplerV2 bitstring arrays.
+        """
+        def _eval_basis(outs: List[str], bsms: Optional[List[str]]) -> Tuple[float, int, int]:
+            s0 = 0
+            s1 = 0
+            total = len(outs)
+            for i in range(total):
+                if self.regime == "post_selected" and bsms is not None:
+                    # In post-selected, keep only if bsm is '00'
+                    if bsms[i].replace(" ", "") not in ("00", "0"):
+                        continue
+                b = outs[i].strip()
+                if b == '0':
+                    s0 += 1
+                else:
+                    s1 += 1
+            valid = s0 + s1
+            if valid == 0:
+                return 0.0, 0, total
+            return (s0 - s1) / valid, valid, total
+
+        exp_x, val_x, tot_x = _eval_basis(out_x, bsm_x)
+        exp_y, val_y, tot_y = _eval_basis(out_y, bsm_y)
+        exp_z, val_z, tot_z = _eval_basis(out_z, bsm_z)
+
+        measured_bloch = np.array([exp_x, exp_y, exp_z])
+        ideal_bloch = np.array(self.target_state.ideal_bloch_vector)
+
+        fidelity = float(np.clip((1.0 + np.dot(ideal_bloch, measured_bloch)) / 2.0, 0.0, 1.0))
+        total_valid = val_x + val_y + val_z
+        total_submitted = tot_x + tot_y + tot_z
+        yield_rate = total_valid / total_submitted if total_submitted > 0 else 0.0
+
+        return {
+            "target_state": self.target_state.name,
+            "regime": self.regime,
+            "measured_bloch_vector": [float(exp_x), float(exp_y), float(exp_z)],
+            "ideal_bloch_vector": list(self.target_state.ideal_bloch_vector),
+            "state_fidelity": fidelity,
+            "classical_bound": CLASSICAL_TELEPORTATION_BOUND,
+            "surpasses_classical_limit": fidelity > CLASSICAL_TELEPORTATION_BOUND,
+            "deterministic_yield_rate": yield_rate,
+            "valid_shots": total_valid,
+            "total_submitted_shots": total_submitted,
+        }

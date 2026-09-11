@@ -355,3 +355,186 @@ class FullAdaptiveExperiment:
                 imbalance=imbalance,
                 execution_time_s=time.time() - t_window,
             ))
+
+            # Genuinely track static baselines on the same syndrome data
+            mwpm_preds = matcher.decode_batch(detection_events)
+            mwpm_flat = mwpm_preds[:, :n_obs] if mwpm_preds.ndim > 1 else mwpm_preds.reshape(-1, 1)
+            mwpm_errs = int(np.sum(np.any(mwpm_flat != obs_flat, axis=1)))
+            self._static_mwpm_lers.append(mwpm_errs / cfg.shots_per_window)
+
+            uf_preds = uf_decoder.decode_batch(detection_events)
+            uf_flat = uf_preds[:, :n_obs] if uf_preds.ndim > 1 else uf_preds.reshape(-1, 1)
+            uf_errs = int(np.sum(np.any(uf_flat != obs_flat, axis=1)))
+            self._static_uf_lers.append(uf_errs / cfg.shots_per_window)
+
+
+            if (window_idx + 1) % 20 == 0:
+                avg_ler = np.mean([r.ler for r in self._adaptive_records[-20:]])
+                logger.info(
+                    f"Window {window_idx + 1}/{cfg.num_windows}: "
+                    f"avg LER (last 20) = {avg_ler:.6f}, "
+                    f"schedule = {schedule_type}"
+                )
+
+        elapsed = time.time() - t_start
+
+        # Compile and save results
+        results = self._compile_results(elapsed)
+        self._save_results(results)
+        self._print_summary(results)
+
+        return results
+
+    def _create_scenario(self) -> NoiseScenarioFactory:
+        """Create noise scenario."""
+        n = self._config.num_windows
+        scenarios = {
+            "stationary": lambda: stationary_scenario(total_steps=n),
+            "drift": lambda: drift_scenario(total_steps=n),
+            "burst": lambda: burst_scenario(total_steps=n),
+            "multi_phase": lambda: multi_phase_scenario(total_steps=n),
+        }
+        return scenarios[self._config.scenario]()
+
+    def _build_circuit(self) -> stim.Circuit:
+        """Build base Stim circuit."""
+        return stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=self._config.code_distance,
+            rounds=self._config.num_rounds,
+            after_clifford_depolarization=self._config.physical_error_rate,
+            before_round_data_depolarization=self._config.physical_error_rate,
+            before_measure_flip_probability=self._config.physical_error_rate * 2,
+            after_reset_flip_probability=self._config.physical_error_rate * 0.5,
+        )
+
+    def _compile_results(self, elapsed: float) -> dict[str, Any]:
+        """Compile all results into a single dictionary."""
+        adaptive_lers = [r.ler for r in self._adaptive_records]
+        total_errors = sum(r.logical_errors for r in self._adaptive_records)
+        total_shots = sum(r.total_shots for r in self._adaptive_records)
+
+        ci_low, ci_high = wilson_score_ci(total_errors, total_shots)
+
+        return {
+            "config": {
+                "code_distance": self._config.code_distance,
+                "controller": self._config.controller_type,
+                "scheduling": self._config.scheduling_enabled,
+                "scenario": self._config.scenario,
+                "num_windows": len(self._adaptive_records),
+                "shots_per_window": self._config.shots_per_window,
+            },
+            "summary": {
+                "total_shots": total_shots,
+                "total_errors": total_errors,
+                "overall_ler": total_errors / total_shots if total_shots > 0 else 0.0,
+                "ci_95_lower": ci_low,
+                "ci_95_upper": ci_high,
+                "mean_ler": float(np.mean(adaptive_lers)),
+                "std_ler": float(np.std(adaptive_lers)),
+                "elapsed_s": round(elapsed, 2),
+            },
+            "scheduler": self._scheduler.summary() if self._scheduler else None,
+            "budget": self._budget.summary(),
+            "per_window": [
+                {
+                    "window": r.window_idx,
+                    "ler": r.ler,
+                    "ci_lower": r.ci_lower,
+                    "ci_upper": r.ci_upper,
+                    "noise_level": r.noise_level,
+                    "schedule": r.schedule_type,
+                    "imbalance": round(r.imbalance, 4),
+                    "action": r.controller_action,
+                }
+                for r in self._adaptive_records
+            ],
+        }
+
+    def _save_results(self, results: dict[str, Any]) -> None:
+        """Save results to disk."""
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        output_dir = Path(self._config.output_dir) / timestamp
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(output_dir / "results.json", "w") as f:
+            json.dump(results, f, indent=2, default=_numpy_encoder)
+
+        if self._config.save_telemetry:
+            telemetry = {
+                "controller": [
+                    t.to_dict() if hasattr(t, "to_dict") else str(t)
+                    for t in self._controller.telemetry
+                ] if hasattr(self._controller, "telemetry") else [],
+                "scheduler_history": (
+                    self._scheduler.get_history()
+                    if self._scheduler else []
+                ),
+            }
+            with open(output_dir / "telemetry.json", "w") as f:
+                json.dump(telemetry, f, indent=2, default=_numpy_encoder)
+
+        logger.info(f"Results saved to {output_dir}")
+
+    def _print_summary(self, results: dict[str, Any]) -> None:
+        """Print summary."""
+        s = results["summary"]
+        c = results["config"]
+        sched = results.get("scheduler")
+
+        print(f"\n{'='*60}")
+        print(f"FULL ADAPTIVE QEC EXPERIMENT RESULTS")
+        print(f"{'='*60}")
+        print(f"Controller:      {c['controller']}")
+        print(f"Scheduling:      {'ON' if c['scheduling'] else 'OFF'}")
+        print(f"Scenario:        {c['scenario']}")
+        print(f"Total shots:     {s['total_shots']:,}")
+        print(f"Overall LER:     {s['overall_ler']:.6f}")
+        print(f"95% CI:          [{s['ci_95_lower']:.6f}, {s['ci_95_upper']:.6f}]")
+        print(f"Std(LER):        {s['std_ler']:.6f}")
+        if sched:
+            print(f"Schedule switches: {sched.get('total_switches', 0)}")
+        print(f"Elapsed:         {s['elapsed_s']:.1f}s")
+        print(f"{'='*60}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Full adaptive QEC experiment"
+    )
+    parser.add_argument("--distance", type=int, default=3)
+    parser.add_argument("--windows", type=int, default=100)
+    parser.add_argument("--shots", type=int, default=2000)
+    parser.add_argument("--controller", type=str, default="dase",
+                        choices=["exp3", "dase", "sprt"])
+    parser.add_argument("--scenario", type=str, default="multi_phase",
+                        choices=["stationary", "drift", "burst", "multi_phase"])
+    parser.add_argument("--no-scheduling", action="store_true")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--output", type=str,
+                        default="experiments/results/full_adaptive")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    config = FullAdaptiveConfig(
+        code_distance=args.distance,
+        num_windows=args.windows,
+        shots_per_window=args.shots,
+        controller_type=args.controller,
+        scenario=args.scenario,
+        scheduling_enabled=not args.no_scheduling,
+        seed=args.seed,
+        output_dir=args.output,
+    )
+
+    experiment = FullAdaptiveExperiment(config)
+    experiment.run()
+
+
+if __name__ == "__main__":
+    main()

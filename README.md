@@ -7,7 +7,7 @@
 [![Stim](https://img.shields.io/badge/Stim-1.15+-blueviolet.svg)](https://github.com/quantumlib/Stim)
 [![PyMatching](https://img.shields.io/badge/PyMatching-2.2+-orange.svg)](https://github.com/oscarhiggott/PyMatching)
 
-An experimental platform for **hardware-aware, adaptive, low-latency quantum error correction (QEC)** designed for noisy intermediate-scale and early fault-tolerant quantum processors (QPUs).
+An experimental platform for **hardware-aware, adaptive, low-latency quantum error correction (QEC)** designed for noisy intermediate-scale and early fault-tolerant quantum processors (QPUs). 
 
 AdaptiveQEC continuously models the **Reality Gap** between ideal topological code assumptions and actual physical superconducting hardware (coherence drift, asymmetric readout error, two-qubit gate crosstalk, and spectator interaction). By combining dual change-point drift detectors (EWMA + CUSUM) with adaptive decoder dispatching (PyMatching MWPM, Union-Find, and ML neural decoders), it triggers **selective recalibrations** that achieve a **58.4% reduction in calibration overhead** while sustaining sub-threshold logical error rates.
 

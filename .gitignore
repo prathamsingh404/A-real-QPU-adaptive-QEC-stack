@@ -1,0 +1,41 @@
+# Python environment & cache
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Package build & distribution
+build/
+dist/
+*.egg-info/
+*.egg
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Logs and scratch files
+*.log
+scratch/
+
+# Credentials — NEVER commit
+.env
+
+# Ephemeral experiment runs (ignore un-cited scratch runs, whitelist canonical benchmark artifacts)
+experiments/results/*
+!experiments/results/adaptive_vs_static_high_stats_50k.json
+!experiments/results/adaptive_vs_static_d3_20260929_040419.json
+!experiments/results/adaptive_vs_static_d3_20260927_195622.json

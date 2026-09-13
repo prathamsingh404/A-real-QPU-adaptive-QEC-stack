@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software or benchmark suite, please cite it as below."
+authors:
+  - family-names: Singh
+    given-names: Pratham
+title: "When Does Online Decoder Reweighting Pay Off in Quantum Error Correction? A Confidence-Gated Framework"
+version: 2.0.0
+date-released: 2026-10-25
+url: "https://github.com/prathamsingh404/A-real-QPU-adaptive-QEC-stack"
+repository-code: "https://github.com/prathamsingh404/A-real-QPU-adaptive-QEC-stack"
+keywords:
+  - quantum-error-correction
+  - adaptive-decoding
+  - surface-code
+  - non-stationary-noise
+  - minimum-weight-perfect-matching
+license: MIT

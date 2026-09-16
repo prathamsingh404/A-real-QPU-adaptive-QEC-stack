@@ -146,3 +146,76 @@ class MolecularIQPE:
                 shift = -2.0 * math.pi / (2.0 ** (prev_j - bit_idx + 1))
                 with qc.if_test((c[prev_j], 1)):
                     qc.rz(shift, q[0])
+
+            # Step D: Apply DD on system qubit during ancilla readout window if requested
+            if self.apply_dd:
+                # XY4 sequence on idling system qubit to suppress dephasing during measurement
+                qc.x(q[1])
+                qc.y(q[1])
+                qc.x(q[1])
+                qc.y(q[1])
+
+            # Step E: Hadamard & Measure ancilla into classical bit c[bit_idx]
+            qc.h(q[0])
+            qc.measure(q[0], c[bit_idx])
+
+            # Step F: Active reset ancilla for next bit iteration
+            if bit_idx > 0:
+                qc.reset(q[0])
+
+        return qc
+
+    def decode_energy_from_bitstrings(self, counts: Dict[str, int]) -> Dict[str, Any]:
+        """
+        Extract ground state energy from physical QPU measurement counts.
+
+        Args:
+            counts: Dictionary mapping bitstring (e.g., '101') to frequency.
+
+        Returns:
+            Dictionary containing estimated phase, QPU energy, exact energy, and error.
+        """
+        total_shots = sum(counts.values())
+        if total_shots == 0:
+            raise ValueError("Empty counts dictionary.")
+
+        # Find most frequent bitstring
+        best_bitstring, best_count = max(counts.items(), key=lambda item: item[1])
+
+        # Clean bitstring: strip spaces and take last num_bits
+        cleaned_bits = best_bitstring.replace(" ", "")[-self.num_bits:]
+        
+        # Convert binary fraction to phase phi \in [0, 1)
+        # Note: in Qiskit classical register, c[0] is least significant or rightmost depending on formatting
+        # We explicitly parse each bit index
+        phase = 0.0
+        for i, bit_char in enumerate(reversed(cleaned_bits)):
+            if bit_char == '1':
+                phase += 2.0 ** -(i + 1)
+
+        # IQPE measures phase modulo 1 (eigenvalues determined modulo 2*pi/tau).
+        # Unwrap phase into principal interval [-0.5, 0.5) (branch nearest zero).
+        unwrapped_phase = phase - 1.0 if phase >= 0.5 else phase
+
+        # Ground state energy: E = -2*pi*unwrapped_phase / tau + g0 + E_nuc
+        eigenvalue = -2.0 * math.pi * unwrapped_phase / self.tau + self.coeffs.g0
+        total_energy = eigenvalue + self.coeffs.nuclear_repulsion
+
+        error_hartree = abs(total_energy - self.coeffs.exact_ground_energy)
+        error_kcal = error_hartree * 627.509  # 1 Hartree = 627.509 kcal/mol
+
+        return {
+            "r_angstrom": self.r_angstrom,
+            "most_likely_bitstring": cleaned_bits,
+            "bitstring_probability": best_count / total_shots,
+            "total_shots": total_shots,
+            "extracted_phase": phase,
+            "unwrapped_phase": unwrapped_phase,
+            "qpu_eigenvalue_hartree": eigenvalue,
+            "qpu_ground_energy_hartree": total_energy,
+            "exact_ground_energy_hartree": self.coeffs.exact_ground_energy,
+            "error_hartree": error_hartree,
+            "error_kcal_per_mol": error_kcal,
+            "chemical_accuracy_achieved": error_hartree < CHEMICAL_ACCURACY_HARTREE,
+            "counts": counts,
+        }

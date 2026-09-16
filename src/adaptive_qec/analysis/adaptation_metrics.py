@@ -207,3 +207,109 @@ class ConformalLERPredictor:
         """
         if len(predicted_lers) != len(true_lers) or len(predicted_lers) == 0:
             raise ValueError("Predictions and ground truths must have equal non-zero length")
+
+        scores = [abs(float(p) - float(y)) for p, y in zip(predicted_lers, true_lers)]
+        self._calibration_scores = sorted(scores)
+        n = len(scores)
+
+        # Conformal quantile level: ceil((n + 1) * (1 - alpha)) / n
+        level = int(np.ceil((n + 1) * (1.0 - self.alpha)))
+        level = min(level, n)
+        self.q_hat = float(self._calibration_scores[level - 1])
+        return self.q_hat
+
+    def predict_interval(self, predicted_ler: float) -> Tuple[float, float]:
+        """Return distribution-free [lower, upper] prediction interval."""
+        if self.q_hat is None:
+            # Fallback conservative bound before calibration
+            margin = 0.02
+        else:
+            margin = self.q_hat
+
+        lower = max(0.0, predicted_ler - margin)
+        upper = min(1.0, predicted_ler + margin)
+        return (float(lower), float(upper))
+
+
+class AnalyticalProofsAndBounds:
+    """
+    Analytical theorems and bounds for Adaptive QEC.
+    Tasks: TASK-088, TASK-089, TASK-090, TASK-091.
+    """
+
+    @staticmethod
+    def evaluate_switching_condition(
+        delta_hat: float,
+        sigma_delta: float,
+        c_switch: float,
+        c_latency: float,
+        c_uncertainty: float = 0.0,
+        c_physical: float = 0.0,
+        confidence: float = 0.95,
+    ) -> Tuple[bool, float, float]:
+        """
+        TASK-088: Formalize foundational switching condition:
+            LCB(Delta L_t) > C_switch + C_latency + C_uncertainty + C_physical
+        where LCB(Delta L_t) = Delta_hat - z_{1-alpha} * sigma_delta.
+
+        Returns:
+            (should_switch, lcb_value, total_threshold)
+        """
+        alpha = 1.0 - confidence
+        z = float(stats.norm.ppf(1.0 - alpha))  # One-sided z-score
+        lcb = delta_hat - z * sigma_delta
+        total_threshold = c_switch + c_latency + c_uncertainty + c_physical
+        should_switch = lcb > total_threshold
+        return (should_switch, lcb, total_threshold)
+
+    @staticmethod
+    def false_switching_probability_bound(
+        sigma_noise: float,
+        n_samples: int,
+        threshold: float,
+    ) -> float:
+        """
+        TASK-089: Derive analytical upper bound on false-switching probability.
+        Under the null hypothesis (true Delta L = 0):
+        By Sub-Gaussian concentration / Chernoff bound:
+            P( Delta_hat > threshold | Delta = 0 ) <= exp( - (n * threshold^2) / (2 * sigma_noise^2) )
+        """
+        if n_samples <= 0 or sigma_noise <= 0.0 or threshold <= 0.0:
+            return 1.0
+        exponent = -(n_samples * (threshold ** 2)) / (2.0 * (sigma_noise ** 2))
+        return float(np.exp(np.clip(exponent, -700.0, 0.0)))
+
+    @staticmethod
+    def adaptation_boundary_threshold(
+        sigma_noise: float,
+        c_switch: float,
+        c_latency: float,
+        window_length: int,
+        desired_confidence: float = 0.95,
+    ) -> float:
+        """
+        TASK-090: Derive analytical adaptation boundary threshold A_drift^*:
+        The minimum true drift amplitude required for profitable adaptation:
+            A_drift^* = C_switch + C_latency + z_{1-alpha} * (sigma_noise / sqrt(window_length))
+        """
+        alpha = 1.0 - desired_confidence
+        z = float(stats.norm.ppf(1.0 - alpha))
+        se = sigma_noise / np.sqrt(window_length) if window_length > 0 else 0.0
+        return float(c_switch + c_latency + z * se)
+
+    @staticmethod
+    def piecewise_stationary_regret_bound(
+        total_steps_t: int,
+        num_change_points_s: int,
+        num_arms_k: int = 5,
+        c_switch: float = 0.001,
+    ) -> float:
+        """
+        TASK-091: Derive regret bound under piecewise-stationary drift with S change points:
+            R_T <= O( sqrt(S * K * T * log(T)) + S * C_switch )
+        """
+        if total_steps_t <= 0:
+            return 0.0
+        term_estimation = np.sqrt(num_change_points_s * num_arms_k * total_steps_t * np.log(max(2, total_steps_t)))
+        term_switching = num_change_points_s * c_switch
+        return float(term_estimation + term_switching)

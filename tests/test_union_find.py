@@ -232,3 +232,12 @@ class TestUnionFindDecoder:
         decoder.configure(circuit=circuit)
         metrics = decoder.decode_batch(detectors, observables)
 
+        assert metrics.latency_p50_us <= metrics.latency_p95_us
+        assert metrics.latency_p95_us <= metrics.latency_p99_us
+        assert metrics.latency_p99_us <= metrics.latency_p999_us
+
+
+# ---------------------------------------------------------------------------
+# Comparison: UF vs MWPM
+# ---------------------------------------------------------------------------
+

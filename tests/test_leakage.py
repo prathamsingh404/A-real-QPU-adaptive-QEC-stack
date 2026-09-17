@@ -70,3 +70,11 @@ class TestLeakageDetector:
 
 class TestLeakageRateEstimator:
     """Tests for LeakageRateEstimator."""
+
+    def test_rate_estimation(self):
+        estimator = LeakageRateEstimator()
+
+        # Mock analysis with one leaked qubit persisting 10 rounds
+        mock_analysis = LeakageAnalysis(
+            total_rounds=100,
+            total_detectors=10,

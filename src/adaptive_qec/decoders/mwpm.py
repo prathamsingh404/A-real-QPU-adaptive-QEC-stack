@@ -82,3 +82,17 @@ class MWPMDecoder(Decoder):
             raise RuntimeError("Decoder not configured. Call configure() first.")
 
         if syndrome.ndim == 1:
+            prediction = self._matching.decode(syndrome.astype(np.uint8))
+            return Correction(
+                observable_corrections=prediction.astype(np.uint8),
+            )
+
+        # Batch decode
+        predictions = self._matching.decode_batch(syndrome.astype(np.uint8))
+        return Correction(
+            observable_corrections=predictions.astype(np.uint8),
+        )
+
+    def decode_batch(
+        self,
+        syndromes: np.ndarray,

@@ -30,3 +30,11 @@ class TestLeakageDetector:
         detector = LeakageDetector(min_persistence=4, autocorr_threshold=0.3)
         analysis = detector.analyze(trace)
 
+        assert isinstance(analysis, LeakageAnalysis)
+        assert analysis.total_rounds == 30
+        assert analysis.total_detectors == 8
+        assert len(analysis.leaked_qubits) == 0
+        assert analysis.estimated_leakage_rate == 0.0
+
+    def test_persistent_leakage_detected(self):
+        """A qubit stuck firing consecutively should be flagged as leaked."""

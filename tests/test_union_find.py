@@ -43,3 +43,12 @@ class TestUnionFindForest:
         uf.union(1, 2)
         assert uf.find(0) == uf.find(2)
 
+    def test_parity_tracking(self):
+        uf = UnionFindForest(5)
+        uf.parity[0] = 1  # one defect
+        uf.parity[1] = 1  # one defect
+        uf.union(0, 1)
+        root = uf.find(0)
+        assert uf.parity[root] == 2  # even → even cluster
+
+    def test_boundary_connection(self):

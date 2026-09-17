@@ -38,3 +38,8 @@ The goal of this project transcends standard academic exercises or superficial t
   - `src/adaptive_qec/topology/embedding.py`: `EmbeddingFinder` and `SurfaceCodeEmbedding` protocol. Implements greedy BFS and candidate-scoring algorithms to embed logical surface codes of arbitrary distance onto physical heavy-hex qubits, computing SWAP counts, depth overhead, and connectivity deficits.
   - `src/adaptive_qec/qec/codes.py`: Enhanced `SurfaceCode.generate_circuit` to accept an optional `embedding` parameter, adjusting the Stim circuit and injecting SWAP noise overhead.
 
+---
+
+### Problem 2: Correlated Error Burst Detection (Cosmic Rays & Quasiparticle Poisoning)
+* **Why it matters**: Standard fault-tolerant QEC theory assumes independent, identically distributed (i.i.d.) Pauli errors. Experiments by Google Quantum AI (Nature 2025, Willow processor) and IBM show that high-energy ionizing radiation (cosmic ray muons, environmental radioactivity) causes localized energy absorption in the substrate. This breaks superconducting Cooper pairs, generating cascades of quasiparticles and phonon avalanches that temporarily degrade $T_1$ across dozens of qubits simultaneously.
+* **The Detection Theory**:

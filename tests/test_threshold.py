@@ -47,3 +47,10 @@ class TestThresholdAnalyzer:
         analyzer.add_result(5, _mock_metrics(10000, 50), physical_error_rate=0.003)
 
         lam = analyzer.compute_lambda(3, 5)
+        # p_L(3) = 0.02, p_L(5) = 0.005 -> Lambda = 4.0
+        assert pytest.approx(lam, rel=1e-3) == 4.0
+        assert lam > 1.0
+
+    def test_add_and_compute_lambda_above_threshold(self):
+        analyzer = ThresholdAnalyzer()
+        # Above threshold: d=3 has lower logical error than d=5

@@ -168,3 +168,28 @@ class DistanceSweep:
             for dec_name in self.decoder_names:
                 t_start = time.perf_counter()
 
+                decoder = get_decoder(dec_name)
+                decoder.configure(circuit=circuit)
+                metrics = decoder.decode_batch(detectors, observables)
+
+                wall_time = time.perf_counter() - t_start
+
+                result = SweepResult(
+                    distance=d,
+                    rounds=rounds,
+                    decoder_name=dec_name,
+                    metrics=metrics,
+                    physical_error_rate=p_phys,
+                    wall_time_s=wall_time,
+                )
+                results.results.append(result)
+
+                logger.info(
+                    f"  {dec_name}: LER={metrics.logical_error_rate:.6f} "
+                    f"({metrics.num_logical_errors}/{metrics.total_shots}), "
+                    f"throughput={metrics.throughput_shots_per_s:.0f} shots/s"
+                )
+
+        results.total_wall_time_s = time.perf_counter() - t_total_start
+        logger.info(f"Sweep complete in {results.total_wall_time_s:.1f}s")
+        return results

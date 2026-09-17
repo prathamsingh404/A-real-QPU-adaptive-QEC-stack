@@ -208,3 +208,18 @@ class CUSUMDriftDetector:
         self,
         threshold: float = 5.0,
         drift_allowance: float = 0.5,
+        warmup_samples: int = 20,
+    ) -> None:
+        """
+        Args:
+            threshold: CUSUM decision threshold (h).
+            drift_allowance: minimum shift to detect (k), in units of std.
+            warmup_samples: samples for baseline estimation.
+        """
+        self._threshold = threshold
+        self._allowance = drift_allowance
+        self._warmup = warmup_samples
+
+        # State
+        self._s_plus: Optional[np.ndarray] = None   # upper CUSUM
+        self._s_minus: Optional[np.ndarray] = None   # lower CUSUM

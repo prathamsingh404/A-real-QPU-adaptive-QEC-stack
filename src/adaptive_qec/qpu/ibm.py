@@ -339,3 +339,38 @@ class IBMQuantumBackend(QPUBackend):
 
     def is_available(self) -> bool:
         """Check if the IBM backend is currently operational."""
+        if self._backend is None:
+            return False
+        try:
+            status = self._backend.status()
+            return status.operational
+        except Exception:
+            return False
+
+    def get_results(self, job_id: str) -> ExperimentResult:
+        """Retrieve results from a previously submitted job."""
+        if self._service is None:
+            raise RuntimeError("Service not connected. Call connect() first.")
+
+        job = self._service.job(job_id)
+        result = job.result()
+
+        pub_result = result[0]
+        bitstrings = pub_result.data.meas
+        outcomes = np.array(
+            [[int(b) for b in bits] for bits in bitstrings.get_bitstrings()],
+            dtype=np.uint8,
+        )
+
+        counts: dict[str, int] = {}
+        for bitstring in bitstrings.get_bitstrings():
+            counts[bitstring] = counts.get(bitstring, 0) + 1
+
+        return ExperimentResult(
+            experiment_id=job_id[:12],
+            backend_name=self._backend_name,
+            shots=sum(counts.values()),
+            measurement_outcomes=outcomes,
+            counts=counts,
+            job_id=job_id,
+        )

@@ -6,3 +6,7 @@ from adaptive_qec.decoders.union_find import UnionFindDecoder, UnionFindForest
 from adaptive_qec.decoders.registry import get_decoder, list_decoders, register_decoder
 
 __all__ = [
+    "Correction",
+    "Decoder",
+    "DecoderMetrics",
+    "MWPMDecoder",

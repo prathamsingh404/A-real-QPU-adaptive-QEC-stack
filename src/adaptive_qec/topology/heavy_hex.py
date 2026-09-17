@@ -218,3 +218,13 @@ class HeavyHexTopology:
         """BFS from start, returns distances to all reachable nodes."""
         from collections import deque
         dist = {start: 0}
+        queue = deque([start])
+        while queue:
+            node = queue.popleft()
+            for neighbor in self.adjacency.get(node, set()):
+                if neighbor not in dist:
+                    dist[neighbor] = dist[node] + 1
+                    queue.append(neighbor)
+        return dist
+
+    def find_shortest_path(self, start: int, end: int) -> list[int]:

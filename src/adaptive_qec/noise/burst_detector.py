@@ -58,3 +58,13 @@ class BurstEvent:
     def to_dict(self) -> dict[str, Any]:
         return {
             "round_start": self.round_start,
+            "round_end": self.round_end,
+            "affected_detectors": self.affected_detectors,
+            "severity": round(self.severity, 4),
+            "p_value": round(self.p_value, 8),
+            "burst_type": self.burst_type.value,
+            "spatial_radius": round(self.spatial_radius, 2),
+            "confidence": round(self.confidence, 3),
+        }
+
+

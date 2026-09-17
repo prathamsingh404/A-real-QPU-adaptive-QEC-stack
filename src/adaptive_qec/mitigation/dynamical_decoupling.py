@@ -205,3 +205,15 @@ class AdaptiveDDPlanner:
 
         For protected qubits, dephasing noise during idle windows is suppressed
         by the factor corresponding to the selected sequence, while inserting
+        small pulse errors representing the DD sequences.
+        """
+        # Create an equivalent protected circuit
+        new_circuit = circuit.copy()
+        if schedule.protected_qubits:
+            # Add annotation comments or equivalent noise adjustment
+            new_circuit.append(
+                "DEPOLARIZE1",
+                schedule.protected_qubits,
+                [self.pulse_error * 2],
+            )
+        return new_circuit

@@ -49,3 +49,20 @@ class QECCode(ABC):
         embedding: Optional[Any] = None,
     ) -> stim.Circuit:
         """
+        Generate the Stim circuit for this code.
+
+        Args:
+            noise: Optional noise configuration to inject.
+            embedding: Optional hardware embedding mapping logical to physical qubits.
+
+        Returns:
+            Stim circuit with detectors and observables annotated.
+        """
+        ...
+
+    @abstractmethod
+    def get_info(self) -> CodeInfo:
+        """Get static information about this code instance."""
+        ...
+
+    @abstractmethod

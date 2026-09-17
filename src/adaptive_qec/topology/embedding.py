@@ -207,3 +207,14 @@ class EmbeddingFinder:
             used_physical.add(pq)
             data_positions.append(pq)
 
+            for neighbor in sorted(self.topology.neighbors(pq)):
+                if neighbor not in used_physical:
+                    physical_queue.append(neighbor)
+
+        if len(data_positions) < n_data:
+            return None  # Not enough connected qubits
+
+        # Assign data qubits to logical grid positions
+        for idx, pq in enumerate(data_positions):
+            row = idx // distance
+            col = idx % distance

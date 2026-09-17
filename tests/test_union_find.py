@@ -88,3 +88,12 @@ class TestDetectorGraph:
     def test_build_from_repetition_code(self):
         code = create_code("repetition", distance=3, rounds=3)
         noise = NoiseConfig()
+        noise.gate.two_qubit = 0.01
+        circuit = code.generate_circuit(noise=noise)
+        dem = circuit.detector_error_model(decompose_errors=True)
+
+        graph = build_detector_graph(dem)
+
+        assert graph.num_detectors == dem.num_detectors
+        assert graph.num_observables == dem.num_observables
+        assert len(graph.edges) > 0

@@ -118,3 +118,18 @@ class HardwareDigitalTwin:
 
         self._topology = calibration.coupling_map
         self._update_count += 1
+
+        logger.info(
+            f"Digital twin updated (update #{self._update_count}): "
+            f"{len(calibration.qubit_calibrations)} qubits, "
+            f"{len(calibration.gate_calibrations)} gates"
+        )
+
+    def predict_logical_failure_rate(
+        self,
+        data_qubits: list[int],
+        ancilla_qubits: list[int],
+        code_distance: int,
+    ) -> float:
+        """
+        Predict P(logical failure) from the current hardware state.

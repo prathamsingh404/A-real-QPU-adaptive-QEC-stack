@@ -194,3 +194,17 @@ class MWPMDecoder(Decoder):
     ) -> tuple[DecoderMetrics, DecoderMetrics, dict[str, Any]]:
         """
         Compare standard MWPM vs burst-aware MWPM on identical syndrome data.
+
+        Burst-aware strategy:
+        1. Identify shots and rounds with correlated error bursts.
+        2. Mitigate anomalous burst detector clusters that violate independent error models.
+        3. Decode with and without burst mitigation and return comparative metrics.
+
+        Returns:
+            (standard_metrics, burst_aware_metrics, burst_summary)
+        """
+        from adaptive_qec.noise.burst_detector import BurstDetector, reshape_syndromes_to_tensor
+
+        detector = burst_detector or BurstDetector()
+        shots = syndromes.shape[0]
+

@@ -78,3 +78,13 @@ class BurstAnalysis:
     burst_rate_per_round: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_rounds": self.total_rounds,
+            "total_detectors": self.total_detectors,
+            "baseline_defect_rate": round(self.baseline_defect_rate, 6),
+            "num_bursts": len(self.bursts_detected),
+            "burst_rate_per_round": round(self.burst_rate_per_round, 8),
+            "bursts": [b.to_dict() for b in self.bursts_detected],
+        }
+
+

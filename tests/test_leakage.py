@@ -110,3 +110,11 @@ class TestDigitalTwinLeakage:
 
         analysis = LeakageAnalysis(
             total_rounds=50,
+            total_detectors=10,
+            leaked_qubits=[
+                LeakedQubit(
+                    detector_index=3,
+                    onset_round=5,
+                    persistence_length=20,
+                    autocorrelation=0.75,
+                    firing_rate=0.8,

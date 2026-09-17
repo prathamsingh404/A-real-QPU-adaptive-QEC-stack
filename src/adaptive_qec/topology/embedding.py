@@ -196,3 +196,14 @@ class EmbeddingFinder:
         embedding = SurfaceCodeEmbedding(distance=distance)
 
         # BFS from start to claim physical qubits for data qubits
+        used_physical: set[int] = set()
+        physical_queue = deque([start_qubit])
+        data_positions: list[int] = []
+
+        while physical_queue and len(data_positions) < n_data:
+            pq = physical_queue.popleft()
+            if pq in used_physical:
+                continue
+            used_physical.add(pq)
+            data_positions.append(pq)
+

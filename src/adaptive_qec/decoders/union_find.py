@@ -12,3 +12,17 @@ This is fundamentally faster than MWPM's O(N³) but typically ~8-15% higher
 logical error rate. The tradeoff matters at d ≥ 7 where MWPM becomes
 latency-prohibitive for real-time feedback.
 
+Algorithm:
+    1. Build a detector graph from the Stim DetectorErrorModel
+    2. For each syndrome shot:
+       a. Identify defect vertices (detectors that fired)
+       b. Grow clusters by processing edges in weight order (cheapest first)
+       c. Merge clusters via union-find, tracking observable XOR along
+          merge paths using lazy accumulation with path compression
+       d. When two odd-parity clusters merge (or odd meets boundary),
+          compute the correction from the accumulated observable XOR
+    3. Observable tracking uses lazy XOR: each node stores the XOR from
+       itself to its parent, and find() compresses while accumulating
+
+Key data structures:
+    - Union-Find forest with path compression, union by rank, and

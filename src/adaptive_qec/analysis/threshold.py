@@ -180,3 +180,17 @@ class ThresholdAnalyzer:
         lambda_ratio = p_low / p_high
         logger.info(
             f"Λ(d={d_low}→d={d_high}) = {lambda_ratio:.4f} "
+            f"({'BELOW' if lambda_ratio > 1 else 'ABOVE'} threshold)"
+        )
+        return lambda_ratio
+
+    def fit_threshold_model(self) -> ThresholdFit:
+        """
+        Fit the phenomenological threshold model:
+
+            p_L = A · (p / p_th)^((d+1)/2)
+
+        to the experimental data.
+
+        Requires results at ≥ 2 different distances.
+

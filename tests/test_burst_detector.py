@@ -96,3 +96,10 @@ class TestDriftIntegration:
             composite.update(rates)
 
         # Create burst syndrome tensor
+        syndrome_tensor = np.zeros((20, 8), dtype=np.uint8)
+        syndrome_tensor[10:12, :] = 1  # massive burst
+
+        report = composite.update(
+            detection_rates=rates,
+            syndrome_tensor=syndrome_tensor,
+            num_detectors_per_round=8,

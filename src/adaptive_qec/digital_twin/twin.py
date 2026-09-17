@@ -208,3 +208,18 @@ class HardwareDigitalTwin:
         Decision rule (IBM Orbit / ADAPT framework):
             Apply DD on qubit q if estimated_idle_dephasing(q) > dd_pulse_error(q).
             Estimated dephasing: p_idle ≈ 1 - exp(-idle_duration / T2).
+
+        Args:
+            idle_duration_us: Duration of the idle window in microseconds.
+            pulse_error_budget: Aggregate pulse error introduced by the DD sequence.
+
+        Returns:
+            List of qubit indices where DD is advantageous.
+        """
+        candidates = []
+        for idx, state in self._qubits.items():
+            t2 = state.t2_us
+            if t2 > 0:
+                p_dephase = 1.0 - float(np.exp(-idle_duration_us / t2))
+                if p_dephase > pulse_error_budget:
+                    candidates.append(idx)

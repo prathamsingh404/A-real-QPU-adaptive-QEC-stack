@@ -91,3 +91,34 @@ class IBMQuantumBackend(QPUBackend):
         actual_qubits = self._backend.num_qubits
         if actual_qubits != self._config.qubits:
             logger.warning(
+                f"Config says {self._config.qubits} qubits but "
+                f"{self._backend_name} has {actual_qubits}. "
+                f"Using actual count."
+            )
+
+        logger.info(
+            f"Connected to {self._backend_name} — "
+            f"{actual_qubits} qubits, "
+            f"status: {self._backend.status().status_msg}"
+        )
+
+    def run(
+        self,
+        circuit: Any,
+        shots: int,
+        qubit_mapping: Optional[dict[int, int]] = None,
+    ) -> ExperimentResult:
+        """
+        Execute a circuit on IBM QPU via SamplerV2.
+
+        Args:
+            circuit: A Qiskit QuantumCircuit.
+            shots: Number of shots.
+            qubit_mapping: Optional logical→physical qubit mapping.
+
+        Returns:
+            ExperimentResult with per-shot measurement outcomes.
+        """
+        from qiskit.compiler import transpile
+        from qiskit_ibm_runtime import SamplerV2
+

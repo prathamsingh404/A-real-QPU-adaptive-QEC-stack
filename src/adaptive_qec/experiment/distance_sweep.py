@@ -58,3 +58,13 @@ class DistanceSweepResults:
     total_wall_time_s: float = 0.0
     noise_config: Optional[dict[str, Any]] = None
 
+    def get_by_decoder(self, decoder_name: str) -> list[SweepResult]:
+        """Get results for a specific decoder."""
+        return [r for r in self.results if r.decoder_name == decoder_name]
+
+    def get_by_distance(self, distance: int) -> list[SweepResult]:
+        """Get results for a specific distance."""
+        return [r for r in self.results if r.distance == distance]
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-serializable representation."""

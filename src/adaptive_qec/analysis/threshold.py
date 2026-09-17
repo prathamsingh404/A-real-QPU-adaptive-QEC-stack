@@ -222,3 +222,17 @@ class ThresholdAnalyzer:
             )
 
         d_valid = [v[0] for v in valid]
+        e_valid = [v[1] for v in valid]
+
+        # Fit: log(p_L) = log(A) + ((d+1)/2) · log(p/p_th)
+        # Parameters: A, p_th
+        def model(d, A, p_th):
+            if p_th <= 0:
+                return np.full_like(d, 1.0)
+            ratio = p_phys / p_th
+            if ratio <= 0:
+                return np.full_like(d, 1.0)
+            return A * np.power(ratio, (d + 1) / 2)
+
+        try:
+            popt, _ = optimize.curve_fit(

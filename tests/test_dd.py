@@ -40,3 +40,10 @@ class TestDynamicalDecoupling:
         schedule = planner.plan_schedule(idle_map)
         assert isinstance(schedule, DDSchedule)
 
+        # Qubit 0 should get protected because 30us idle on T2=20us creates severe dephasing
+        assert schedule.qubit_sequences[0] == DDSequenceType.XY4
+        assert 0 in schedule.protected_qubits
+
+        # Qubit 1 should NOT get protected because 0.1us idle creates negligible dephasing
+        assert schedule.qubit_sequences[1] == DDSequenceType.NONE
+        assert 1 not in schedule.protected_qubits

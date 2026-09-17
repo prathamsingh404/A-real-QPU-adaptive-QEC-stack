@@ -53,3 +53,14 @@ class CodeEmbedding(Protocol):
         ...
 
 
+@dataclass
+class EmbeddingScore:
+    """Quality score for an embedding."""
+    swap_count: int
+    circuit_depth_overhead: float
+    idle_time_slots: int
+    connectivity_deficit: float  # 0.0 = perfect, 1.0 = no connectivity
+    total_score: float  # Combined weighted score (lower = better)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {

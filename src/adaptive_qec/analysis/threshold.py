@@ -292,3 +292,31 @@ class ThresholdAnalyzer:
         """
         Generate a scaling table for display/export.
 
+        Returns list of dicts with distance, error rate, CI, and Λ.
+        """
+        distances = sorted(self._results.keys())
+        table = []
+
+        for i, d in enumerate(distances):
+            r = self._results[d]
+            row = {
+                "distance": d,
+                "logical_error_rate": r["logical_error_rate"],
+                "ci_lower": r["ci_lower"],
+                "ci_upper": r["ci_upper"],
+                "num_errors": r["num_logical_errors"],
+                "total_shots": r["total_shots"],
+            }
+
+            # Lambda to previous distance
+            if i > 0:
+                d_prev = distances[i - 1]
+                p_prev = self._results[d_prev]["logical_error_rate"]
+                p_curr = r["logical_error_rate"]
+                row["lambda_vs_prev"] = p_prev / p_curr if p_curr > 0 else float("inf")
+            else:
+                row["lambda_vs_prev"] = None
+
+            table.append(row)
+
+        return table

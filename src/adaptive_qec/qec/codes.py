@@ -270,3 +270,20 @@ class SurfaceCode(QECCode):
                 extra_p = min(0.5, p * swap_count * 0.05)
                 circuit.append("DEPOLARIZE1", list(range(self.distance ** 2)), [extra_p])
 
+        logger.info(
+            f"Generated surface code circuit: d={self.distance}, R={self.rounds}, "
+            f"detectors={circuit.num_detectors}, observables={circuit.num_observables}, "
+            f"noise_p={p:.6f}, embedded={embedding is not None}"
+        )
+        return circuit
+
+    def get_info(self) -> CodeInfo:
+        """Get surface code info."""
+        d = self.distance
+        num_data = d * d
+        num_ancilla = (d * d - 1)  # approximate for rotated code
+        # Detector count: ancillas * (rounds + 1) approximately
+        # Exact count comes from the Stim circuit
+        return CodeInfo(
+            name="surface",
+            distance=d,

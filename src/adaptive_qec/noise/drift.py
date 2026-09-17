@@ -253,3 +253,18 @@ class CUSUMDriftDetector:
             return DriftReport(
                 status=DriftStatus.STABLE,
                 magnitude=0.0,
+                details={"message": f"CUSUM warmup: 1/{self._warmup}"},
+            )
+
+        if self._sample_count <= self._warmup:
+            delta = detection_rates - self._baseline_mean
+            self._baseline_mean += delta / self._sample_count
+
+            if self._sample_count == self._warmup:
+                # Compute baseline standard deviation
+                history_arr = np.array(self._history)
+                self._baseline_std = history_arr.std(axis=0)
+                self._baseline_std[self._baseline_std < 1e-8] = 1e-8
+                self._s_plus = np.zeros(num_detectors)
+                self._s_minus = np.zeros(num_detectors)
+

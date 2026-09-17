@@ -292,3 +292,17 @@ class UnionFindDecoder(Decoder):
 
     def configure(self, **kwargs: Any) -> None:
         """
+        Configure with a DetectorErrorModel or Stim Circuit.
+
+        Args:
+            dem: stim.DetectorErrorModel
+            circuit: stim.Circuit (will extract DEM automatically)
+        """
+        dem = kwargs.get("dem")
+        circuit = kwargs.get("circuit")
+
+        if dem is None and circuit is not None:
+            dem = circuit.detector_error_model(decompose_errors=True)
+
+        if dem is None:
+            raise ValueError("Must provide 'dem' or 'circuit' to configure UF decoder")

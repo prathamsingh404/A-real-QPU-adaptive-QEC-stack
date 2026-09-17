@@ -100,3 +100,20 @@ class RepetitionCode(QECCode):
 
         d = self.distance
         num_data = self.num_data
+        num_ancilla = self.num_ancilla
+
+        # Qubit layout: data qubits 0..d-1, ancilla qubits d..2d-2
+        data_qubits = list(range(num_data))
+        ancilla_qubits = list(range(num_data, num_data + num_ancilla))
+
+        # Assign coordinates for visualization
+        for i, q in enumerate(data_qubits):
+            circuit.append("QUBIT_COORDS", [q], [2 * i, 0])
+        for i, q in enumerate(ancilla_qubits):
+            circuit.append("QUBIT_COORDS", [q], [2 * i + 1, 0])
+
+        # Initialize data qubits
+        circuit.append("R", data_qubits)
+
+        # Noise parameters
+        p1 = noise.gate.single_qubit if noise else 0.0

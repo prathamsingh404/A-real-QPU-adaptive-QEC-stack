@@ -16,3 +16,12 @@ from adaptive_qec.decoders.union_find import (
     UnionFindForest,
     build_detector_graph,
 )
+from adaptive_qec.decoders.registry import get_decoder
+from adaptive_qec.qec.codes import create_code
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for UnionFindForest
+# ---------------------------------------------------------------------------
+
+class TestUnionFindForest:

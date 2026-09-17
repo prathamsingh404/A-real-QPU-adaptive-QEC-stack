@@ -229,3 +229,14 @@ class LeakageDetector:
         Compute leakage confidence from multiple signals.
 
         High confidence requires:
+            - High autocorrelation (persistent same-round defects)
+            - Long consecutive streak
+            - High firing rate
+        """
+        # Normalize each signal to [0, 1]
+        autocorr_score = np.clip(autocorr, 0, 1)
+        persistence_score = min(persistence / max(total_rounds * 0.5, 1), 1.0)
+        rate_score = min(firing_rate / 0.8, 1.0)
+
+        # Weighted combination
+        confidence = (

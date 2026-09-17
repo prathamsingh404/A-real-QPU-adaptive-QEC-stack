@@ -502,3 +502,17 @@ class UnionFindDecoder(Decoder):
         t_start = time.perf_counter()
 
         for i in range(shots):
+            t_shot_start = time.perf_counter()
+            all_preds[i] = self._decode_single(syndromes_u8[i])
+            per_shot_times[i] = time.perf_counter() - t_shot_start
+
+        t_total = time.perf_counter() - t_start
+
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        logical_errors = np.any(all_preds != observable_flips, axis=1)
+        num_errors = int(logical_errors.sum())
+        error_rate = num_errors / shots
+
+        latency_us = per_shot_times * 1e6

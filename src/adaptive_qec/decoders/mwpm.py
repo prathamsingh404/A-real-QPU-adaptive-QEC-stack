@@ -110,3 +110,17 @@ class MWPMDecoder(Decoder):
         """
         if self._matching is None:
             raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        shots = syndromes.shape[0]
+
+        # Track memory
+        tracemalloc.start()
+
+        # Per-shot timing for latency distribution
+        per_shot_times = np.zeros(shots)
+
+        # Batch decode with timing
+        t_start = time.perf_counter()
+
+        # Decode in mini-batches for latency measurement
+        batch_size = min(1000, shots)

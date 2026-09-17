@@ -404,3 +404,17 @@ class UnionFindDecoder(Decoder):
             rx, ry = find(x), find(y)
             if rx == ry:
                 return rx
+            parent[ry] = rx
+            parity[rx] += parity[ry]
+            boundary_conn[rx] |= boundary_conn[ry]
+            return rx
+
+        corr = 0
+        active_odd = len(defects)
+
+        for w, u, v, o, is_b in events:
+            if active_odd <= 0:
+                break
+            ru = find(u)
+            rv = find(v)
+            if ru == rv:

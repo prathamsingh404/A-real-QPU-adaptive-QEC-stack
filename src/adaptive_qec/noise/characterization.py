@@ -94,3 +94,15 @@ class NoiseProfile:
         if self.spatial_corr:
             d["spatial_correlation"] = {
                 "num_significant_pairs": len(self.spatial_corr.significant_pairs),
+            }
+
+        d["summary"] = self.summary
+        return d
+
+
+class NoiseCharacterizer:
+    """
+    Builds a comprehensive noise profile from calibration and experimental data.
+
+    Combines:
+    1. Hardware calibration (T1, T2, readout, gate errors)

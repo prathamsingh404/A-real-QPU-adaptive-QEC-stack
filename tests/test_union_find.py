@@ -115,3 +115,12 @@ class TestDetectorGraph:
 
     def test_boundary_edges_exist(self):
         """Surface code should have boundary edges."""
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+        dem = circuit.detector_error_model(decompose_errors=True)
+
+        graph = build_detector_graph(dem)
+
+        boundary_edges = [e for e in graph.edges if e.is_boundary]

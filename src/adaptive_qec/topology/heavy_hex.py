@@ -118,3 +118,13 @@ class HeavyHexTopology:
             return cls.from_coupling_map(cm, n)
 
     @classmethod
+    def synthetic(cls, rows: int = 5, cols: int = 5) -> HeavyHexTopology:
+        """
+        Generate a synthetic heavy-hex topology.
+
+        Creates a heavy-hex lattice with the specified grid dimensions.
+        Each hex cell has 6 vertices + flag qubits on edges.
+        """
+        topo = cls()
+        edges = []
+        qubit_id = 0

@@ -28,3 +28,12 @@ __all__ = [
     "BurstType",
     "reshape_syndromes_to_tensor",
     "LeakageAnalysis",
+    "LeakageDetector",
+    "LeakageRateEstimator",
+    "LeakedQubit",
+    "CompositeDriftDetector",
+    "CUSUMDriftDetector",
+    "DriftReport",
+    "DriftStatus",
+    "EWMADriftDetector",
+]

@@ -108,3 +108,14 @@ class SurfaceCodeEmbedding:
             "distance": self.distance,
             "num_data_qubits": len(self.data_map),
             "num_ancilla_qubits": len(self.ancilla_map),
+            "total_physical_qubits": len(self.all_physical_qubits()),
+            "swap_count": self._swap_count,
+            "depth_overhead": round(self._depth_overhead, 3),
+            "idle_slots": self._idle_slots,
+        }
+
+
+class EmbeddingFinder:
+    """
+    Find optimal surface code embeddings on hardware topologies.
+

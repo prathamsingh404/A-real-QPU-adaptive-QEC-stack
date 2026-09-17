@@ -48,3 +48,13 @@ class SweepResult:
     decoder_name: str
     metrics: DecoderMetrics
     physical_error_rate: float
+    wall_time_s: float
+
+
+@dataclass
+class DistanceSweepResults:
+    """Complete results from a distance sweep experiment."""
+    results: list[SweepResult] = field(default_factory=list)
+    total_wall_time_s: float = 0.0
+    noise_config: Optional[dict[str, Any]] = None
+

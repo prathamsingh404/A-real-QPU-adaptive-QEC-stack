@@ -70,3 +70,15 @@ runtime:
   gpu:
     enabled: false
     device: 0
+    backend: pytorch              # pytorch | tensorrt | cuda
+  batch_size: 1000                # number of syndromes per batch
+  latency_budget:
+    deadline_us: 1000             # microseconds per QEC round
+    warning_threshold: 0.8        # fraction of deadline to trigger WARNING
+    tracking: true
+
+experiment:
+  output_dir: experiments
+  shots: 10000                    # shots per circuit execution
+  repetitions: 1                  # number of times to repeat experiment
+  save_raw: true                  # save individual shot outcomes

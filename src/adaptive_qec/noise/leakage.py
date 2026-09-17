@@ -64,3 +64,14 @@ class LeakageAnalysis:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "total_rounds": self.total_rounds,
+            "total_detectors": self.total_detectors,
+            "num_leaked": len(self.leaked_qubits),
+            "estimated_leakage_rate": round(self.estimated_leakage_rate, 8),
+            "leaked_qubits": [q.to_dict() for q in self.leaked_qubits],
+        }
+
+
+class LeakageDetector:
+    """
+    Detects leakage from QEC syndrome temporal patterns.

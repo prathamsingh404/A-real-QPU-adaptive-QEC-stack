@@ -70,3 +70,12 @@ class TestUnionFindForest:
     def test_path_compression(self):
         """Path compression should flatten chains."""
         uf = UnionFindForest(10)
+        # Build a chain: 0→1→2→3→4
+        for i in range(4):
+            uf.union(i, i + 1)
+        # After find(0), path should be compressed
+        root = uf.find(0)
+        assert uf.parent[0] == root
+
+
+# ---------------------------------------------------------------------------

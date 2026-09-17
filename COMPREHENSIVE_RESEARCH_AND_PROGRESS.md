@@ -23,3 +23,8 @@ The goal of this project transcends standard academic exercises or superficial t
 - **Primary hardware mismatch**: Topological surface codes require a 2D square grid connectivity graph with degree-4 data qubits and degree-4 ancillas. Mapping this onto heavy-hex requires bridge routing, SWAP insertion, or fold-unfold embeddings that introduce idle-time windows where noise accumulates.
 
 ---
+
+## 2. Deep-Dive: The 6 Core Research & Engineering Problems
+
+### Problem 1: Heavy-Hex ↔ Surface Code Mismatch & Embedding
+* **Why it matters**: A planar/rotated surface code of distance $d$ requires $d^2$ data qubits and $d^2-1$ measurement ancillas connected in a 4-regular square lattice. The heavy-hex lattice of IBM Heron r2 has max degree 3 and consists of hexagonal tiles with couplers on the edges.

@@ -248,3 +248,17 @@ class HeavyHexTopology:
                         while visited[current] is not None:
                             current = visited[current]
                             path.append(current)
+                        return list(reversed(path))
+                    queue.append(neighbor)
+
+        return []  # No path found
+
+    def swap_distance(self, q1: int, q2: int) -> int:
+        """
+        Compute the SWAP distance between two qubits.
+
+        SWAP distance = shortest path length - 1
+        (number of SWAP gates needed to make q1 and q2 adjacent)
+        """
+        path = self.find_shortest_path(q1, q2)
+        return max(0, len(path) - 2)  # -2 because the path includes both endpoints

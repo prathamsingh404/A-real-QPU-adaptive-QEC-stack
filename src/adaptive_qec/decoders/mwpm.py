@@ -208,3 +208,17 @@ class MWPMDecoder(Decoder):
         detector = burst_detector or BurstDetector()
         shots = syndromes.shape[0]
 
+        # 1. Standard decode
+        standard_metrics = self.decode_batch(syndromes, observable_flips)
+
+        # 2. Burst-aware preprocessing
+        mitigated_syndromes = syndromes.copy().astype(np.uint8)
+        burst_shot_count = 0
+        total_bursts_found = 0
+
+        for i in range(shots):
+            shot_tensor = reshape_syndromes_to_tensor(
+                syndromes[i], num_rounds, num_detectors_per_round
+            )
+            analysis = detector.analyze(shot_tensor, num_detectors_per_round)
+            if analysis.bursts_detected:

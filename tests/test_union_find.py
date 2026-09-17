@@ -61,3 +61,12 @@ class TestUnionFindForest:
     def test_is_even_zero_parity(self):
         uf = UnionFindForest(3)
         assert uf.is_even(0)  # zero defects = even
+
+    def test_is_even_odd_parity(self):
+        uf = UnionFindForest(3)
+        uf.parity[0] = 1
+        assert not uf.is_even(0)
+
+    def test_path_compression(self):
+        """Path compression should flatten chains."""
+        uf = UnionFindForest(10)

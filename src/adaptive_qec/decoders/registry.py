@@ -47,3 +47,12 @@ def get_decoder(name: str) -> Decoder:
             f"Available: {', '.join(available)}. "
             f"Register new decoders with register_decoder()."
         )
+
+    decoder = _DECODERS[name_lower]()
+    logger.info(f"Created decoder: {decoder.name}")
+    return decoder
+
+
+def list_decoders() -> list[str]:
+    """List all registered decoder names."""
+    return list(_DECODERS.keys())

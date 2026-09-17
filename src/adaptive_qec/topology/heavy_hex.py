@@ -58,3 +58,13 @@ class HeavyHexTopology:
     Representation and analysis of IBM's heavy-hex qubit topology.
 
     Heavy-hex is a modified hexagonal lattice where each edge of the
+    hex lattice has a "flag" qubit inserted, reducing the maximum degree
+    from 3 to 2-3 while increasing total qubit count.
+
+    This class can be initialized either from:
+        - A coupling map (list of [q1, q2] pairs)
+        - An IBM backend object
+        - A synthetic heavy-hex of specified size
+    """
+
+    def __init__(self) -> None:

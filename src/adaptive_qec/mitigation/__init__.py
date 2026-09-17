@@ -10,3 +10,7 @@ from adaptive_qec.mitigation.dynamical_decoupling import (
 )
 
 __all__ = [
+    "AdaptiveDDPlanner",
+    "DDSchedule",
+    "DDSequenceType",
+]

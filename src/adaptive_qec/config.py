@@ -310,3 +310,42 @@ def _apply_env_overrides(data: dict[str, Any], prefix: str = "AQEC") -> dict[str
     """
     for key, value in os.environ.items():
         if not key.startswith(f"{prefix}_"):
+            continue
+
+        parts = key[len(prefix) + 1:].lower().split("__")
+        current = data
+        for part in parts[:-1]:
+            if part not in current:
+                current[part] = {}
+            current = current[part]
+
+        # Type coercion for common cases
+        raw = value
+        if raw.lower() in ("true", "false"):
+            raw = raw.lower() == "true"  # type: ignore[assignment]
+        else:
+            try:
+                raw = int(raw)  # type: ignore[assignment]
+            except ValueError:
+                try:
+                    raw = float(raw)  # type: ignore[assignment]
+                except ValueError:
+                    pass
+
+        current[parts[-1]] = raw
+
+    return data
+
+
+def _load_dotenv() -> None:
+    """Load .env file from project root if it exists."""
+    try:
+        from dotenv import load_dotenv
+        # Walk up from this file to find project root with .env
+        here = Path(__file__).resolve().parent
+        for ancestor in [here, here.parent, here.parent.parent, here.parent.parent.parent]:
+            env_path = ancestor / ".env"
+            if env_path.exists():
+                load_dotenv(env_path, override=False)
+                return
+    except ImportError:

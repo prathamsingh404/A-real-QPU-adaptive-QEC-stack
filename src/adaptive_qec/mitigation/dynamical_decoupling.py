@@ -124,3 +124,12 @@ class AdaptiveDDPlanner:
 
         Returns:
             DDSchedule specifying which qubits receive DD and their sequence.
+        """
+        seq_type = preferred_sequence or self.default_sequence
+        num_pulses = self.PULSE_COUNTS[seq_type]
+        pulse_cost = num_pulses * self.pulse_error
+
+        schedule = DDSchedule(idle_windows_us=dict(idle_map))
+        total_pulses = 0
+        noise_savings = []
+

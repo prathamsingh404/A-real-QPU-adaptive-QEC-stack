@@ -106,3 +106,12 @@ class TestDetectorGraph:
         circuit = code.generate_circuit(noise=noise)
         dem = circuit.detector_error_model(decompose_errors=True)
 
+        graph = build_detector_graph(dem)
+
+        assert graph.num_detectors > 0
+        assert len(graph.edges) > 0
+        # Should have adjacency built
+        assert len(graph.adjacency) > 0
+
+    def test_boundary_edges_exist(self):
+        """Surface code should have boundary edges."""

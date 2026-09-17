@@ -54,3 +54,11 @@ class TestLeakageDetector:
         assert len(analysis.leaked_qubits) >= 1
         leaked_indices = [q.detector_index for q in analysis.leaked_qubits]
         assert 4 in leaked_indices
+
+        q4 = next(q for q in analysis.leaked_qubits if q.detector_index == 4)
+        assert q4.onset_round == 10
+        assert q4.persistence_length >= 25
+        assert q4.autocorrelation > 0.3
+        assert q4.confidence > 0.5
+
+    def test_longest_streak_utility(self):

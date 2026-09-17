@@ -198,3 +198,13 @@ class BurstDetector:
                 )
 
                 burst = BurstEvent(
+                    round_start=t_start,
+                    round_end=t_end,
+                    affected_detectors=affected_dets,
+                    severity=severity,
+                    p_value=float(p_value),
+                    burst_type=burst_type,
+                    spatial_radius=spatial_radius,
+                    confidence=confidence,
+                )
+                bursts.append(burst)

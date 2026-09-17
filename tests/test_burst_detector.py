@@ -40,3 +40,10 @@ class TestBurstDetector:
         """A sudden burst across many detectors should be classified as COSMIC_RAY."""
         rng = np.random.default_rng(42)
         syndromes = (rng.random((30, 16)) < 0.01).astype(np.uint8)
+
+        # Inject wide cosmic ray burst at round 10-11 across 12/16 detectors
+        syndromes[10:12, :12] = 1
+
+        detector = BurstDetector(window_size=4, significance=0.001)
+        analysis = detector.analyze(syndromes, num_detectors_per_round=16)
+

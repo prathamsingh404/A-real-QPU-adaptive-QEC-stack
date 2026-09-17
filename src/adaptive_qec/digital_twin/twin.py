@@ -133,3 +133,18 @@ class HardwareDigitalTwin:
     ) -> float:
         """
         Predict P(logical failure) from the current hardware state.
+
+        Uses a simple model based on average error rates and code distance.
+        More sophisticated models can be added in V1+.
+
+        Rough model: p_L ≈ A * (p/p_th)^(d+1)/2
+        where p is the average physical error rate.
+        """
+        # Collect error rates for relevant qubits
+        all_qubits = data_qubits + ancilla_qubits
+        errors = []
+        for q in all_qubits:
+            if q in self._qubits:
+                state = self._qubits[q]
+                # Use readout error + gate error as approximate physical error
+                err = state.readout_error + (1 - state.single_qubit_fidelity)

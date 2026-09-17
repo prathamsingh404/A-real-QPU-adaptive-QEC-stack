@@ -10,3 +10,9 @@ import stim
 from adaptive_qec.config import NoiseConfig
 from adaptive_qec.qec.codes import create_code
 from adaptive_qec.topology.embedding import EmbeddingFinder, SurfaceCodeEmbedding
+from adaptive_qec.topology.heavy_hex import HeavyHexTopology, TopologyMetrics
+
+
+class TestHeavyHexTopology:
+    """Tests for HeavyHexTopology class."""
+

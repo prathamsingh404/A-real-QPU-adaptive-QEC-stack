@@ -97,3 +97,14 @@ class SurfaceCodeEmbedding:
         return self._swap_count
 
     def circuit_depth_overhead(self) -> float:
+        return self._depth_overhead
+
+    def all_physical_qubits(self) -> set[int]:
+        """All physical qubits used by this embedding."""
+        return set(self.data_map.values()) | set(self.ancilla_map.values())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "distance": self.distance,
+            "num_data_qubits": len(self.data_map),
+            "num_ancilla_qubits": len(self.ancilla_map),

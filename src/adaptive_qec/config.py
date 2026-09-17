@@ -193,3 +193,42 @@ class QECConfig(BaseModel):
     @classmethod
     def distance_must_be_odd(cls, v: int) -> int:
         if v % 2 == 0:
+            raise ValueError(f"Code distance must be odd, got {v}")
+        return v
+
+
+class MLDecoderConfig(BaseModel):
+    """ML decoder configuration."""
+    enabled: bool = False
+    model: MLModel = MLModel.CNN
+    checkpoint: Optional[str] = None
+    batch_size: int = Field(default=256, ge=1)
+
+
+class AdaptiveDecoderConfig(BaseModel):
+    """Adaptive decoder configuration."""
+    enabled: bool = False
+    noise_estimation: bool = True
+    routing: bool = False
+    uncertainty: bool = False
+
+
+class DecoderConfig(BaseModel):
+    """Complete decoder configuration."""
+    baseline: DecoderType = DecoderType.MWPM
+    ml: MLDecoderConfig = Field(default_factory=MLDecoderConfig)
+    adaptive: AdaptiveDecoderConfig = Field(default_factory=AdaptiveDecoderConfig)
+
+
+class CPUConfig(BaseModel):
+    """CPU runtime configuration."""
+    threads: int = Field(default=4, ge=1)
+    affinity: bool = False
+
+
+class GPUConfig(BaseModel):
+    """GPU runtime configuration."""
+    enabled: bool = False
+    device: int = Field(default=0, ge=0)
+    backend: GPUBackendType = GPUBackendType.PYTORCH
+

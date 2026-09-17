@@ -89,3 +89,16 @@ class TestDigitalTwinDDCandidates:
 
     def test_get_dd_candidates(self):
         twin = HardwareDigitalTwin(num_qubits=3)
+        twin.get_qubit_state(0).t2_us = 10.0   # very bad T2
+        twin.get_qubit_state(1).t2_us = 50.0   # moderate T2
+        twin.get_qubit_state(2).t2_us = 500.0  # very good T2
+
+        # During a 5us idle period:
+        # q0 dephasing: 1 - exp(-5/10) = 0.393 > 0.001 -> Candidate
+        # q1 dephasing: 1 - exp(-5/50) = 0.095 > 0.001 -> Candidate
+        # q2 dephasing: 1 - exp(-5/500) = 0.010 > 0.001 -> Candidate
+        candidates = twin.get_dd_candidates(idle_duration_us=5.0, pulse_error_budget=0.05)
+        # With budget 0.05, only q0 and q1 exceed 0.05
+        assert 0 in candidates
+        assert 1 in candidates
+        assert 2 not in candidates

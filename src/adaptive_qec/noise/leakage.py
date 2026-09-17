@@ -284,3 +284,14 @@ class LeakageRateEstimator:
             return {
                 "gamma_leakage": 0.0,
                 "gamma_seepage": 0.0,
+                "p_leak_steady": 0.0,
+            }
+
+        # Estimate leakage rate from number of events
+        n_events = len(self._leakage_events)
+        gamma_l = n_events / (self._total_rounds * self._total_qubits)
+
+        # Estimate seepage rate from average persistence
+        if self._leakage_events:
+            avg_persistence = np.mean(self._leakage_events)
+            gamma_s = 1.0 / max(avg_persistence, 1.0)

@@ -240,3 +240,14 @@ class LeakageDetector:
 
         # Weighted combination
         confidence = (
+            0.4 * autocorr_score +
+            0.35 * persistence_score +
+            0.25 * rate_score
+        )
+        return float(np.clip(confidence, 0, 1))
+
+
+class LeakageRateEstimator:
+    """
+    Estimate per-qubit leakage and seepage-back rates from repeated
+    experiments.

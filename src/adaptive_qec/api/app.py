@@ -103,3 +103,38 @@ class RecalibrateRequest(BaseModel):
     budget_shots: int = 2000
 
 
+# ---- Global State / Cache ----
+
+from adaptive_qec.noise.drift import CompositeDriftDetector, DriftStatus
+
+_CURRENT_EXPERIMENT: dict[str, Any] = {}
+_DRIFT_DETECTOR = CompositeDriftDetector(
+    ewma_alpha=0.15,
+    cusum_threshold=4.5,
+    warmup_samples=5,
+)
+_LATEST_DRIFT_REPORT = None
+_DRIFT_HISTORY: list[dict[str, Any]] = []
+_EXPERIMENT_HISTORY: list[dict[str, Any]] = []
+
+
+# ---- Endpoints ----
+
+@app.get("/")
+async def root():
+    """Serve the ethereal frontend dashboard."""
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    return {
+        "service": "AdaptiveQEC",
+        "version": "0.1.0",
+        "status": "operational",
+    }
+
+
+@app.get("/health")
+async def health_check() -> dict[str, str]:
+    """Health check endpoint."""
+    return {"status": "healthy"}
+

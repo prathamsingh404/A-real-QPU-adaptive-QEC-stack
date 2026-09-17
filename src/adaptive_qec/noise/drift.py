@@ -73,3 +73,18 @@ class EWMADriftDetector:
         warmup_samples: int = 20,
     ) -> None:
         """
+        Args:
+            alpha: EWMA smoothing factor (0 < alpha <= 1). Smaller = more smoothing.
+            warning_sigma: standard deviations for warning threshold.
+            alarm_sigma: standard deviations for drift alarm.
+            severe_sigma: standard deviations for severe drift.
+            warmup_samples: minimum samples before drift detection activates.
+        """
+        self._alpha = alpha
+        self._warning_sigma = warning_sigma
+        self._alarm_sigma = alarm_sigma
+        self._severe_sigma = severe_sigma
+        self._warmup = warmup_samples
+
+        # State
+        self._ewma: Optional[np.ndarray] = None

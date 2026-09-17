@@ -278,3 +278,17 @@ class UnionFindDecoder(Decoder):
         - Speed: O(N·α(N)) vs O(N³)
         - Accuracy: ~8-15% higher logical error rate (typical)
         - Memory: ~60% of MWPM
+    """
+
+    def __init__(self) -> None:
+        self._graph: Optional[DetectorGraph] = None
+        self._num_detectors: int = 0
+        self._num_observables: int = 0
+        self._sorted_edge_indices: Optional[np.ndarray] = None
+
+    @property
+    def name(self) -> str:
+        return "union_find"
+
+    def configure(self, **kwargs: Any) -> None:
+        """

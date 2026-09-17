@@ -698,3 +698,38 @@ async def get_simulator_gap() -> dict[str, Any]:
             {"mode": "Correlated Errors", "description": "Spatial/temporal noise correlations not in ideal model"},
             {"mode": "Leakage", "description": "Non-computational subspace transitions"},
             {"mode": "Parameter Drift", "description": "Noise parameter change between calibration cycles"},
+        ]
+    }
+
+
+@app.get("/api/profiling/latency")
+async def get_profiling_latency() -> dict[str, Any]:
+    """
+    Real-time system profiling and latency budget engine.
+
+    When experiment data is available, uses actual decode latency.
+    Otherwise returns the system's target budget allocation.
+    """
+    deadline_us = 10.0
+
+    last_exp = _CURRENT_EXPERIMENT
+    has_data = bool(last_exp.get("latency_mean_us"))
+
+    if has_data:
+        actual_decode_us = last_exp.get("latency_mean_us", 0.0)
+        p99_decode_us = last_exp.get("latency_p99_us", 0.0)
+        source = "measured"
+    else:
+        actual_decode_us = 0.0
+        p99_decode_us = 0.0
+        source = "budget_allocation"
+
+    # Budget breakdown — acquisition and transport are from QPU specs,
+    # decode latency is measured when available
+    stages = {
+        "acquisition_us": 1.25,
+        "transport_us": 0.45,
+        "preprocess_us": 0.35,
+        "inference_us": actual_decode_us if has_data else 1.85,
+        "decode_us": actual_decode_us if has_data else 0.75,
+        "return_us": 0.20,

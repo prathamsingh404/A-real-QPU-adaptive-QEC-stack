@@ -43,3 +43,12 @@ graph TD
     subgraph QECBlock ["3. Fault-Tolerant Circuit Synthesis"]
         StimCirc["Stim Fault-Tolerant Circuit\n(Rotated Surface Code d=3, 5, 7)"]:::qec
         DEM["Detector Error Model (DEM)\n(Separators ^, Hyperedges)"]:::qec
+        SyndromeStream["Real-Time Syndrome Stream\ns in {0, 1}^(R x Nd)"]:::qec
+    end
+
+    subgraph NoiseDetect ["4. Real-Time Noise & Correlation Engines"]
+        CompositeDrift["CompositeDriftDetector\n(EWMA + CUSUM + Burst)"]:::noise
+        BurstDet["Poisson Burst Detector\n(P-value < 10^-3, Spatiotemporal)"]:::noise
+        LeakageDet["Syndrome Leakage Detector\n(Lag-1 Autocorrelation R(1) + Streaks)"]:::noise
+        RateEst["Leakage & Seepage Rates\n(gamma_L, gamma_S, p_steady)"]:::noise
+    end

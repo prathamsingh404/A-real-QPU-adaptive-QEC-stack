@@ -115,3 +115,42 @@ class HypothesisTest(str, Enum):
 
 class HardwareConfig(BaseModel):
     """QPU hardware configuration."""
+    model_config = {"arbitrary_types_allowed": True}
+
+    provider: HardwareProvider = HardwareProvider.IBM
+    backend: str = "ibm_marrakesh"
+    qubits: int = Field(default=156, ge=1)
+    topology: str = "heavy_hex"
+    api_token_env: str = "IBM_QUANTUM_TOKEN"
+    channel: str = "ibm_cloud"
+    instance_env: str = "IBM_QUANTUM_INSTANCE"
+
+    @property
+    def api_token(self) -> Optional[str]:
+        """Retrieve API token from environment variable."""
+        return os.environ.get(self.api_token_env)
+
+    @property
+    def instance(self) -> Optional[str]:
+        """Retrieve CRN/instance from environment variable."""
+        return os.environ.get(self.instance_env)
+
+
+class ReadoutNoiseConfig(BaseModel):
+    """Readout noise parameters."""
+    enabled: bool = True
+    p0_given_1: float = Field(default=0.01208, ge=0.0, le=1.0)
+    p1_given_0: float = Field(default=0.01208, ge=0.0, le=1.0)
+
+
+class GateNoiseConfig(BaseModel):
+    """Gate noise parameters."""
+    single_qubit: float = Field(default=0.000454, ge=0.0, le=1.0)
+    two_qubit: float = Field(default=0.003021, ge=0.0, le=1.0)
+    model: NoiseModel = NoiseModel.DEPOLARIZING
+
+
+class CorrelatedNoiseConfig(BaseModel):
+    """Correlated noise parameters."""
+    enabled: bool = False
+    spatial_range: int = Field(default=1, ge=0)

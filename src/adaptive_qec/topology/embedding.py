@@ -163,3 +163,14 @@ class EmbeddingFinder:
         )[:max_candidates]
 
         best_embedding: Optional[SurfaceCodeEmbedding] = None
+        best_score = float("inf")
+
+        for start_qubit in candidates:
+            embedding = self._try_embedding(distance, start_qubit)
+            if embedding is None:
+                continue
+
+            score = self._score_embedding(embedding)
+            if score.total_score < best_score:
+                best_score = score.total_score
+                best_embedding = embedding

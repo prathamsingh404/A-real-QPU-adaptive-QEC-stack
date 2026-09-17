@@ -295,3 +295,17 @@ class LeakageRateEstimator:
         if self._leakage_events:
             avg_persistence = np.mean(self._leakage_events)
             gamma_s = 1.0 / max(avg_persistence, 1.0)
+        else:
+            gamma_s = 0.0
+
+        # Steady-state leaked population
+        if gamma_l + gamma_s > 0:
+            p_steady = gamma_l / (gamma_l + gamma_s)
+        else:
+            p_steady = 0.0
+
+        return {
+            "gamma_leakage": float(gamma_l),
+            "gamma_seepage": float(gamma_s),
+            "p_leak_steady": float(p_steady),
+        }

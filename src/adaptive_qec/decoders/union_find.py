@@ -250,3 +250,17 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
         ))
 
     graph = DetectorGraph(
+        num_detectors=num_detectors,
+        num_observables=num_observables,
+        edges=edges,
+        boundary_node=boundary_node,
+    )
+    graph.build_adjacency()
+    return graph
+
+
+# ---------------------------------------------------------------------------
+# Union-Find decoder
+# ---------------------------------------------------------------------------
+
+class UnionFindDecoder(Decoder):

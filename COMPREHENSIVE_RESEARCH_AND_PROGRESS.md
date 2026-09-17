@@ -58,3 +58,8 @@ The goal of this project transcends standard academic exercises or superficial t
 
 ---
 
+### Problem 3: Selective Dynamical Decoupling (Idle-Time Noise Suppression)
+* **Why it matters**: During syndrome extraction rounds, while two-qubit gates are executed between specific pairs, other qubits remain idle. Superconducting transmons during idle slots suffer from low-frequency $1/f$ flux noise, stray ZZ crosstalk, and non-Markovian dephasing:
+  $$p_{\text{dephase}}(t) = 1 - e^{-t / T_2}$$
+  Applying continuous microwave inversion pulses (Dynamical Decoupling) refocuses coherent phase accumulation. However, each microwave pulse has imperfect rotation angle and amplitude, adding gate error $\epsilon_{\text{pulse}}$.
+* **The Decision Rule**:

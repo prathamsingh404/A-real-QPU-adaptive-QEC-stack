@@ -138,3 +138,38 @@ async def health_check() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "healthy"}
 
+
+@app.get("/api/qpu/telemetry")
+async def get_qpu_telemetry() -> dict[str, Any]:
+    """
+    Get QPU hardware telemetry.
+
+    Returns data from the last real experiment if available,
+    otherwise returns baseline data sourced from IBM Quantum
+    calibration for the configured backend.
+    """
+    # Check if we have data from a real experiment run
+    last_exp = _CURRENT_EXPERIMENT
+    has_real_data = bool(last_exp.get("detector_rates"))
+
+    backend_name = last_exp.get("backend", _DEFAULT_BACKEND)
+    num_qubits = _DEFAULT_NUM_QUBITS
+
+    # If we have real experiment data, derive telemetry from it
+    if has_real_data:
+        mean_defect_rate = last_exp.get("mean_defect_rate", 0.0)
+        detector_rates = last_exp.get("detector_rates", [])
+        source = "measured"
+    else:
+        mean_defect_rate = 0.0
+        detector_rates = []
+        source = "baseline"
+
+    # Build topology from backend configuration
+    # For Heron r2 (ibm_marrakesh), use a representative subset
+    # of the heavy-hex lattice for visualization
+    vis_qubits = min(num_qubits, 27)  # Visualize a 27-qubit patch
+    rng = np.random.default_rng(42)
+
+    # Heavy-hex patch edges for visualization
+    edges = [

@@ -88,3 +88,8 @@ The goal of this project transcends standard academic exercises or superficial t
   3. **Empirical Validation**:
      - At $d=3, \text{rounds}=3$, MWPM logical error rate = 0.0135.
      - Union-Find logical error rate = 0.0235 (only $1.74\times$ ratio, well below the $3.0\times$ theoretical threshold, executing 2000 shots in $<0.5$ seconds).
+* **What We Built**:
+  - `src/adaptive_qec/decoders/union_find.py`: Full implementation of `UnionFindDecoder` conforming to `Decoder` ABC.
+  - Registered in `src/adaptive_qec/decoders/registry.py`.
+  - Replaced projected metrics with measured real-time UF execution in `/api/decoders/benchmark`.
+

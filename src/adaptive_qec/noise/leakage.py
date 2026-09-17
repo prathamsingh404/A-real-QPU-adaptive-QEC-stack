@@ -174,3 +174,14 @@ class LeakageDetector:
             leaked_qubits=leaked,
             estimated_leakage_rate=leakage_rate,
         )
+
+    @staticmethod
+    def _autocorrelation_lag1(trace: np.ndarray) -> float:
+        """Compute lag-1 autocorrelation of a binary time series."""
+        n = len(trace)
+        if n < 2:
+            return 0.0
+
+        mean = trace.mean()
+        var = trace.var()
+        if var < 1e-10:

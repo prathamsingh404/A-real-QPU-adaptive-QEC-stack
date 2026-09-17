@@ -102,3 +102,29 @@ def run(config: str, shots: int | None, distances: str | None, temporal: int | N
 
 @cli.command()
 @click.option("--host", default="0.0.0.0", help="Host to bind to")
+@click.option("--port", default=8000, type=int, help="Port to bind to")
+@click.option("--reload", is_flag=True, help="Enable auto-reload for development")
+def serve(host: str, port: int, reload: bool) -> None:
+    """Start the AdaptiveQEC API server."""
+    import uvicorn
+
+    logger = logging.getLogger("adaptive_qec.cli")
+    logger.info(f"Starting AdaptiveQEC API server on {host}:{port}")
+    uvicorn.run(
+        "adaptive_qec.api.app:app",
+        host=host,
+        port=port,
+        reload=reload,
+    )
+
+
+@cli.command()
+@click.option("--config", default="configs/default.yaml", help="Path to configuration YAML file")
+def check(config: str) -> None:
+    """Validate configuration and check connectivity."""
+    from adaptive_qec.config import load_config
+
+    logger = logging.getLogger("adaptive_qec.cli")
+
+    try:
+        cfg = load_config(config)

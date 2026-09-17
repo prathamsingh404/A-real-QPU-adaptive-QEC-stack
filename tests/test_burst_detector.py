@@ -103,3 +103,10 @@ class TestDriftIntegration:
             detection_rates=rates,
             syndrome_tensor=syndrome_tensor,
             num_detectors_per_round=8,
+        )
+
+        assert report.status == DriftStatus.BURST_EVENT
+        assert report.magnitude > 0
+        assert "burst_analysis" in report.details
+
+

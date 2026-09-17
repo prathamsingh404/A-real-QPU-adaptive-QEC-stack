@@ -78,3 +78,13 @@ class DistanceSweepResults:
                     "decoder": r.decoder_name,
                     "logical_error_rate": round(r.metrics.logical_error_rate, 8),
                     "num_errors": r.metrics.num_logical_errors,
+                    "total_shots": r.metrics.total_shots,
+                    "decode_time_s": round(r.metrics.decode_time_s, 4),
+                    "throughput_shots_per_s": round(r.metrics.throughput_shots_per_s, 1),
+                    "latency_p99_us": round(r.metrics.latency_p99_us, 2),
+                    "physical_error_rate": round(r.physical_error_rate, 6),
+                    "wall_time_s": round(r.wall_time_s, 3),
+                }
+                for r in self.results
+            ],
+        }

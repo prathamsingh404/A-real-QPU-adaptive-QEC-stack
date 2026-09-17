@@ -38,3 +38,11 @@ class TestLeakageDetector:
 
     def test_persistent_leakage_detected(self):
         """A qubit stuck firing consecutively should be flagged as leaked."""
+        rng = np.random.default_rng(42)
+        trace = (rng.random((40, 10)) < 0.02).astype(np.uint8)
+
+        # Inject persistent leakage on detector 4 from round 10 to 35 (25 consecutive rounds)
+        trace[10:35, 4] = 1
+
+        detector = LeakageDetector(
+            min_persistence=5,

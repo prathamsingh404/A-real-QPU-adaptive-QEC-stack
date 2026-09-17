@@ -238,3 +238,13 @@ class HeavyHexTopology:
 
         while queue:
             node = queue.popleft()
+            for neighbor in self.adjacency.get(node, set()):
+                if neighbor not in visited:
+                    visited[neighbor] = node
+                    if neighbor == end:
+                        # Reconstruct path
+                        path = [end]
+                        current = end
+                        while visited[current] is not None:
+                            current = visited[current]
+                            path.append(current)

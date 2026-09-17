@@ -253,3 +253,20 @@ class SurfaceCode(QECCode):
                 distance=self.distance,
                 rounds=self.rounds,
                 after_clifford_depolarization=p,
+                before_round_data_depolarization=p,
+                before_measure_flip_probability=p,
+                after_reset_flip_probability=p,
+            )
+        else:
+            circuit = stim.Circuit.generated(
+                "surface_code:rotated_memory_z",
+                distance=self.distance,
+                rounds=self.rounds,
+            )
+
+        if embedding is not None and hasattr(embedding, "swap_count"):
+            swap_count = embedding.swap_count()
+            if swap_count > 0 and p > 0:
+                extra_p = min(0.5, p * swap_count * 0.05)
+                circuit.append("DEPOLARIZE1", list(range(self.distance ** 2)), [extra_p])
+

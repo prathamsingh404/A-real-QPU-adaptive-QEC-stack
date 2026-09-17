@@ -47,3 +47,10 @@ class TestDynamicalDecoupling:
         # Qubit 1 should NOT get protected because 0.1us idle creates negligible dephasing
         assert schedule.qubit_sequences[1] == DDSequenceType.NONE
         assert 1 not in schedule.protected_qubits
+
+        # Overall schedule checks
+        assert schedule.total_pulses_inserted == 4  # 4 pulses for qubit 0 (XY4)
+        assert schedule.estimated_noise_reduction > 0
+
+    def test_cpmg_and_xy8_sequences(self):
+        twin = HardwareDigitalTwin(num_qubits=2)

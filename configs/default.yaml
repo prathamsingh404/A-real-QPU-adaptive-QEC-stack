@@ -22,3 +22,15 @@ hardware:
 
 qec:
   code: surface                   # repetition | surface | color | qldpc
+  distance: 3                     # code distance: 3, 5, 7, ...
+  rounds: 3                      # QEC rounds: 1, 3, 5, 10, ...
+  logical_basis: Z                # Z | X
+  boundary: planar               # planar | toric
+
+noise:
+  readout:
+    enabled: true
+    p0_given_1: 0.01208           # P(measure 0 | state 1) — ibm_marrakesh calibration
+    p1_given_0: 0.01208           # P(measure 1 | state 0) — ibm_marrakesh calibration
+  gate:
+    single_qubit: 0.000454        # SX gate error — ibm_marrakesh calibration

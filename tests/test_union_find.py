@@ -214,3 +214,12 @@ class TestUnionFindDecoder:
         metrics = decoder.decode_batch(detectors, observables)
 
         # At p=0.5%, d=3, error rate should be well below 50%
+        assert metrics.logical_error_rate < 0.5
+
+    def test_latency_metrics(self):
+        """Latency percentiles should be ordered correctly."""
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+

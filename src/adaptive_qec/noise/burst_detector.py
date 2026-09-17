@@ -138,3 +138,13 @@ class BurstDetector:
         )
 
         # Compute baseline defect rate (excluding obvious outlier rounds)
+        round_rates = syndrome_tensor.mean(axis=1)
+        median_rate = float(np.median(round_rates))
+        baseline_rate = max(median_rate, 1e-6)
+
+        # Expected defects per window under null hypothesis
+        expected_per_window = baseline_rate * N_d * self.window_size
+
+        # Sliding window burst detection
+        bursts: list[BurstEvent] = []
+        w = self.window_size

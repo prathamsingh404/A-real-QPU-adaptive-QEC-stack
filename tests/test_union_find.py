@@ -79,3 +79,12 @@ class TestUnionFindForest:
 
 
 # ---------------------------------------------------------------------------
+# Unit tests for detector graph construction
+# ---------------------------------------------------------------------------
+
+class TestDetectorGraph:
+    """Test graph construction from Stim DEM."""
+
+    def test_build_from_repetition_code(self):
+        code = create_code("repetition", distance=3, rounds=3)
+        noise = NoiseConfig()

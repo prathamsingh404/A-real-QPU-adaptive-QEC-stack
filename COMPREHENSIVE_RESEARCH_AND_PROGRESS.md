@@ -118,3 +118,8 @@ The goal of this project transcends standard academic exercises or superficial t
 * **The Detection Mathematical Formalism**:
   - A transient Pauli error fires for 1 or 2 rounds.
   - A leaked qubit produces a high firing rate with high **lag-1 temporal autocorrelation**:
+    $$R(1) = \frac{\sum_{t=1}^{R-1} (s_t - \bar{s})(s_{t+1} - \bar{s})}{(R-1) \sigma^2}$$
+  - Combined with streak-length analysis (longest continuous run of 1s), we estimate:
+    - $\gamma_L$: Leakage rate per round
+    - $\gamma_S$: Seepage rate per round ($\approx 1 / \text{mean streak length}$)
+    - Steady-state leaked fraction: $p_{\text{leak}}^{\text{steady}} = \frac{\gamma_L}{\gamma_L + \gamma_S}$

@@ -97,3 +97,12 @@ class AdaptiveDDPlanner:
     def __init__(
         self,
         digital_twin: Optional[HardwareDigitalTwin] = None,
+        single_qubit_pulse_error: float = 0.0003,
+        default_sequence: DDSequenceType = DDSequenceType.XY4,
+    ) -> None:
+        """
+        Args:
+            digital_twin: Hardware model with T2 coherence times.
+            single_qubit_pulse_error: Estimated error per DD pulse (1Q X/Y gate).
+            default_sequence: Default candidate sequence when DD is beneficial.
+        """

@@ -238,3 +238,18 @@ class CUSUMDriftDetector:
         Returns:
             DriftReport.
         """
+        self._sample_count += 1
+        self._history.append(detection_rates.copy())
+
+        num_detectors = len(detection_rates)
+
+        if self._baseline_mean is None or self._baseline_mean.shape != detection_rates.shape:
+            self._baseline_mean = detection_rates.copy()
+            self._sample_count = 1
+            self._history = [detection_rates.copy()]
+            self._s_plus = None
+            self._s_minus = None
+            self._baseline_std = None
+            return DriftReport(
+                status=DriftStatus.STABLE,
+                magnitude=0.0,

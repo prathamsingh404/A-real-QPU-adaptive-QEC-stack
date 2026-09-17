@@ -362,3 +362,17 @@ class UnionFindDecoder(Decoder):
         Args:
             syndrome: shape (num_detectors,), dtype uint8
 
+        Returns:
+            Observable corrections: shape (num_observables,), dtype uint8
+        """
+        defects = np.where(syndrome > 0)[0]
+        if len(defects) == 0:
+            return np.zeros(self._num_observables, dtype=np.uint8)
+
+        boundary = self._graph.boundary_node
+        dist = self._dist
+        path_obs = self._path_obs
+
+        events = []
+        for i in range(len(defects)):
+            di = int(defects[i])

@@ -26,3 +26,17 @@ Sources:
       threshold", Nature (2025), arXiv:2408.13687
     - Fowler et al., "Surface codes: Towards practical large-scale quantum
       computation", Phys. Rev. A 86, 032324 (2012)
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from typing import Any, Optional
+
+import numpy as np
+from scipy import optimize
+
+from adaptive_qec.decoders.base import DecoderMetrics
+
+logger = logging.getLogger(__name__)

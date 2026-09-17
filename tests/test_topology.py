@@ -46,3 +46,9 @@ class TestHeavyHexTopology:
 
         # Adjacent qubits require 0 SWAPs
         assert topo.swap_distance(0, 1) == 0
+        # 0 to 2 requires 1 SWAP (len(path) - 2 = 3 - 2 = 1)
+        assert topo.swap_distance(0, 2) == 1
+        # 0 to 3 requires 2 SWAPs
+        assert topo.swap_distance(0, 3) == 2
+
+

@@ -119,3 +119,14 @@ class LeakageDetector:
 
         for det_idx in range(N_d):
             trace = syndrome_tensor[:, det_idx].astype(np.float64)
+            firing_rate = float(trace.mean())
+
+            # Skip detectors that rarely fire
+            if firing_rate < self.firing_rate_threshold:
+                continue
+
+            # Temporal autocorrelation at lag 1
+            autocorr = self._autocorrelation_lag1(trace)
+
+            # Longest consecutive firing streak
+            persistence, onset = self._longest_streak(trace)

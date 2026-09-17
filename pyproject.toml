@@ -58,3 +58,18 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
 ]
+ml = [
+    "torch>=2.2",
+    "onnxruntime>=1.17",
+]
+gpu = [
+    "cupy>=13.0",
+]
+deltakit = [
+    "deltakit",
+]
+
+[project.scripts]
+aqec = "adaptive_qec.cli:main"
+
+[tool.setuptools.packages.find]

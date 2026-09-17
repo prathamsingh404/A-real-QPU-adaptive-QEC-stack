@@ -208,3 +208,17 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
         # Split instruction targets by separator (^)
         segments: list[tuple[list[int], int]] = []
         cur_dets: list[int] = []
+        cur_obs = 0
+
+        for target in instruction.targets_copy():
+            if target.is_separator():
+                segments.append((cur_dets, cur_obs))
+                cur_dets = []
+                cur_obs = 0
+            elif target.is_relative_detector_id():
+                cur_dets.append(target.val)
+            elif target.is_logical_observable_id():
+                cur_obs |= (1 << target.val)
+
+        segments.append((cur_dets, cur_obs))
+

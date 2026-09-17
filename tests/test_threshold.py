@@ -89,3 +89,10 @@ class TestThresholdAnalyzer:
 
         table = analyzer.scaling_table()
         assert len(table) == 2
+        assert table[0]["distance"] == 3
+        assert table[0]["lambda_vs_prev"] is None
+        assert table[1]["distance"] == 5
+        assert table[1]["lambda_vs_prev"] > 1.0
+
+
+class TestDistanceSweep:

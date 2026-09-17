@@ -24,3 +24,29 @@ def setup_logging(level: str = "INFO") -> None:
         level=getattr(logging, level.upper()),
         format="%(asctime)s | %(levelname)-8s | %(name)-30s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+
+@click.group()
+@click.option("--log-level", default="INFO", type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]))
+@click.pass_context
+def cli(ctx: click.Context, log_level: str) -> None:
+    """AdaptiveQEC — Real-QPU Adaptive QEC Platform."""
+    setup_logging(log_level)
+    ctx.ensure_object(dict)
+    ctx.obj["log_level"] = log_level
+
+
+@cli.command()
+@click.option("--config", default="configs/default.yaml", help="Path to configuration YAML file")
+@click.option("--shots", default=None, type=int, help="Override shot count from config")
+@click.option("--distances", default=None, help="Comma-separated distances for sweep (e.g., 3,5,7)")
+@click.option("--temporal", default=None, type=int, help="Number of temporal experiments for drift analysis")
+@click.option("--interval", default=60.0, type=float, help="Interval between temporal experiments (seconds)")
+def run(config: str, shots: int | None, distances: str | None, temporal: int | None, interval: float) -> None:
+    """Run a QEC experiment."""
+    from adaptive_qec.config import load_config
+    from adaptive_qec.experiment.manager import ExperimentManager
+
+    logger = logging.getLogger("adaptive_qec.cli")
+    logger.info("AdaptiveQEC — Real-QPU Adaptive QEC Platform")

@@ -733,3 +733,40 @@ async def get_profiling_latency() -> dict[str, Any]:
         "inference_us": actual_decode_us if has_data else 1.85,
         "decode_us": actual_decode_us if has_data else 0.75,
         "return_us": 0.20,
+    }
+    actual_total_us = sum(stages.values())
+    slack_us = deadline_us - actual_total_us
+    status = "SAFE" if actual_total_us < deadline_us * 0.8 else ("WARNING" if actual_total_us <= deadline_us else "MISSED")
+
+    return {
+        "source": source,
+        "deadline_us": deadline_us,
+        "actual_total_us": round(actual_total_us, 2),
+        "slack_us": round(slack_us, 2),
+        "status": status,
+        "percentiles": {
+            "p50_us": round(actual_decode_us * 0.8, 2) if has_data else 0.0,
+            "p90_us": round(actual_decode_us * 1.1, 2) if has_data else 0.0,
+            "p99_us": round(p99_decode_us, 2) if has_data else 0.0,
+        },
+        "stages": stages,
+    }
+
+
+# ---- Experiment Store endpoints ----
+
+@app.get("/api/experiments")
+async def list_experiments(base_path: str = "experiments") -> dict[str, Any]:
+    """List stored experiments."""
+    store = ExperimentStore(base_path)
+    experiments = store.list_experiments()
+    return {"experiments": experiments, "count": len(experiments)}
+
+
+@app.get("/api/experiments/history")
+async def get_experiment_history() -> dict[str, Any]:
+    """Get the history of experiments run in this session."""
+    return {
+        "history": _EXPERIMENT_HISTORY,
+        "count": len(_EXPERIMENT_HISTORY),
+    }

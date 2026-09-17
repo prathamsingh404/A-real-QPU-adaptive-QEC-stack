@@ -103,3 +103,8 @@ The goal of this project transcends standard academic exercises or superficial t
   - Google Willow achieved $\Lambda \approx 2.14 \pm 0.02$.
 * **Phenomenological Scaling Model**:
   $$p_L = A \cdot \left(\frac{p_{\text{phys}}}{p_{\text{th}}}\right)^{\frac{d+1}{2}}$$
+  Fitting this model to multi-distance experimental sweeps extracts the effective fault-tolerant threshold $p_{\text{th}}$ and scaling factor $A$.
+* **What We Built**:
+  - `src/adaptive_qec/analysis/threshold.py`: `ThresholdAnalyzer` and `ThresholdFit` dataclass. Computes $\Lambda$ ratios, 95% Wilson score confidence intervals, and fits non-linear exponential threshold scaling curves.
+  - `src/adaptive_qec/experiment/distance_sweep.py`: Automated multi-distance experiment orchestrator (`DistanceSweep`) running distance sweeps across distances $[3, 5, 7, \dots]$, collecting per-shot metrics for multiple decoders.
+  - `src/adaptive_qec/api/app.py`: Created `/api/analysis/threshold` endpoint.

@@ -68,3 +68,17 @@ class UnionFindForest:
     def __init__(self, n: int, n_obs: int = 1) -> None:
         self.n = n
         self.n_obs = n_obs
+        self.parent = np.arange(n, dtype=np.int32)
+        self.rank = np.zeros(n, dtype=np.int32)
+        self.size = np.ones(n, dtype=np.int32)
+        self.parity = np.zeros(n, dtype=np.int32)
+        self.boundary_connected = np.zeros(n, dtype=np.bool_)
+        # Observable XOR from node to its parent
+        self.obs_to_parent = np.zeros((n, n_obs), dtype=np.uint8)
+
+    def find(self, x: int) -> int:
+        """Find root with path compression (recursively accumulates obs_to_parent)."""
+        p = self.parent[x]
+        if p != x:
+            root = self.find(p)
+            if p != root:

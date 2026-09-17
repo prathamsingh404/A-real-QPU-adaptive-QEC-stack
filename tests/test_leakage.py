@@ -46,3 +46,11 @@ class TestLeakageDetector:
 
         detector = LeakageDetector(
             min_persistence=5,
+            autocorr_threshold=0.25,
+            firing_rate_threshold=0.3,
+        )
+        analysis = detector.analyze(trace)
+
+        assert len(analysis.leaked_qubits) >= 1
+        leaked_indices = [q.detector_index for q in analysis.leaked_qubits]
+        assert 4 in leaked_indices

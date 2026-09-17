@@ -259,3 +259,38 @@ class TestUFvsMWPM:
             shots=2000, separate_observables=True
         )
 
+        # MWPM
+        mwpm = MWPMDecoder()
+        mwpm.configure(circuit=circuit)
+        mwpm_metrics = mwpm.decode_batch(detectors, observables)
+
+        # UF
+        uf = UnionFindDecoder()
+        uf.configure(circuit=circuit)
+        uf_metrics = uf.decode_batch(detectors, observables)
+
+        # UF should be slightly worse but not dramatically so
+        # Allow up to 3x worse error rate (generous for d=3 low noise)
+        if mwpm_metrics.logical_error_rate > 0:
+            ratio = uf_metrics.logical_error_rate / mwpm_metrics.logical_error_rate
+            assert ratio < 3.0, (
+                f"UF error rate ({uf_metrics.logical_error_rate:.4f}) is "
+                f"{ratio:.1f}x worse than MWPM ({mwpm_metrics.logical_error_rate:.4f})"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Registry integration
+# ---------------------------------------------------------------------------
+
+class TestRegistryIntegration:
+    """Test that UF decoder is properly registered."""
+
+    def test_get_union_find(self):
+        decoder = get_decoder("union_find")
+        assert decoder.name == "union_find"
+        assert isinstance(decoder, UnionFindDecoder)
+
+    def test_get_by_uppercase(self):
+        decoder = get_decoder("UNION_FIND")
+        assert decoder.name == "union_find"

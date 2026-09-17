@@ -178,3 +178,12 @@ class AdaptiveDDPlanner:
 
         current_tick = 0
         for instruction in circuit:
+            if instruction.name == "TICK":
+                current_tick += 1
+                continue
+
+            for target in instruction.targets_copy():
+                if target.is_qubit_target:
+                    q = target.value
+                    qubit_activity[q] = qubit_activity.get(q, 0) + 1
+

@@ -133,3 +133,8 @@ The goal of this project transcends standard academic exercises or superficial t
 ## 3. End-to-End Test Suite Verification
 
 All 113 unit and integration tests across all 10 test modules execute and pass with 100% reliability:
+
+| Test Module | Coverage Area | Tests | Status |
+| :--- | :--- | :---: | :---: |
+| `tests/test_threshold.py` | Wilson Score CIs, $\Lambda$ Ratio, Phenomenological Curve Fitting, DistanceSweep Harness | 7 | **PASSED** |
+| `tests/test_burst_detector.py` | Poisson Sliding Window, Spatial Radius, Temporal Duration, CompositeDrift Alarm | 6 | **PASSED** |

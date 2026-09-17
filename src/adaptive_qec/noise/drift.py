@@ -43,3 +43,18 @@ class DriftReport:
     details: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
+        """JSON-serializable representation."""
+        return {
+            "status": self.status.value,
+            "magnitude": float(self.magnitude),
+            "affected_detectors": self.affected_detectors,
+            "affected_parameters": self.affected_parameters,
+            "change_points": self.change_points,
+            "details": self.details,
+        }
+
+
+class EWMADriftDetector:
+    """
+    Exponentially Weighted Moving Average drift detector.
+

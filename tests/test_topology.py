@@ -70,3 +70,9 @@ class TestEmbeddingFinder:
 
         qubits_used = embedding.all_physical_qubits()
         assert len(qubits_used) > 9
+        assert embedding.circuit_depth_overhead() >= 1.0
+
+        d_dict = embedding.to_dict()
+        assert d_dict["distance"] == 3
+        assert d_dict["num_data_qubits"] == 9
+

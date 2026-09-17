@@ -88,3 +88,13 @@ class BurstAnalysis:
         }
 
 
+class BurstDetector:
+    """
+    Spatiotemporal burst detector for QEC syndrome data.
+
+    Scans the syndrome tensor S ∈ {0,1}^(R × N_d) for anomalous
+    spatiotemporal clusters using a sliding-window chi-squared test.
+
+    Usage:
+        detector = BurstDetector(window_size=5, significance=0.001)
+        analysis = detector.analyze(syndrome_tensor, num_detectors_per_round=8)

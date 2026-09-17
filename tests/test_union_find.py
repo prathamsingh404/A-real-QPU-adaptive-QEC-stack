@@ -196,3 +196,12 @@ class TestUnionFindDecoder:
         assert 0 <= metrics.logical_error_rate <= 1
         assert metrics.decode_time_s > 0
         assert metrics.throughput_shots_per_s > 0
+
+    def test_error_rate_reasonable(self):
+        """UF error rate should be in a reasonable range for d=3."""
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+
+        sampler = circuit.compile_detector_sampler()

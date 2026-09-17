@@ -70,3 +70,12 @@ graph TD
         Threshold["ThresholdAnalyzer\nLambda = p_L(d) / p_L(d+2)"]:::analysis
         WilsonCI["Wilson Score 95% Confidence Intervals"]:::analysis
         Fit["Phenomenological Fit\np_L = A * (p_phys / p_th)^((d+1)/2)"]:::analysis
+    end
+
+    %% Cross-domain edges
+    IBM --> HH
+    HH --> Embedding
+    Embedding --> StimCirc
+    Twin --> StimCirc
+    Twin --> DDPlanner
+

@@ -262,3 +262,14 @@ class EmbeddingFinder:
         # Connectivity deficit: fraction of required edges missing
         required_edges = 2 * d * (d - 1)  # horizontal + vertical in grid
         missing = 0
+        for (r, c), pq in embedding.data_map.items():
+            for dr, dc in [(0, 1), (1, 0)]:
+                nr, nc = r + dr, c + dc
+                if (nr, nc) in embedding.data_map:
+                    npq = embedding.data_map[(nr, nc)]
+                    if npq not in self.topology.neighbors(pq):
+                        missing += 1
+
+        conn_deficit = missing / max(required_edges, 1)
+
+        total = (

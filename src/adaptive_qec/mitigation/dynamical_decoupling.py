@@ -88,3 +88,12 @@ class AdaptiveDDPlanner:
 
     # Noise suppression factors (empirical from IBM Heron DD studies)
     SUPPRESSION_FACTORS = {
+        DDSequenceType.NONE: 1.0,
+        DDSequenceType.CPMG: 0.45,
+        DDSequenceType.XY4: 0.22,
+        DDSequenceType.XY8: 0.12,
+    }
+
+    def __init__(
+        self,
+        digital_twin: Optional[HardwareDigitalTwin] = None,

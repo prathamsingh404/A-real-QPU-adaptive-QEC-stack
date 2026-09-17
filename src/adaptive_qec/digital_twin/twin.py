@@ -148,3 +148,18 @@ class HardwareDigitalTwin:
                 state = self._qubits[q]
                 # Use readout error + gate error as approximate physical error
                 err = state.readout_error + (1 - state.single_qubit_fidelity)
+                # Add 2Q gate errors
+                for neighbor, fidelity in state.two_qubit_fidelities.items():
+                    if neighbor in all_qubits:
+                        err += (1 - fidelity)
+                errors.append(err)
+
+        if not errors:
+            return 0.5  # no data
+
+        avg_error = np.mean(errors)
+        # Simple threshold model with p_th ≈ 1%
+        p_th = 0.01
+        if avg_error < p_th:
+            p_logical = 0.1 * (avg_error / p_th) ** ((code_distance + 1) / 2)
+        else:

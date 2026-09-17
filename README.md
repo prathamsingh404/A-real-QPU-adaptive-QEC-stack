@@ -160,3 +160,12 @@ A real-QPU adaptive QEC stack/
 ├── pyproject.toml                     # Poetry/pip build configuration & dependencies
 ├── COMPREHENSIVE_RESEARCH_AND_PROGRESS.md # Master research compendium & mathematical derivations
 ├── README.md                          # Full architectural manual & hardware guides
+├── src/
+│   └── adaptive_qec/
+│       ├── analysis/
+│       │   ├── threshold.py           # ThresholdAnalyzer, Lambda ratio, Wilson score CIs
+│       │   └── metrics.py             # Logical error rates and latency statistics
+│       ├── api/
+│       │   └── app.py                 # FastAPI backend with /benchmark and /threshold routes
+│       ├── decoders/
+│       │   ├── union_find.py          # O(N alpha(N)) radius-weighted Union-Find decoder

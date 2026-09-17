@@ -7,3 +7,12 @@
 [![Stim](https://img.shields.io/badge/Stim-1.15+-blueviolet.svg)](https://github.com/quantumlib/Stim)
 [![PyMatching](https://img.shields.io/badge/PyMatching-2.2+-orange.svg)](https://github.com/oscarhiggott/PyMatching)
 
+AdaptiveQEC is a production-grade, hardware-aware, adaptive Quantum Error Correction (QEC) stack engineered to bridge the fundamental gap between low-level superconducting transmon physics and high-level fault-tolerant algorithms. Designed specifically for IBM Quantum's 156-qubit Heron revision 2 architecture (`ibm_marrakesh`, heavy-hexagonal coupling map), this platform incorporates real-time drift detection, correlated burst isolation (cosmic rays and quasiparticle poisoning), syndrome-based transmon leakage tracking, selective dynamical decoupling (CPMG/XY4/XY8), almost-linear time Union-Find decoding ($O(N \alpha(N))$), and phenomenological threshold scaling analysis ($\Lambda$ ratio).
+
+---
+
+## 1. Multi-Scale System Architecture (Obsidian Knowledge Graph)
+
+The following interactive graph maps the interdependencies across physical hardware, noise phenomenology, syndrome extraction, statistical inference, low-latency decoding, and closed-loop control:
+
+```mermaid

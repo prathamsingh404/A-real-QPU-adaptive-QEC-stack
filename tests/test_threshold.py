@@ -82,3 +82,10 @@ class TestThresholdAnalyzer:
         assert "d3_to_d5" in fit.lambda_ratios
         assert "d5_to_d7" in fit.lambda_ratios
 
+    def test_scaling_table(self):
+        analyzer = ThresholdAnalyzer()
+        analyzer.add_result(3, _mock_metrics(1000, 20), physical_error_rate=0.003)
+        analyzer.add_result(5, _mock_metrics(1000, 5), physical_error_rate=0.003)
+
+        table = analyzer.scaling_table()
+        assert len(table) == 2

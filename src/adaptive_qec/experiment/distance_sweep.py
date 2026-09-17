@@ -18,3 +18,13 @@ Usage:
         rounds_per_distance=None,  # defaults to d
         noise=NoiseConfig(gate=GateNoiseConfig(two_qubit=0.005)),
         decoder_names=["mwpm", "union_find"],
+        shots_per_distance=10000,
+    )
+    results = sweep.run()
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from dataclasses import dataclass, field

@@ -218,3 +218,13 @@ class BurstDetector:
                 # Skip past this burst
                 round_idx = t_end + 1
             else:
+                round_idx += 1
+
+        burst_rate = len(bursts) / max(R, 1)
+
+        return BurstAnalysis(
+            total_rounds=R,
+            total_detectors=N_d,
+            baseline_defect_rate=baseline_rate,
+            bursts_detected=bursts,
+            burst_rate_per_round=burst_rate,

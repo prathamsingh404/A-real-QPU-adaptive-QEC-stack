@@ -75,3 +75,10 @@ class TestThresholdAnalyzer:
         analyzer.add_result(7, _mock_metrics(10000, 4), physical_error_rate=0.003)
 
         fit = analyzer.fit_threshold_model()
+        assert isinstance(fit, ThresholdFit)
+        assert fit.is_below_threshold is True
+        assert fit.p_threshold > 0.003  # Threshold should be higher than physical error rate
+        assert fit.A > 0
+        assert "d3_to_d5" in fit.lambda_ratios
+        assert "d5_to_d7" in fit.lambda_ratios
+

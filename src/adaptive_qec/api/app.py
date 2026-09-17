@@ -243,3 +243,38 @@ async def run_qec_experiment(req: QECRunRequest) -> dict[str, Any]:
         code = create_code(
             code_type=req.code_type,
             distance=req.distance,
+            rounds=req.rounds,
+        )
+        noise = NoiseConfig()
+        noise.gate.two_qubit = req.physical_error_rate
+        noise.gate.single_qubit = req.physical_error_rate * 0.15
+        noise.readout.p0_given_1 = 0.01208
+        noise.readout.p1_given_0 = 0.01208
+
+        circuit = code.generate_circuit(noise=noise)
+        sampler = circuit.compile_detector_sampler()
+
+        t_start = time.perf_counter()
+        detectors, observables = sampler.sample(shots=req.shots, separate_observables=True)
+        t_sample = time.perf_counter() - t_start
+
+        # MWPM decoding
+        decoder = MWPMDecoder()
+        decoder.configure(circuit=circuit)
+        metrics = decoder.decode_batch(detectors, observables)
+
+        # Compute syndrome defect rates
+        num_detectors = detectors.shape[1]
+        mean_defect_rate = float(np.mean(detectors))
+        detector_rates = np.mean(detectors, axis=0).round(4).tolist()
+
+        # Wilson score confidence interval for logical error rate
+        n = req.shots
+        p = metrics.logical_error_rate
+        z = 1.96  # 95% CI
+        denom = 1.0 + z**2 / n
+        center = (p + z**2 / (2 * n)) / denom
+        delta = z * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denom
+        ci_lower = max(0.0, float(center - delta))
+        ci_upper = min(1.0, float(center + delta))
+

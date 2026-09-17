@@ -273,3 +273,14 @@ class LeakageRateEstimator:
         for lq in analysis.leaked_qubits:
             self._leakage_events.append(lq.persistence_length)
 
+    def estimate_rates(self) -> dict[str, float]:
+        """
+        Estimate leakage and seepage rates.
+
+        Returns:
+            Dict with gamma_leakage, gamma_seepage, p_leak_steady.
+        """
+        if self._total_rounds == 0 or self._total_qubits == 0:
+            return {
+                "gamma_leakage": 0.0,
+                "gamma_seepage": 0.0,

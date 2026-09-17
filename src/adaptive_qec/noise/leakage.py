@@ -97,3 +97,14 @@ class LeakageDetector:
         """
         Args:
             min_persistence: Min consecutive rounds for leakage suspicion.
+            autocorr_threshold: Min lag-1 autocorrelation for leakage.
+            firing_rate_threshold: Min firing rate for leakage suspicion.
+        """
+        self.min_persistence = min_persistence
+        self.autocorr_threshold = autocorr_threshold
+        self.firing_rate_threshold = firing_rate_threshold
+
+    def analyze(self, syndrome_tensor: np.ndarray) -> LeakageAnalysis:
+        """
+        Analyze a syndrome tensor for leakage signatures.
+

@@ -98,3 +98,13 @@ class DistanceSweep:
     collects metrics for threshold scaling analysis.
     """
 
+    def __init__(
+        self,
+        distances: list[int] | None = None,
+        rounds_per_distance: dict[int, int] | None = None,
+        noise: NoiseConfig | None = None,
+        decoder_names: list[str] | None = None,
+        shots_per_distance: int = 10000,
+        code_type: str = "surface",
+    ) -> None:
+        """

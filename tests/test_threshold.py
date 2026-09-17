@@ -103,3 +103,10 @@ class TestDistanceSweep:
         noise.gate.two_qubit = 0.008
 
         sweep = DistanceSweep(
+            distances=[3],
+            rounds_per_distance={3: 2},
+            noise=noise,
+            decoder_names=["mwpm", "union_find"],
+            shots_per_distance=100,
+            code_type="surface",
+        )

@@ -40,3 +40,17 @@ from scipy import optimize
 from adaptive_qec.decoders.base import DecoderMetrics
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ThresholdFit:
+    """Result of fitting the threshold model to experimental data."""
+
+    # Fitted parameters
+    p_threshold: float  # estimated threshold error rate
+    A: float  # scaling prefactor
+    fit_residual: float  # sum of squared residuals
+
+    # Input data
+    distances: list[int]
+    logical_error_rates: list[float]

@@ -68,3 +68,17 @@ class MWPMDecoder(Decoder):
             f"{self._num_observables} observables"
         )
 
+    def decode(self, syndrome: np.ndarray) -> Correction:
+        """
+        Decode a single syndrome or batch.
+
+        Args:
+            syndrome: shape (num_detectors,) or (batch, num_detectors)
+
+        Returns:
+            Correction with observable predictions.
+        """
+        if self._matching is None:
+            raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        if syndrome.ndim == 1:

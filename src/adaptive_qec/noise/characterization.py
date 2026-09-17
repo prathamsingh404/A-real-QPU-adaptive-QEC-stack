@@ -130,3 +130,15 @@ class NoiseCharacterizer:
 
         Returns:
             NoiseProfile with all analyses.
+        """
+        from datetime import datetime, timezone
+        timestamp = datetime.now(timezone.utc).isoformat()
+        backend = calibration.backend_name if calibration else "unknown"
+
+        logger.info("Starting noise characterization...")
+
+        # 1. Detector statistics
+        detector_stats = compute_detector_statistics(detection_events)
+
+        # 2. Temporal correlation
+        temporal_corr = compute_temporal_correlation(

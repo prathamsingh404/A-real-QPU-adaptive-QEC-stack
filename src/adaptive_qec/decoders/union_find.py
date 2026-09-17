@@ -488,3 +488,17 @@ class UnionFindDecoder(Decoder):
         """
         if self._graph is None:
             raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        shots = syndromes.shape[0]
+        syndromes_u8 = syndromes.astype(np.uint8)
+
+        tracemalloc.start()
+
+        per_shot_times = np.zeros(shots)
+        all_preds = np.zeros(
+            (shots, self._num_observables), dtype=np.uint8
+        )
+
+        t_start = time.perf_counter()
+
+        for i in range(shots):

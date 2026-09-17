@@ -38,3 +38,13 @@ from adaptive_qec.decoders.registry import get_decoder
 from adaptive_qec.qec.codes import create_code
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SweepResult:
+    """Result for a single (distance, decoder) combination."""
+    distance: int
+    rounds: int
+    decoder_name: str
+    metrics: DecoderMetrics
+    physical_error_rate: float

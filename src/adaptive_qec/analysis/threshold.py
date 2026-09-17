@@ -152,3 +152,17 @@ class ThresholdAnalyzer:
 
         Args:
             d_low: lower code distance
+            d_high: higher code distance (should be d_low + 2)
+
+        Returns:
+            Lambda ratio. Returns 0.0 if either error rate is zero.
+        """
+        if d_low not in self._results or d_high not in self._results:
+            available = sorted(self._results.keys())
+            raise ValueError(
+                f"Need results for both d={d_low} and d={d_high}. "
+                f"Available: {available}"
+            )
+
+        p_low = self._results[d_low]["logical_error_rate"]
+        p_high = self._results[d_high]["logical_error_rate"]

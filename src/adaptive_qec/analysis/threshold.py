@@ -194,3 +194,17 @@ class ThresholdAnalyzer:
 
         Requires results at ≥ 2 different distances.
 
+        Returns:
+            ThresholdFit with estimated p_th and A.
+        """
+        if len(self._results) < 2:
+            raise ValueError(
+                f"Need results at ≥ 2 distances for threshold fit. "
+                f"Have {len(self._results)}."
+            )
+
+        distances = sorted(self._results.keys())
+        error_rates = [self._results[d]["logical_error_rate"] for d in distances]
+        p_phys = self._results[distances[0]]["physical_error_rate"]
+
+        # Filter out zero error rates (can't fit log)

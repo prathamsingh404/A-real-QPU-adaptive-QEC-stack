@@ -148,3 +148,13 @@ class DistanceSweep:
             rounds = self.rounds_per_distance[d]
             logger.info(f"=== Distance {d}, {rounds} rounds, {self.shots} shots ===")
 
+            # Generate circuit
+            code = create_code(self.code_type, distance=d, rounds=rounds)
+            circuit = code.generate_circuit(noise=self.noise)
+
+            # Sample syndrome data (shared across decoders)
+            sampler = circuit.compile_detector_sampler()
+            detectors, observables = sampler.sample(
+                shots=self.shots, separate_observables=True
+            )
+

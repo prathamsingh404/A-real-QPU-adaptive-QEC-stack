@@ -61,3 +61,10 @@ class TestBurstDetector:
 
         # Inject localized burst on only 2 detectors across 6 consecutive rounds (12..17)
         syndromes[12:18, 0:2] = 1
+
+        detector = BurstDetector(window_size=5, significance=0.005, min_defects_for_burst=3)
+        analysis = detector.analyze(syndromes, num_detectors_per_round=16)
+
+        assert len(analysis.bursts_detected) >= 1
+        # Look for the detected burst
+        qp_bursts = [b for b in analysis.bursts_detected if b.burst_type == BurstType.QP_POISONING]

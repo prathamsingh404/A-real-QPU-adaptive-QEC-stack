@@ -8,3 +8,13 @@ assumption underlying surface codes. Caused by:
     - Crosstalk events (patterned, gate-correlated)
 
 These bursts are rare (~1/hour) but catastrophic: they can cause correlated
+logical failures that defeat error correction.
+
+Detection approach:
+    For each time window of width w, compute whether the observed defect
+    rate exceeds the null hypothesis (independent Bernoulli at rate p_base)
+    using a chi-squared-like test at significance level α.
+
+Sources:
+    - Google Quantum AI, "Quantum error correction below the surface code
+      threshold" (2025) — cosmic ray discussion

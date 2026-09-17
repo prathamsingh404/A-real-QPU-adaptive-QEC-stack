@@ -28,3 +28,13 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
+
+import numpy as np
+from scipy import stats
+
+logger = logging.getLogger(__name__)
+
+
+class BurstType(str, Enum):
+    """Classification of detected error bursts."""
+    COSMIC_RAY = "cosmic_ray"       # Wide spatial, sharp temporal

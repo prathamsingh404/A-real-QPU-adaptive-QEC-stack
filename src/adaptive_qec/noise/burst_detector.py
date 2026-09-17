@@ -38,3 +38,13 @@ logger = logging.getLogger(__name__)
 class BurstType(str, Enum):
     """Classification of detected error bursts."""
     COSMIC_RAY = "cosmic_ray"       # Wide spatial, sharp temporal
+    QP_POISONING = "qp_poisoning"   # Localized, lingering
+    CROSSTALK = "crosstalk"         # Patterned, gate-correlated
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class BurstEvent:
+    """A detected error burst."""
+    round_start: int           # First round of the burst
+    round_end: int             # Last round of the burst

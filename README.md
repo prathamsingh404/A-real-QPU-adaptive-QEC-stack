@@ -205,3 +205,12 @@ A real-QPU adaptive QEC stack/
     └── test_qpu.py                    # Backend abstractions and mock calibrations
 ```
 
+---
+
+## 4. Quick Start & CLI Usage
+
+### Installation
+```bash
+# Clone the repository
+git clone https://github.com/prathamsingh404/A-real-QPU-adaptive-QEC-stack.git
+cd "A real-QPU adaptive QEC stack"

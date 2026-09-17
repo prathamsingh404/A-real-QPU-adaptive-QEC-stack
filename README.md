@@ -214,3 +214,12 @@ A real-QPU adaptive QEC stack/
 # Clone the repository
 git clone https://github.com/prathamsingh404/A-real-QPU-adaptive-QEC-stack.git
 cd "A real-QPU adaptive QEC stack"
+
+# Activate environment and install dependencies
+python -m venv .venv
+.venv\Scripts\activate          # On Windows
+pip install -e .
+```
+
+### Running the End-to-End Test Suite
+```bash

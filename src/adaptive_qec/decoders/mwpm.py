@@ -54,3 +54,17 @@ class MWPMDecoder(Decoder):
         circuit = kwargs.get("circuit")
 
         if dem is None and circuit is not None:
+            dem = circuit.detector_error_model(decompose_errors=True)
+
+        if dem is None:
+            raise ValueError("Must provide 'dem' or 'circuit' to configure MWPM decoder")
+
+        self._matching = pymatching.Matching.from_detector_error_model(dem)
+        self._num_detectors = dem.num_detectors
+        self._num_observables = dem.num_observables
+
+        logger.info(
+            f"MWPM decoder configured: {self._num_detectors} detectors, "
+            f"{self._num_observables} observables"
+        )
+

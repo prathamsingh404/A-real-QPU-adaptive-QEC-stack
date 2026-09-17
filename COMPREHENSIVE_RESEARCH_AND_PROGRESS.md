@@ -73,3 +73,8 @@ The goal of this project transcends standard academic exercises or superficial t
   - `src/adaptive_qec/digital_twin/twin.py`: Added `get_dd_candidates` method to identify qubits requiring protection.
 
 ---
+
+### Problem 4: Real Linear-Time Union-Find Decoder ($O(N \alpha(N))$)
+* **Why it matters**: Minimum-Weight Perfect Matching (MWPM) via Edmonds' blossom algorithm scales as $O(N^3)$, or $O(N^2 \log N)$ with localized heuristics. For distance $d \ge 7$ in real-time control (where the decoder must return corrections within the qubit coherence time $\sim 10\ \mu\text{s}$), MWPM is latency-prohibitive. Delfosse & Nickerson (Quantum 2021) introduced the Union-Find decoder, which runs in almost-linear time:
+  $$\mathcal{O}(N \cdot \alpha(N))$$
+* **The Physics & Algorithmic Breakthroughs**:

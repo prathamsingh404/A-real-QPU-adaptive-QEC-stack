@@ -42,3 +42,14 @@ class LeakedQubit:
     autocorrelation: float        # Temporal autocorrelation at lag 1
     firing_rate: float            # Fraction of rounds this detector fired
     confidence: float             # Leakage confidence [0, 1]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "detector_index": self.detector_index,
+            "onset_round": self.onset_round,
+            "persistence_length": self.persistence_length,
+            "autocorrelation": round(self.autocorrelation, 4),
+            "firing_rate": round(self.firing_rate, 4),
+            "confidence": round(self.confidence, 3),
+        }
+

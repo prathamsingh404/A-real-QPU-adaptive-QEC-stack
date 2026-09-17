@@ -75,3 +75,14 @@ class LeakageAnalysis:
 class LeakageDetector:
     """
     Detects leakage from QEC syndrome temporal patterns.
+
+    A leaked qubit produces persistent, round-after-round defects on
+    the same detector. We identify these by:
+        1. Computing per-detector firing rate
+        2. Computing temporal autocorrelation at lag 1
+        3. Finding the longest consecutive firing streak
+        4. Combining these signals into a leakage confidence score
+
+    Usage:
+        detector = LeakageDetector(min_persistence=3, autocorr_threshold=0.3)
+        analysis = detector.analyze(syndrome_tensor)

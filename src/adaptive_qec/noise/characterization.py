@@ -106,3 +106,15 @@ class NoiseCharacterizer:
 
     Combines:
     1. Hardware calibration (T1, T2, readout, gate errors)
+    2. Detector statistics (rates, correlations)
+    3. Temporal correlation analysis
+    4. Spatial correlation analysis
+    5. Noise parameter estimation
+    """
+
+    def characterize(
+        self,
+        detection_events: np.ndarray,
+        num_rounds: int,
+        calibration: Optional[CalibrationSnapshot] = None,
+        detector_coordinates: Optional[np.ndarray] = None,

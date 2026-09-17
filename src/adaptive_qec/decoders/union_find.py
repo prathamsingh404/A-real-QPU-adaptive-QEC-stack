@@ -194,3 +194,17 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
             p_old = edge_dict[pair][obs_mask]
             p_comb = p_old + prob - 2.0 * p_old * prob
             edge_dict[pair][obs_mask] = min(p_comb, 0.999999)
+        else:
+            edge_dict[pair][obs_mask] = prob
+
+    for instruction in dem.flattened():
+        if instruction.type != "error":
+            continue
+
+        prob = instruction.args_copy()[0]
+        if prob <= 0 or prob >= 1:
+            continue
+
+        # Split instruction targets by separator (^)
+        segments: list[tuple[list[int], int]] = []
+        cur_dets: list[int] = []

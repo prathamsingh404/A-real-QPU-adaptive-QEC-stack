@@ -43,3 +43,12 @@ class DDSequenceType(str, Enum):
     XY4 = "xy4"    # 4 pulses: X - Y - X - Y
     XY8 = "xy8"    # 8 pulses: X - Y - X - Y - Y - X - Y - X
 
+
+@dataclass
+class DDSchedule:
+    """Per-qubit dynamical decoupling schedule."""
+    qubit_sequences: dict[int, DDSequenceType] = field(default_factory=dict)
+    idle_windows_us: dict[int, float] = field(default_factory=dict)
+    pulse_counts: dict[int, int] = field(default_factory=dict)
+    protected_qubits: list[int] = field(default_factory=list)
+    total_pulses_inserted: int = 0

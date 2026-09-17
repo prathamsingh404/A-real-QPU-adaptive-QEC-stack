@@ -488,3 +488,38 @@ async def run_threshold_analysis(req: ThresholdRequest) -> dict[str, Any]:
     except Exception as e:
         logger.exception("Error running threshold analysis")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/noise/characterization")
+async def get_noise_characterization() -> dict[str, Any]:
+    """
+    Hardware noise characterization from real experiment data:
+        - Single-detector defect probabilities P(D_i = 1)
+        - Pair correlation matrix C_ij = E[D_i D_j] - E[D_i]E[D_j]
+        - Temporal correlation C(k) = corr(D_t, D_{t+k})
+        - Real-time CUSUM / EWMA drift status
+    """
+    detectors = _CURRENT_EXPERIMENT.get("detectors_array")
+    source = "measured"
+
+    if detectors is None:
+        # No experiment has been run yet — generate baseline synthetic data
+        # clearly labeled as such
+        rng = np.random.default_rng(42)
+        defect_prob = _DEFAULT_PHYSICAL_ERROR_RATE * 4  # rough detector fire rate
+        detectors = rng.binomial(1, defect_prob, size=(500, 24)).astype(np.uint8)
+        source = "baseline_synthetic"
+
+    stats = compute_detector_statistics(detectors)
+    temp_corr = compute_temporal_correlation(detectors, num_rounds=3, max_lag=3)
+    spatial_corr = compute_spatial_correlation(detectors)
+
+    # Use real drift history from experiments
+    global _LATEST_DRIFT_REPORT
+    is_alarm = (_LATEST_DRIFT_REPORT is not None and
+                _LATEST_DRIFT_REPORT.status in (DriftStatus.DRIFT_DETECTED, DriftStatus.SEVERE))
+    magnitude = float(_LATEST_DRIFT_REPORT.magnitude) if _LATEST_DRIFT_REPORT else 0.0
+    affected_qubits = _LATEST_DRIFT_REPORT.affected_detectors if _LATEST_DRIFT_REPORT else []
+
+    return {
+        "source": source,

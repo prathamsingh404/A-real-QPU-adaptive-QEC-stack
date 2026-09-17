@@ -250,3 +250,17 @@ class ThresholdAnalyzer:
             residual = float(np.sum((np.array(e_valid) - predicted) ** 2))
 
         except (RuntimeError, ValueError) as e:
+            logger.warning(f"Threshold model fit failed: {e}")
+            A_fit = 0.0
+            p_th_fit = 0.0
+            residual = float("inf")
+
+        # Compute all lambda ratios
+        lambda_ratios = {}
+        for i in range(len(distances) - 1):
+            d_lo, d_hi = distances[i], distances[i + 1]
+            try:
+                lam = self.compute_lambda(d_lo, d_hi)
+                lambda_ratios[f"d{d_lo}_to_d{d_hi}"] = lam
+            except ValueError:
+                pass

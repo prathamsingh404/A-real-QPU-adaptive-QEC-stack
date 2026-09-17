@@ -64,3 +64,9 @@ class TestEmbeddingFinder:
         assert isinstance(embedding, SurfaceCodeEmbedding)
         assert embedding.distance == 3
         # d=3 surface code requires 9 data qubits
+        assert len(embedding.data_map) == 9
+        # ancillas mapped
+        assert len(embedding.ancilla_map) > 0
+
+        qubits_used = embedding.all_physical_qubits()
+        assert len(qubits_used) > 9

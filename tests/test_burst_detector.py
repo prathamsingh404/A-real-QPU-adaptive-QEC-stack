@@ -26,3 +26,10 @@ class TestBurstDetector:
         """Clean syndromes with low independent error should have zero bursts."""
         # 20 rounds, 8 detectors, independent error rate ~1%
         rng = np.random.default_rng(42)
+        clean = (rng.random((20, 8)) < 0.01).astype(np.uint8)
+
+        detector = BurstDetector(window_size=4, significance=0.001)
+        analysis = detector.analyze(clean, num_detectors_per_round=8)
+
+        assert analysis.total_rounds == 20
+        assert analysis.total_detectors == 8

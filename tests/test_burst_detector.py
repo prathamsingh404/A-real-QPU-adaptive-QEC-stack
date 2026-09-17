@@ -110,3 +110,10 @@ class TestDriftIntegration:
         assert "burst_analysis" in report.details
 
 
+class TestMWPMBurstAware:
+    """Tests for MWPM burst-aware decoding."""
+
+    def test_mwpm_decode_burst_aware(self):
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.01

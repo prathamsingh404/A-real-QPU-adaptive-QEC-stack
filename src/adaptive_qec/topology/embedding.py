@@ -130,3 +130,14 @@ class EmbeddingFinder:
     def __init__(self, topology: HeavyHexTopology) -> None:
         self.topology = topology
 
+    def find_embedding(
+        self,
+        distance: int,
+        max_candidates: int = 20,
+    ) -> SurfaceCodeEmbedding:
+        """
+        Find the best embedding for a surface code of given distance.
+
+        Args:
+            distance: Code distance (3, 5, 7, ...)
+            max_candidates: Maximum starting positions to try.

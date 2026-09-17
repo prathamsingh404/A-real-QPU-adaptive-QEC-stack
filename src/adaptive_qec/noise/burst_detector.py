@@ -208,3 +208,13 @@ class BurstDetector:
                     confidence=confidence,
                 )
                 bursts.append(burst)
+
+                logger.info(
+                    f"Burst detected: rounds [{t_start}, {t_end}], "
+                    f"{len(affected_dets)} detectors, severity={severity:.1f}x, "
+                    f"type={burst_type.value}"
+                )
+
+                # Skip past this burst
+                round_idx = t_end + 1
+            else:

@@ -202,3 +202,20 @@ class RepetitionCode(QECCode):
             num_observables=1,
         )
 
+    def get_detector_coordinates(self) -> np.ndarray:
+        """Get detector coordinates (x, y, t)."""
+        coords = []
+        for r in range(self.rounds + 1):
+            for i in range(self.num_ancilla):
+                coords.append([2 * i + 1, 0, r])
+        return np.array(coords)
+
+
+class SurfaceCode(QECCode):
+    """
+    Rotated surface code.
+
+    The workhorse code for near-term QEC. Uses Stim's built-in
+    surface code circuit generation for correctness, with custom
+    noise injection.
+    """

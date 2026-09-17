@@ -42,3 +42,14 @@ class CodeEmbedding(Protocol):
 
     def ancilla_qubit_map(self) -> dict[tuple[int, int], int]:
         """Map logical (row, col) → physical qubit index for ancilla qubits."""
+        ...
+
+    def swap_count(self) -> int:
+        """Total SWAPs needed per QEC round."""
+        ...
+
+    def circuit_depth_overhead(self) -> float:
+        """Multiplicative depth overhead vs ideal square grid."""
+        ...
+
+

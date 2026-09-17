@@ -258,3 +258,13 @@ class BurstDetector:
             confidence = min(0.9, 0.5 + 0.2 * severity)
             return BurstType.COSMIC_RAY, confidence
 
+        elif spatial_radius < 0.2 and duration > 3:
+            # Narrow spatial, long temporal → quasiparticle poisoning
+            confidence = min(0.8, 0.4 + 0.1 * duration)
+            return BurstType.QP_POISONING, confidence
+
+        elif 0.1 < spatial_radius < 0.4 and duration <= 3:
+            # Moderate spatial, short temporal → could be crosstalk
+            # Check for geometric pattern (even/odd detector alternation)
+            col_sums = window.sum(axis=0)
+            active = np.where(col_sums > 0)[0]

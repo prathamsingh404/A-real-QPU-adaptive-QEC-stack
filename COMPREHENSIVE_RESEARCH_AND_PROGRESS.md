@@ -113,3 +113,8 @@ The goal of this project transcends standard academic exercises or superficial t
 
 ### Problem 6: Syndrome-Based Leakage Detection & Steady-State Rates
 * **Why it matters**: Superconducting transmon qubits are weakly anharmonic oscillators. Strong microwave drive pulses or stray environmental interactions can excite a qubit out of the computational subspace $\{|0\rangle, |1\rangle\}$ into state $|2\rangle$ or $|3\rangle$.
+  - Standard Pauli error models cannot capture leakage: a leaked ancilla or data qubit ceases to participate correctly in entangling gates.
+  - Crucially, a leaked qubit produces **persistent, repeated detection events** across subsequent rounds because it remains in $|2\rangle$ until a leakage reduction unit (LRU) or dissipative decay restores it.
+* **The Detection Mathematical Formalism**:
+  - A transient Pauli error fires for 1 or 2 rounds.
+  - A leaked qubit produces a high firing rate with high **lag-1 temporal autocorrelation**:

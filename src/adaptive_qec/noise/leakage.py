@@ -262,3 +262,14 @@ class LeakageRateEstimator:
     def __init__(self) -> None:
         self._leakage_events: list[float] = []
         self._seepage_events: list[float] = []
+        self._total_rounds: int = 0
+        self._total_qubits: int = 0
+
+    def add_analysis(self, analysis: LeakageAnalysis) -> None:
+        """Add results from a single experiment."""
+        self._total_rounds += analysis.total_rounds
+        self._total_qubits += analysis.total_detectors
+
+        for lq in analysis.leaked_qubits:
+            self._leakage_events.append(lq.persistence_length)
+

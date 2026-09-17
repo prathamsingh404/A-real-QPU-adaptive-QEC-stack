@@ -154,3 +154,42 @@ class CorrelatedNoiseConfig(BaseModel):
     """Correlated noise parameters."""
     enabled: bool = False
     spatial_range: int = Field(default=1, ge=0)
+    strength: float = Field(default=0.001, ge=0.0, le=1.0)
+
+
+class LeakageConfig(BaseModel):
+    """Leakage noise parameters."""
+    enabled: bool = False
+    rate: float = Field(default=0.001, ge=0.0, le=1.0)
+    seepage: float = Field(default=0.01, ge=0.0, le=1.0)
+
+
+class DriftConfig(BaseModel):
+    """Noise drift parameters."""
+    enabled: bool = True
+    model: DriftModel = DriftModel.LINEAR
+    rate: float = Field(default=0.0001, ge=0.0)
+    monitoring_window: int = Field(default=100, ge=1)
+
+
+class NoiseConfig(BaseModel):
+    """Complete noise configuration."""
+    readout: ReadoutNoiseConfig = Field(default_factory=ReadoutNoiseConfig)
+    gate: GateNoiseConfig = Field(default_factory=GateNoiseConfig)
+    correlated: CorrelatedNoiseConfig = Field(default_factory=CorrelatedNoiseConfig)
+    leakage: LeakageConfig = Field(default_factory=LeakageConfig)
+    drift: DriftConfig = Field(default_factory=DriftConfig)
+
+
+class QECConfig(BaseModel):
+    """QEC experiment configuration."""
+    code: QECCode = QECCode.SURFACE
+    distance: int = Field(default=3, ge=1)
+    rounds: int = Field(default=3, ge=1)
+    logical_basis: LogicalBasis = LogicalBasis.Z
+    boundary: Boundary = Boundary.PLANAR
+
+    @field_validator("distance")
+    @classmethod
+    def distance_must_be_odd(cls, v: int) -> int:
+        if v % 2 == 0:

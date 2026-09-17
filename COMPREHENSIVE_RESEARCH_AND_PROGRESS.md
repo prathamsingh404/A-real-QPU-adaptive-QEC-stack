@@ -48,3 +48,8 @@ The goal of this project transcends standard academic exercises or superficial t
   - When a burst occurs, the defect count spikes with $p$-value $< 10^{-3}$:
     $$P(k \ge K \mid \lambda) = 1 - \sum_{i=0}^{K-1} \frac{\lambda^i e^{-\lambda}}{i!}$$
   - We classify bursts into:
+    1. `COSMIC_RAY`: Sharp temporal onset (1–2 rounds), large spatial footprint ($>30\%$ of detectors).
+    2. `QP_POISONING`: Long temporal persistence ($>3$ rounds), localized spatial radius ($<20\%$).
+    3. `CROSSTALK`: Periodic spatial defect pattern, short temporal duration.
+* **What We Built**:
+  - `src/adaptive_qec/noise/burst_detector.py`: `BurstDetector` implementing sliding-window Poisson tests, temporal boundary localization, and heuristic classification (`BurstEvent`, `BurstAnalysis`).

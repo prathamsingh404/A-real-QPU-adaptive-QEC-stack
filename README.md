@@ -250,3 +250,12 @@ To execute adaptive QEC circuits directly on IBM Quantum hardware (`ibm_marrakes
 2. **Programmatic Execution**:
    ```python
    from adaptive_qec.qpu.ibm import IBMQPUBackend
+   from adaptive_qec.qec.codes import create_code
+   from adaptive_qec.topology.heavy_hex import HeavyHexTopology
+   from adaptive_qec.topology.embedding import EmbeddingFinder
+
+   # Initialize backend from Qiskit Runtime
+   backend = IBMQPUBackend.from_credentials(
+       channel="ibm_cloud",
+       token="WHQiem5SJ0-iTLZBqPs10H1gNfTxFcE6lbobBRoLVVMI",
+       instance="crn:v1:bluemix:public:quantum-computing:us-east:a/8ae29ae2e0204424ab76bf7397315239:5031eafb-df34-4dd9-8912-1fb14dc9b74f::",

@@ -169,3 +169,12 @@ class TestUnionFindDecoder:
         decoder = UnionFindDecoder()
         decoder.configure(circuit=circuit)
 
+        dem = circuit.detector_error_model(decompose_errors=True)
+        syndrome = np.zeros(dem.num_detectors, dtype=np.uint8)
+        correction = decoder.decode(syndrome)
+
+        assert np.all(correction.observable_corrections == 0)
+
+    def test_decode_batch(self):
+        """Batch decoding should produce valid metrics."""
+        code = create_code("surface", distance=3, rounds=3)

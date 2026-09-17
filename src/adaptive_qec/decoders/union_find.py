@@ -26,3 +26,17 @@ Algorithm:
 
 Key data structures:
     - Union-Find forest with path compression, union by rank, and
+      per-node observable-XOR-to-parent tracking
+    - Pre-sorted edge list by weight for growth phase
+"""
+
+from __future__ import annotations
+
+import heapq
+import logging
+import time
+import tracemalloc
+from dataclasses import dataclass, field
+from typing import Any, Optional
+
+import numpy as np

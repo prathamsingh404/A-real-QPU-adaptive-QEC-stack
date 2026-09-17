@@ -34,3 +34,9 @@ class TestHeavyHexTopology:
         assert isinstance(metrics, TopologyMetrics)
         assert metrics.num_qubits == 36
         assert metrics.num_edges > 0
+        assert metrics.max_degree <= 3
+        assert metrics.diameter > 0
+
+    def test_shortest_path_and_swap_distance(self):
+        edges = [[0, 1], [1, 2], [2, 3], [3, 4]]
+        topo = HeavyHexTopology.from_coupling_map(edges, num_qubits=5)

@@ -516,3 +516,27 @@ class UnionFindDecoder(Decoder):
         error_rate = num_errors / shots
 
         latency_us = per_shot_times * 1e6
+
+        metrics = DecoderMetrics(
+            total_shots=shots,
+            num_logical_errors=num_errors,
+            logical_error_rate=error_rate,
+            decode_time_s=t_total,
+            per_shot_latency_us=latency_us,
+            latency_mean_us=float(latency_us.mean()),
+            latency_p50_us=float(np.percentile(latency_us, 50)),
+            latency_p95_us=float(np.percentile(latency_us, 95)),
+            latency_p99_us=float(np.percentile(latency_us, 99)),
+            latency_p999_us=float(np.percentile(latency_us, 99.9)),
+            throughput_shots_per_s=shots / t_total if t_total > 0 else 0,
+            peak_memory_mb=peak / (1024 * 1024),
+        )
+
+        logger.info(
+            f"UF decode: {shots} shots, "
+            f"LER={error_rate:.6f} ({num_errors}/{shots}), "
+            f"time={t_total:.3f}s, "
+            f"throughput={metrics.throughput_shots_per_s:.0f} shots/s, "
+            f"P99={metrics.latency_p99_us:.1f}μs"
+        )
+        return metrics

@@ -61,3 +61,12 @@ graph TD
 
     subgraph Decoders ["6. Dual Low-Latency Decoders"]
         MWPM["MWPMDecoder (PyMatching)\nO(N^3) Edmonds Blossom Baseline"]:::decoder
+        UF["UnionFindDecoder (Delfosse & Nickerson)\nO(N alpha(N)) Cluster Radius Matching"]:::decoder
+        BurstAware["decode_burst_aware\n(Defect masking during QP avalanches)"]:::decoder
+    end
+
+    subgraph AnalysisBlock ["7. Threshold & Scaling Verification"]
+        DistSweep["DistanceSweep Orchestrator\n(d in [3, 5, 7], Shots = 2000+)"]:::analysis
+        Threshold["ThresholdAnalyzer\nLambda = p_L(d) / p_L(d+2)"]:::analysis
+        WilsonCI["Wilson Score 95% Confidence Intervals"]:::analysis
+        Fit["Phenomenological Fit\np_L = A * (p_phys / p_th)^((d+1)/2)"]:::analysis

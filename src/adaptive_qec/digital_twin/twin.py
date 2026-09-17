@@ -223,3 +223,19 @@ class HardwareDigitalTwin:
                 p_dephase = 1.0 - float(np.exp(-idle_duration_us / t2))
                 if p_dephase > pulse_error_budget:
                     candidates.append(idx)
+        return sorted(candidates)
+
+    def summary(self) -> dict[str, Any]:
+        """Get a summary of the current hardware state."""
+        t1s = [s.t1_us for s in self._qubits.values() if s.t1_us > 0]
+        t2s = [s.t2_us for s in self._qubits.values() if s.t2_us > 0]
+        readouts = [s.readout_error for s in self._qubits.values() if s.readout_error > 0]
+
+        return {
+            "num_qubits": self._num_qubits,
+            "update_count": self._update_count,
+            "t1_mean_us": float(np.mean(t1s)) if t1s else 0.0,
+            "t2_mean_us": float(np.mean(t2s)) if t2s else 0.0,
+            "readout_error_mean": float(np.mean(readouts)) if readouts else 0.0,
+            "num_edges": len(self._topology),
+        }

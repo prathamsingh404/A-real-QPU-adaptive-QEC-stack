@@ -34,3 +34,15 @@ noise:
     p1_given_0: 0.01208           # P(measure 1 | state 0) — ibm_marrakesh calibration
   gate:
     single_qubit: 0.000454        # SX gate error — ibm_marrakesh calibration
+    two_qubit: 0.003021           # ECR/CZ gate error — ibm_marrakesh calibration
+    model: depolarizing           # depolarizing | pauli | custom
+  correlated:
+    enabled: false
+    spatial_range: 1              # nearest-neighbor range
+    strength: 0.001               # correlation strength
+  leakage:
+    enabled: false
+    rate: 0.001                   # leakage probability per gate
+    seepage: 0.01                 # seepage back probability
+  drift:
+    enabled: true

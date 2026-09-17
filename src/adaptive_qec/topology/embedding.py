@@ -251,3 +251,14 @@ class EmbeddingFinder:
 
         embedding._swap_count = swap_count
         embedding._depth_overhead = 1.0 + (swap_count * 3) / max(distance * 4, 1)
+        embedding._idle_slots = swap_count * 2
+
+        return embedding
+
+    def _score_embedding(self, embedding: SurfaceCodeEmbedding) -> EmbeddingScore:
+        """Score an embedding by multiple criteria."""
+        d = embedding.distance
+
+        # Connectivity deficit: fraction of required edges missing
+        required_edges = 2 * d * (d - 1)  # horizontal + vertical in grid
+        missing = 0

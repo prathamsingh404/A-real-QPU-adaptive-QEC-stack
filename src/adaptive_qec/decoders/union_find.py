@@ -306,3 +306,17 @@ class UnionFindDecoder(Decoder):
 
         if dem is None:
             raise ValueError("Must provide 'dem' or 'circuit' to configure UF decoder")
+
+        self._graph = build_detector_graph(dem)
+        self._num_detectors = dem.num_detectors
+        self._num_observables = dem.num_observables
+
+        # Precompute all-pairs shortest paths and path observables
+        n_total = self._num_detectors + 1
+        adj = np.full((n_total, n_total), np.inf)
+        obs_mat = np.zeros((n_total, n_total), dtype=np.uint8)
+        np.fill_diagonal(adj, 0)
+
+        for e in self._graph.edges:
+            if e.weight < adj[e.u, e.v]:
+                adj[e.u, e.v] = e.weight

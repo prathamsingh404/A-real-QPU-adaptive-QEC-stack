@@ -142,3 +142,12 @@ graph TD
   $$\Lambda = \frac{p_L(d)}{p_L(d+2)} > 1.0$$
   $$p_L = A \cdot \left(\frac{p_{\text{phys}}}{p_{\text{th}}}\right)^{\frac{d+1}{2}}$$
 * **Engineering Solution**: `adaptive_qec.analysis.threshold.ThresholdAnalyzer` with Wilson score 95% confidence intervals and non-linear least-squares fitting for $p_{\text{th}}$ and $A$.
+
+### Problem 6: Selective Dynamical Decoupling Mitigation
+* **Physics Context**: Idling qubits during syndrome extraction accumulate phase errors from low-frequency $1/f$ flux noise: $p_{\text{dephase}}(t) = 1 - e^{-t / T_2}$. Applying inversion pulses refocuses phase drift, but each microwave pulse injects gate error $\epsilon_{\text{pulse}}$.
+* **Selective Decision Rule**:
+  $$\Delta p = p_{\text{dephase}}(q, t_{\text{idle}}) - p_{\text{dephase}}^{\text{DD}}(q, t_{\text{idle}}) > N_{\text{pulses}} \cdot \epsilon_{\text{pulse}}$$
+* **Engineering Solution**: `adaptive_qec.mitigation.dynamical_decoupling.AdaptiveDDPlanner` generates tailored CPMG, XY4, or XY8 sequences only on qubits where net decoherence suppression exceeds pulse overhead.
+
+---
+

@@ -308,3 +308,34 @@ class IBMQuantumBackend(QPUBackend):
         coupling_map = []
         if hasattr(self._backend, 'coupling_map') and self._backend.coupling_map:
             coupling_map = [
+                (int(edge[0]), int(edge[1]))
+                for edge in self._backend.coupling_map.get_edges()
+            ]
+
+        return TopologyInfo(
+            num_qubits=self._backend.num_qubits,
+            coupling_map=coupling_map,
+        )
+
+    def get_backend_info(self) -> BackendInfo:
+        """Get static backend information."""
+        if self._backend is None:
+            raise RuntimeError("Backend not connected. Call connect() first.")
+
+        status = self._backend.status()
+        config = self._backend.configuration() if hasattr(self._backend, 'configuration') else None
+
+        return BackendInfo(
+            name=self._backend_name,
+            provider="ibm",
+            num_qubits=self._backend.num_qubits,
+            topology_type=self._config.topology,
+            version=getattr(self._backend, 'version', 'unknown'),
+            status=status.status_msg if status else "unknown",
+            max_shots=config.max_shots if config and hasattr(config, 'max_shots') else 100000,
+            max_circuits=config.max_experiments if config and hasattr(config, 'max_experiments') else 300,
+            basis_gates=list(self._backend.target.operation_names) if self._backend.target else [],
+        )
+
+    def is_available(self) -> bool:
+        """Check if the IBM backend is currently operational."""

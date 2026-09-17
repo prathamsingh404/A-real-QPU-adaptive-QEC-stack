@@ -202,3 +202,27 @@ class NoiseCharacterizer:
             try:
                 from adaptive_qec.noise.leakage import LeakageDetector, reshape_syndromes_to_tensor
                 det_per_round = detection_events.shape[1] // num_rounds
+                if det_per_round > 0:
+                    # Average over first few shots to build a stable syndrome trace
+                    mean_trace = (detection_events[:min(10, len(detection_events))].mean(axis=0) > 0.3).astype(np.uint8)
+                    syndrome_tensor = reshape_syndromes_to_tensor(
+                        mean_trace, num_rounds, det_per_round
+                    )
+                    leakage_detector = LeakageDetector()
+                    leakage_analysis = leakage_detector.analyze(syndrome_tensor)
+                    if len(leakage_analysis.leaked_qubits) > 0:
+                        profile.leakage_detected = True
+            except Exception as e:
+                logger.debug(f"Leakage check skipped: {e}")
+
+        # 8. Summary
+        profile.summary = {
+            "mean_detection_rate": detector_stats.mean_detection_rate,
+            "num_hotspots": len(detector_stats.hotspot_detectors),
+            "correlated_noise": profile.correlated_noise_detected,
+            "leakage": profile.leakage_detected,
+            "estimated_physical_error": profile.estimated_physical_error_rate,
+        }
+
+        logger.info(f"Noise characterization complete: {profile.summary}")
+        return profile

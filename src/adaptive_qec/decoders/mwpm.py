@@ -236,3 +236,17 @@ class MWPMDecoder(Decoder):
 
         burst_summary = {
             "total_shots": shots,
+            "burst_shots": burst_shot_count,
+            "burst_shot_fraction": burst_shot_count / max(shots, 1),
+            "total_bursts": total_bursts_found,
+            "standard_ler": standard_metrics.logical_error_rate,
+            "burst_aware_ler": burst_aware_metrics.logical_error_rate,
+            "ler_reduction": standard_metrics.logical_error_rate - burst_aware_metrics.logical_error_rate,
+        }
+
+        logger.info(
+            f"Burst-aware decoding: {burst_shot_count}/{shots} burst shots, "
+            f"Standard LER={standard_metrics.logical_error_rate:.4f}, "
+            f"Burst-Aware LER={burst_aware_metrics.logical_error_rate:.4f}"
+        )
+        return standard_metrics, burst_aware_metrics, burst_summary

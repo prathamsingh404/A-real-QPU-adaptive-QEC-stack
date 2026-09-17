@@ -63,3 +63,8 @@ The goal of this project transcends standard academic exercises or superficial t
   $$p_{\text{dephase}}(t) = 1 - e^{-t / T_2}$$
   Applying continuous microwave inversion pulses (Dynamical Decoupling) refocuses coherent phase accumulation. However, each microwave pulse has imperfect rotation angle and amplitude, adding gate error $\epsilon_{\text{pulse}}$.
 * **The Decision Rule**:
+  Indiscriminate DD can increase net logical error. An adaptive system must only apply DD when:
+  $$p_{\text{dephase}}(q, t_{\text{idle}}) - p_{\text{dephase}}^{\text{DD}}(q, t_{\text{idle}}) > N_{\text{pulses}} \cdot \epsilon_{\text{pulse}}$$
+* **What We Built**:
+  - `src/adaptive_qec/mitigation/dynamical_decoupling.py`: `AdaptiveDDPlanner` and `DDSchedule` supporting `CPMG` (2 pulses), `XY4` (4 pulses), and `XY8` (8 pulses).
+  - Inspects circuit structure to estimate per-qubit idle durations via `estimate_idle_map_from_circuit`.

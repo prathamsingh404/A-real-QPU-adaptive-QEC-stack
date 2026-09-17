@@ -75,3 +75,10 @@ class TestDynamicalDecoupling:
 
         idle_map = AdaptiveDDPlanner.estimate_idle_map_from_circuit(circuit)
         assert len(idle_map) > 0
+
+        planner = AdaptiveDDPlanner()
+        schedule = planner.plan_schedule(idle_map)
+        protected_circuit = planner.apply_dd_to_circuit(circuit, schedule)
+
+        assert isinstance(protected_circuit, stim.Circuit)
+        assert protected_circuit.num_detectors == circuit.num_detectors

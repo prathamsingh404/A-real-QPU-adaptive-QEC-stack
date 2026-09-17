@@ -180,3 +180,17 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
     num_observables = dem.num_observables
     boundary_node = num_detectors
 
+    # Map (u, v) -> dict[obs_mask, probability] where u <= v
+    edge_dict: dict[tuple[int, int], dict[int, float]] = {}
+
+    def add_edge_prob(u: int, v: int, obs_mask: int, prob: float) -> None:
+        if prob <= 0 or u == v:
+            return
+        prob = min(prob, 0.999999)
+        pair = (min(u, v), max(u, v))
+        if pair not in edge_dict:
+            edge_dict[pair] = {}
+        if obs_mask in edge_dict[pair]:
+            p_old = edge_dict[pair][obs_mask]
+            p_comb = p_old + prob - 2.0 * p_old * prob
+            edge_dict[pair][obs_mask] = min(p_comb, 0.999999)

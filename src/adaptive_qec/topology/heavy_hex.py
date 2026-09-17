@@ -208,3 +208,13 @@ class HeavyHexTopology:
             num_edges=len(self.edges),
             min_degree=min(degrees),
             max_degree=max_deg,
+            avg_degree=float(np.mean(degrees)),
+            degree_distribution=deg_dist,
+            diameter=diameter,
+            is_heavy_hex=is_heavy_hex,
+        )
+
+    def _bfs_distances(self, start: int) -> dict[int, int]:
+        """BFS from start, returns distances to all reachable nodes."""
+        from collections import deque
+        dist = {start: 0}

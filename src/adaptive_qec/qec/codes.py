@@ -32,3 +32,20 @@ class CodeInfo:
     """Static information about a QEC code instance."""
     name: str
     distance: int
+    rounds: int
+    num_data_qubits: int
+    num_ancilla_qubits: int
+    num_detectors: int
+    num_observables: int
+
+
+class QECCode(ABC):
+    """Abstract base for quantum error-correcting codes."""
+
+    @abstractmethod
+    def generate_circuit(
+        self,
+        noise: Optional[NoiseConfig] = None,
+        embedding: Optional[Any] = None,
+    ) -> stim.Circuit:
+        """

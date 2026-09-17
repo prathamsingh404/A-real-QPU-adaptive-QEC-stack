@@ -160,3 +160,12 @@ class TestUnionFindDecoder:
             decoder.decode(np.zeros(10, dtype=np.uint8))
 
     def test_decode_single_no_defects(self):
+        """No defects should produce zero corrections."""
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+
+        decoder = UnionFindDecoder()
+        decoder.configure(circuit=circuit)
+

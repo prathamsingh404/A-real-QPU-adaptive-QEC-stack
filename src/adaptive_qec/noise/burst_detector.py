@@ -68,3 +68,13 @@ class BurstEvent:
         }
 
 
+@dataclass
+class BurstAnalysis:
+    """Complete burst analysis results."""
+    total_rounds: int
+    total_detectors: int
+    baseline_defect_rate: float
+    bursts_detected: list[BurstEvent] = field(default_factory=list)
+    burst_rate_per_round: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:

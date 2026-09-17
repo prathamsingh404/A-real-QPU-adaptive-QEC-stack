@@ -58,3 +58,18 @@ class HardwareDigitalTwin:
     Maintains an internal model of the QPU hardware state.
 
     Updated from calibration snapshots and experimental observations.
+    Predicts P(logical failure) from the current estimated state.
+    """
+
+    def __init__(self, num_qubits: int) -> None:
+        self._num_qubits = num_qubits
+        self._qubits: dict[int, QubitState] = {
+            i: QubitState(index=i) for i in range(num_qubits)
+        }
+        self._topology: list[tuple[int, int]] = []
+        self._update_count = 0
+
+    def update_from_calibration(self, calibration: CalibrationSnapshot) -> None:
+        """
+        Update the digital twin from a calibration snapshot.
+

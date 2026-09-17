@@ -349,3 +349,46 @@ def _load_dotenv() -> None:
                 load_dotenv(env_path, override=False)
                 return
     except ImportError:
+        pass  # python-dotenv not installed; rely on manual env vars
+
+
+def load_config(path: str | Path) -> AdaptiveQECConfig:
+    """
+    Load configuration from a YAML file with environment variable overrides.
+
+    Automatically loads .env file from project root if python-dotenv is
+    installed and a .env file exists.
+
+    Args:
+        path: Path to YAML configuration file.
+
+    Returns:
+        Validated AdaptiveQECConfig instance.
+
+    Raises:
+        FileNotFoundError: If the config file doesn't exist.
+        pydantic.ValidationError: If the config is invalid.
+    """
+    _load_dotenv()
+
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Configuration file not found: {path}")
+
+    with open(path) as f:
+        data = yaml.safe_load(f) or {}
+
+    data = _apply_env_overrides(data)
+    return AdaptiveQECConfig(**data)
+
+
+def load_config_from_dict(data: dict[str, Any]) -> AdaptiveQECConfig:
+    """Load configuration from a dictionary."""
+    _load_dotenv()
+    data = _apply_env_overrides(data)
+    return AdaptiveQECConfig(**data)
+
+
+def default_config() -> AdaptiveQECConfig:
+    """Return the default configuration."""
+    return AdaptiveQECConfig()

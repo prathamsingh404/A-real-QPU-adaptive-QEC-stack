@@ -73,3 +73,18 @@ class HardwareDigitalTwin:
         """
         Update the digital twin from a calibration snapshot.
 
+        Stores the new values and appends to temporal history.
+        """
+        timestamp = calibration.timestamp
+
+        for qc in calibration.qubit_calibrations:
+            idx = qc.qubit_index
+            if idx not in self._qubits:
+                self._qubits[idx] = QubitState(index=idx)
+
+            state = self._qubits[idx]
+            state.last_updated = timestamp
+
+            if qc.t1_us is not None:
+                state.t1_us = qc.t1_us
+                state.t1_history.append((timestamp, qc.t1_us))

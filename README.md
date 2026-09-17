@@ -52,3 +52,12 @@ graph TD
         LeakageDet["Syndrome Leakage Detector\n(Lag-1 Autocorrelation R(1) + Streaks)"]:::noise
         RateEst["Leakage & Seepage Rates\n(gamma_L, gamma_S, p_steady)"]:::noise
     end
+
+    subgraph Mitigate ["5. Selective Error Mitigation"]
+        DDPlanner["AdaptiveDDPlanner\n(CPMG, XY4, XY8 Sequences)"]:::mitigation
+        IdleEst["Circuit Idle Window Profiler\n(Spectator qubit dephasing)"]:::mitigation
+        DDDecision["Selective Decision Rule\np_dephase(t_idle) > N_pulse * eps_pulse"]:::mitigation
+    end
+
+    subgraph Decoders ["6. Dual Low-Latency Decoders"]
+        MWPM["MWPMDecoder (PyMatching)\nO(N^3) Edmonds Blossom Baseline"]:::decoder

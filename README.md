@@ -106,3 +106,12 @@ graph TD
     BurstAware --> MWPM
 
     MWPM --> DistSweep
+    UF --> DistSweep
+    DistSweep --> Threshold
+    Threshold --> WilsonCI
+    Threshold --> Fit
+```
+
+---
+
+## 2. The Six Core Engineering Problems

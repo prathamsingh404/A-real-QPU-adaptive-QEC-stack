@@ -185,3 +185,14 @@ class EmbeddingFinder:
             f"score={best_score:.2f}"
         )
         return best_embedding
+
+    def _try_embedding(
+        self, distance: int, start_qubit: int
+    ) -> Optional[SurfaceCodeEmbedding]:
+        """Try to embed a surface code starting from a specific qubit."""
+        from collections import deque
+
+        n_data = distance ** 2
+        embedding = SurfaceCodeEmbedding(distance=distance)
+
+        # BFS from start to claim physical qubits for data qubits

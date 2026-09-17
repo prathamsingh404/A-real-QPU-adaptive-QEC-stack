@@ -86,3 +86,14 @@ class SurfaceCodeEmbedding:
     _swap_count: int = 0
     _depth_overhead: float = 1.0
     _idle_slots: int = 0
+
+    def data_qubit_map(self) -> dict[tuple[int, int], int]:
+        return self.data_map
+
+    def ancilla_qubit_map(self) -> dict[tuple[int, int], int]:
+        return self.ancilla_map
+
+    def swap_count(self) -> int:
+        return self._swap_count
+
+    def circuit_depth_overhead(self) -> float:

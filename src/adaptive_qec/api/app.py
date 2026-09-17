@@ -453,3 +453,38 @@ async def run_threshold_analysis(req: ThresholdRequest) -> dict[str, Any]:
     the fault-tolerant threshold scaling metrics (Lambda ratio Λ and p_th).
     """
     try:
+        noise = NoiseConfig()
+        noise.gate.two_qubit = req.physical_error_rate
+        noise.gate.single_qubit = req.physical_error_rate * 0.15
+
+        sweep = DistanceSweep(
+            distances=req.distances,
+            noise=noise,
+            decoder_names=["mwpm", "union_find"],
+            shots_per_distance=req.shots,
+            code_type=req.code_type,
+        )
+        sweep_results = sweep.run()
+
+        # Build threshold analyzer from MWPM results
+        analyzer = ThresholdAnalyzer()
+        for r in sweep_results.get_by_decoder("mwpm"):
+            analyzer.add_result(
+                distance=r.distance,
+                metrics=r.metrics,
+                physical_error_rate=req.physical_error_rate,
+            )
+
+        fit = analyzer.fit_threshold_model()
+        table = analyzer.scaling_table()
+
+        return {
+            "fit": fit.to_dict(),
+            "scaling_table": table,
+            "lambda_ratios": fit.lambda_ratios,
+            "is_below_threshold": fit.is_below_threshold,
+            "sweep_summary": sweep_results.to_dict(),
+        }
+    except Exception as e:
+        logger.exception("Error running threshold analysis")
+        raise HTTPException(status_code=500, detail=str(e))

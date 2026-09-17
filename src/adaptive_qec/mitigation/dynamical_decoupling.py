@@ -115,3 +115,12 @@ class AdaptiveDDPlanner:
         idle_map: dict[int, float],
         preferred_sequence: Optional[DDSequenceType] = None,
     ) -> DDSchedule:
+        """
+        Compute an optimal per-qubit DD schedule given idle durations.
+
+        Args:
+            idle_map: dict mapping qubit_index → idle_duration in microseconds.
+            preferred_sequence: sequence type to use if DD is beneficial.
+
+        Returns:
+            DDSchedule specifying which qubits receive DD and their sequence.

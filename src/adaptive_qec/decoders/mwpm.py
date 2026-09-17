@@ -180,3 +180,17 @@ class MWPMDecoder(Decoder):
             f"LER={error_rate:.6f} ({num_errors}/{shots}), "
             f"time={t_total:.3f}s, "
             f"throughput={metrics.throughput_shots_per_s:.0f} shots/s, "
+            f"P99={metrics.latency_p99_us:.1f}μs"
+        )
+        return metrics
+
+    def decode_burst_aware(
+        self,
+        syndromes: np.ndarray,
+        observable_flips: np.ndarray,
+        num_rounds: int,
+        num_detectors_per_round: int,
+        burst_detector: Optional[Any] = None,
+    ) -> tuple[DecoderMetrics, DecoderMetrics, dict[str, Any]]:
+        """
+        Compare standard MWPM vs burst-aware MWPM on identical syndrome data.

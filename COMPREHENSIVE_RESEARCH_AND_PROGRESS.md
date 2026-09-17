@@ -123,3 +123,8 @@ The goal of this project transcends standard academic exercises or superficial t
     - $\gamma_L$: Leakage rate per round
     - $\gamma_S$: Seepage rate per round ($\approx 1 / \text{mean streak length}$)
     - Steady-state leaked fraction: $p_{\text{leak}}^{\text{steady}} = \frac{\gamma_L}{\gamma_L + \gamma_S}$
+* **What We Built**:
+  - `src/adaptive_qec/noise/leakage.py`: `LeakageDetector`, `LeakedQubit`, `LeakageAnalysis`, and `LeakageRateEstimator`.
+  - Integrated into `NoiseCharacterizer` in `src/adaptive_qec/noise/characterization.py`.
+  - Integrated into `HardwareDigitalTwin` (`update_leakage_from_analysis`).
+

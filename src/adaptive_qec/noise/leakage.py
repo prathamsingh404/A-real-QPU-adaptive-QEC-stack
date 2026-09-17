@@ -152,3 +152,14 @@ class LeakageDetector:
                 onset_round=onset,
                 persistence_length=persistence,
                 autocorrelation=autocorr,
+                firing_rate=firing_rate,
+                confidence=confidence,
+            ))
+
+            logger.info(
+                f"Leakage suspected: detector {det_idx}, "
+                f"onset round {onset}, persistence={persistence}, "
+                f"autocorr={autocorr:.3f}, confidence={confidence:.3f}"
+            )
+
+        # Estimate leakage rate

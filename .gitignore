@@ -22,3 +22,11 @@ dist/
 
 # IDE & OS
 .vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Logs and scratch files
+*.log
+scratch/

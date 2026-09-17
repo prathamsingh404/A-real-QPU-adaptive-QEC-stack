@@ -118,3 +118,13 @@ class DistanceSweep:
         """
         self.distances = distances or [3, 5, 7]
         self.rounds_per_distance = rounds_per_distance or {}
+        self.noise = noise or NoiseConfig()
+        self.decoder_names = decoder_names or ["mwpm"]
+        self.shots = shots_per_distance
+        self.code_type = code_type
+
+        # Default rounds = distance
+        for d in self.distances:
+            if d not in self.rounds_per_distance:
+                self.rounds_per_distance[d] = d
+

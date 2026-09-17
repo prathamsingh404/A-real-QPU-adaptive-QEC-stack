@@ -446,3 +446,17 @@ class UnionFindDecoder(Decoder):
                 res[i] = 1
         return res
 
+    def decode(self, syndrome: np.ndarray) -> Correction:
+        """
+        Decode a single syndrome or batch.
+
+        Args:
+            syndrome: shape (num_detectors,) or (batch, num_detectors)
+
+        Returns:
+            Correction with observable predictions.
+        """
+        if self._graph is None:
+            raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        if syndrome.ndim == 1:

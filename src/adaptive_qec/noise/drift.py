@@ -358,3 +358,18 @@ class CompositeDriftDetector:
         if severity[ewma_report.status] >= severity[cusum_report.status]:
             report = ewma_report
         else:
+            report = cusum_report
+
+        # Check burst detector if provided
+        burst_report = None
+        if (
+            self._burst_detector is not None
+            and syndrome_tensor is not None
+            and num_detectors_per_round is not None
+        ):
+            analysis = self._burst_detector.analyze(
+                syndrome_tensor, num_detectors_per_round
+            )
+            if len(analysis.bursts_detected) > 0:
+                burst_dets = []
+                for b in analysis.bursts_detected:

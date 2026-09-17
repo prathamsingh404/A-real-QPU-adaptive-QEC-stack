@@ -130,3 +130,14 @@ class LeakageDetector:
 
             # Longest consecutive firing streak
             persistence, onset = self._longest_streak(trace)
+
+            # Skip if persistence is too short
+            if persistence < self.min_persistence:
+                continue
+
+            # Skip if autocorrelation is too low
+            if autocorr < self.autocorr_threshold:
+                continue
+
+            # Compute leakage confidence
+            confidence = self._compute_confidence(

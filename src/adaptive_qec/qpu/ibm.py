@@ -277,3 +277,34 @@ class IBMQuantumBackend(QPUBackend):
                             gate_calibrations.append(gc)
 
                             # Update qubit single-qubit gate error
+                            if len(qargs) == 1 and gate_props.error is not None:
+                                qcal = qubit_calibrations[qargs[0]]
+                                if qcal.single_qubit_gate_error is None:
+                                    qcal.single_qubit_gate_error = gate_props.error
+                    except Exception:
+                        pass
+
+        # Coupling map
+        coupling_map = []
+        if hasattr(self._backend, 'coupling_map') and self._backend.coupling_map:
+            coupling_map = [
+                (int(edge[0]), int(edge[1]))
+                for edge in self._backend.coupling_map.get_edges()
+            ]
+
+        return CalibrationSnapshot(
+            timestamp=timestamp,
+            backend_name=self._backend_name,
+            qubit_calibrations=qubit_calibrations,
+            gate_calibrations=gate_calibrations,
+            coupling_map=coupling_map,
+        )
+
+    def get_topology(self) -> TopologyInfo:
+        """Get qubit connectivity from the IBM backend."""
+        if self._backend is None:
+            raise RuntimeError("Backend not connected. Call connect() first.")
+
+        coupling_map = []
+        if hasattr(self._backend, 'coupling_map') and self._backend.coupling_map:
+            coupling_map = [

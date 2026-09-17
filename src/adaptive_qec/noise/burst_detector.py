@@ -238,3 +238,13 @@ class BurstDetector:
         total_defects: int,
         window: np.ndarray,
     ) -> tuple[BurstType, float]:
+        """
+        Heuristically classify a burst event.
+
+        Classification rules (from literature):
+            - Cosmic ray: wide spatial extent (>30% of detectors),
+              short duration (1-2 rounds), high severity
+            - QP poisoning: narrow spatial extent (<20%), long duration
+              (>3 rounds), moderate severity
+            - Crosstalk: moderate spatial extent, specific geometric pattern
+

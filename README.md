@@ -151,3 +151,12 @@ graph TD
 
 ---
 
+## 3. Directory Layout & Module Index
+
+```text
+A real-QPU adaptive QEC stack/
+├── configs/
+│   └── default.yaml                   # Hardware, noise, decoder, and API configurations
+├── pyproject.toml                     # Poetry/pip build configuration & dependencies
+├── COMPREHENSIVE_RESEARCH_AND_PROGRESS.md # Master research compendium & mathematical derivations
+├── README.md                          # Full architectural manual & hardware guides

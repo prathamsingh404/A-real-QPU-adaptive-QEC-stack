@@ -22,3 +22,11 @@ class TestLeakageDetector:
     """Tests for LeakageDetector."""
 
     def test_transient_noise_no_leakage(self):
+        """Random independent errors should not trigger leakage detection."""
+        rng = np.random.default_rng(42)
+        # 30 rounds, 8 detectors, independent errors at 3%
+        trace = (rng.random((30, 8)) < 0.03).astype(np.uint8)
+
+        detector = LeakageDetector(min_persistence=4, autocorr_threshold=0.3)
+        analysis = detector.analyze(trace)
+

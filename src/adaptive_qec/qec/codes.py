@@ -66,3 +66,20 @@ class QECCode(ABC):
         ...
 
     @abstractmethod
+    def get_detector_coordinates(self) -> np.ndarray:
+        """Get (x, y, t) coordinates for each detector."""
+        ...
+
+
+class RepetitionCode(QECCode):
+    """
+    Repetition code for bit-flip errors.
+
+    The simplest QEC code — good for initial testing and validation.
+    d data qubits, d-1 ancilla qubits measuring ZZ stabilizers.
+    """
+
+    def __init__(self, distance: int, rounds: int) -> None:
+        if distance < 3 or distance % 2 == 0:
+            raise ValueError(f"Distance must be odd and >= 3, got {distance}")
+        if rounds < 1:

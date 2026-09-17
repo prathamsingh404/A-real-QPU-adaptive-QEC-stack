@@ -198,3 +198,13 @@ class HeavyHexTopology:
                 dist = self._bfs_distances(int(start))
                 max_dist = max(dist.values()) if dist else 0
                 diameter = max(diameter, max_dist)
+
+        # Heavy-hex detection: max degree ≤ 3, most qubits degree 2
+        max_deg = max(degrees)
+        is_heavy_hex = (max_deg <= 3 and deg_dist.get(2, 0) > len(degrees) * 0.3)
+
+        return TopologyMetrics(
+            num_qubits=self.num_qubits,
+            num_edges=len(self.edges),
+            min_degree=min(degrees),
+            max_degree=max_deg,

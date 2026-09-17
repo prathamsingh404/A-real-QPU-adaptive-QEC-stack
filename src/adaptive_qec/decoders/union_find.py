@@ -432,3 +432,17 @@ class UnionFindDecoder(Decoder):
 
             if u_odd and v_odd:
                 corr ^= o
+                active_odd -= 2
+            elif u_odd and v_b:
+                corr ^= o
+                active_odd -= 1
+            elif v_odd and u_b:
+                corr ^= o
+                active_odd -= 1
+
+        res = np.zeros(self._num_observables, dtype=np.uint8)
+        for i in range(self._num_observables):
+            if corr & (1 << i):
+                res[i] = 1
+        return res
+

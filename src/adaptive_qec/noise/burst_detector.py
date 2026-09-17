@@ -118,3 +118,13 @@ class BurstDetector:
 
     def analyze(
         self,
+        syndrome_tensor: np.ndarray,
+        num_detectors_per_round: int,
+    ) -> BurstAnalysis:
+        """
+        Analyze a syndrome tensor for error bursts.
+
+        Args:
+            syndrome_tensor: shape (rounds, detectors_per_round), dtype uint8.
+                Each entry is 1 if the detector fired, 0 otherwise.
+            num_detectors_per_round: Number of detectors per QEC round.

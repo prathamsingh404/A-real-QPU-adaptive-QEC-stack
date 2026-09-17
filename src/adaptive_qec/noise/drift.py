@@ -163,3 +163,18 @@ class EWMADriftDetector:
         # Determine affected parameters
         affected_params = []
         if len(alarm_dets) > 0:
+            affected_params.append("detection_rate")
+            # Check if drift is in readout (all detectors) or specific region
+            fraction_affected = len(alarm_dets) / len(detection_rates)
+            if fraction_affected > 0.5:
+                affected_params.append("global_noise")
+            else:
+                affected_params.append("local_noise")
+
+        report = DriftReport(
+            status=status,
+            magnitude=max_z,
+            affected_detectors=alarm_dets,
+            affected_parameters=affected_params,
+            detector_drift_values=z_scores,
+            details={

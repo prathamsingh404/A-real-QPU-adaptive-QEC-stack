@@ -33,3 +33,8 @@ The goal of this project transcends standard academic exercises or superficial t
   A heavy-hex lattice consists of vertices $V$ and edges $E$ where nodes alternate in vertical connectivity:
   $$\text{connect\_down}(r, c) = (r \equiv 0 \pmod 2 \land c \equiv 0 \pmod 4) \lor (r \equiv 1 \pmod 2 \land c \equiv 2 \pmod 4)$$
   This guarantees $\max(\deg(v)) \le 3$, with over 50% of vertices having degree 2 (coupler/flag transmons).
+* **What We Built**:
+  - `src/adaptive_qec/topology/heavy_hex.py`: Graph-theoretic representation of IBM coupling maps, BFS-based shortest path routing, SWAP distance metrics, degree distribution, and diameter analysis.
+  - `src/adaptive_qec/topology/embedding.py`: `EmbeddingFinder` and `SurfaceCodeEmbedding` protocol. Implements greedy BFS and candidate-scoring algorithms to embed logical surface codes of arbitrary distance onto physical heavy-hex qubits, computing SWAP counts, depth overhead, and connectivity deficits.
+  - `src/adaptive_qec/qec/codes.py`: Enhanced `SurfaceCode.generate_circuit` to accept an optional `embedding` parameter, adjusting the Stim circuit and injecting SWAP noise overhead.
+

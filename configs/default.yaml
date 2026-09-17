@@ -58,3 +58,15 @@ decoder:
     checkpoint: null              # path to model weights
     batch_size: 256
   adaptive:
+    enabled: false
+    noise_estimation: true
+    routing: false
+    uncertainty: false
+
+runtime:
+  cpu:
+    threads: 4
+    affinity: false
+  gpu:
+    enabled: false
+    device: 0

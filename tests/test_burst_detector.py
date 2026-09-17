@@ -75,3 +75,10 @@ class TestBurstDetector:
         flat[5] = 1
         tensor = reshape_syndromes_to_tensor(flat, num_rounds=6, num_detectors_per_round=4)
         assert tensor.shape == (6, 4)
+        assert tensor[1, 1] == 1  # index 5 = 1 * 4 + 1
+
+
+class TestDriftIntegration:
+    """Tests for CompositeDriftDetector with burst detection."""
+
+    def test_composite_drift_catches_burst(self):

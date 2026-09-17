@@ -96,3 +96,17 @@ class ThresholdAnalyzer:
     def __init__(self) -> None:
         self._results: dict[int, dict[str, Any]] = {}
 
+    def add_result(
+        self,
+        distance: int,
+        metrics: DecoderMetrics,
+        physical_error_rate: float,
+    ) -> None:
+        """
+        Add an experimental result for a given code distance.
+
+        Args:
+            distance: code distance (must be odd: 3, 5, 7, ...)
+            metrics: decoder metrics from the experiment
+            physical_error_rate: the physical error rate used
+        """

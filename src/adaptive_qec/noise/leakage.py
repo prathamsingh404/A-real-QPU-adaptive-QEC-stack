@@ -218,3 +218,14 @@ class LeakageDetector:
 
         return max_streak, max_onset
 
+    @staticmethod
+    def _compute_confidence(
+        autocorr: float,
+        persistence: int,
+        firing_rate: float,
+        total_rounds: int,
+    ) -> float:
+        """
+        Compute leakage confidence from multiple signals.
+
+        High confidence requires:

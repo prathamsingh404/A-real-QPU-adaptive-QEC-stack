@@ -26,3 +26,17 @@ logger = logging.getLogger(__name__)
 
 
 class MWPMDecoder(Decoder):
+    """
+    Minimum Weight Perfect Matching decoder via PyMatching.
+
+    Constructs a Matching object from a Stim DetectorErrorModel,
+    then decodes syndromes to predicted observable corrections.
+    """
+
+    def __init__(self) -> None:
+        self._matching: Optional[pymatching.Matching] = None
+        self._num_detectors: int = 0
+        self._num_observables: int = 0
+
+    @property
+    def name(self) -> str:

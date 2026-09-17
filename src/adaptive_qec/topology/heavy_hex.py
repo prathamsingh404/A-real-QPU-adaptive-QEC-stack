@@ -98,3 +98,13 @@ class HeavyHexTopology:
         topo._degree = {q: len(neighbors) for q, neighbors in topo.adjacency.items()}
         return topo
 
+    @classmethod
+    def from_backend(cls, backend: Any) -> HeavyHexTopology:
+        """Build from an IBM backend object."""
+        try:
+            target = backend.target
+            coupling_map = list(target.operation_names_for_qargs)
+            # Extract from target's two-qubit gate entries
+            edges = []
+            for qargs in target.qargs:
+                if len(qargs) == 2:

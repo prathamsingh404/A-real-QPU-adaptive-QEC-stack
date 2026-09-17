@@ -390,3 +390,17 @@ class UnionFindDecoder(Decoder):
         parent = {d: d for d in defects}
         parent[boundary] = boundary
         parity = {d: 1 for d in defects}
+        parity[boundary] = 0
+        boundary_conn = {d: False for d in defects}
+        boundary_conn[boundary] = True
+
+        def find(x: int) -> int:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(x: int, y: int) -> int:
+            rx, ry = find(x), find(y)
+            if rx == ry:
+                return rx

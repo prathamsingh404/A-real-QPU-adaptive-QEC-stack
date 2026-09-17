@@ -52,3 +52,12 @@ class TestUnionFindForest:
         assert uf.parity[root] == 2  # even → even cluster
 
     def test_boundary_connection(self):
+        uf = UnionFindForest(5)
+        uf.boundary_connected[3] = True
+        uf.parity[0] = 1  # odd parity
+        uf.union(0, 3)
+        assert uf.is_even(0)  # boundary absorbs odd parity
+
+    def test_is_even_zero_parity(self):
+        uf = UnionFindForest(3)
+        assert uf.is_even(0)  # zero defects = even

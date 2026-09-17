@@ -298,3 +298,18 @@ class CUSUMDriftDetector:
 
         return DriftReport(
             status=status,
+            magnitude=max_cusum,
+            affected_detectors=alarm_dets,
+            detector_drift_values=cusum_values,
+            details={
+                "max_cusum": max_cusum,
+                "num_alarms": len(alarm_dets),
+                "sample_count": self._sample_count,
+            },
+        )
+
+
+class CompositeDriftDetector:
+    """
+    Combines EWMA, CUSUM, and optional spatiotemporal burst detection.
+

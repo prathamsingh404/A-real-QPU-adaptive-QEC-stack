@@ -110,3 +110,10 @@ class TestDistanceSweep:
             shots_per_distance=100,
             code_type="surface",
         )
+        results = sweep.run()
+
+        assert isinstance(results, DistanceSweepResults)
+        assert len(results.results) == 2  # mwpm and union_find
+        assert results.total_wall_time_s > 0
+
+        mwpm_res = results.get_by_decoder("mwpm")

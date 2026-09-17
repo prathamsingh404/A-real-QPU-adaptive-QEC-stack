@@ -169,3 +169,12 @@ A real-QPU adaptive QEC stack/
 │       │   └── app.py                 # FastAPI backend with /benchmark and /threshold routes
 │       ├── decoders/
 │       │   ├── union_find.py          # O(N alpha(N)) radius-weighted Union-Find decoder
+│       │   ├── mwpm.py                # PyMatching MWPM decoder with burst-aware masking
+│       │   ├── base.py                # Decoder ABC and DecoderMetrics schemas
+│       │   └── registry.py            # Dynamic decoder plugin registry
+│       ├── digital_twin/
+│       │   └── twin.py                # HardwareDigitalTwin (QubitState, leakage, DD rules)
+│       ├── experiment/
+│       │   └── distance_sweep.py      # Automated multi-distance QEC sweep harness
+│       ├── mitigation/
+│       │   └── dynamical_decoupling.py # AdaptiveDDPlanner (CPMG, XY4, XY8 schedules)

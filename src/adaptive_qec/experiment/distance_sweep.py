@@ -68,3 +68,13 @@ class DistanceSweepResults:
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-serializable representation."""
+        return {
+            "total_wall_time_s": round(self.total_wall_time_s, 3),
+            "noise_config": self.noise_config,
+            "results": [
+                {
+                    "distance": r.distance,
+                    "rounds": r.rounds,
+                    "decoder": r.decoder_name,
+                    "logical_error_rate": round(r.metrics.logical_error_rate, 8),
+                    "num_errors": r.metrics.num_logical_errors,

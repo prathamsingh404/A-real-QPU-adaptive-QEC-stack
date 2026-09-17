@@ -34,3 +34,12 @@ graph TD
     end
 
     subgraph Phys ["2. Transmon Physics & Non-Markovian Noise"]
+        FluxNoise["1/f Magnetic Flux & Charge Noise\n(Low-frequency dephasing)"]:::physics
+        Cosmic["High-Energy Ionizing Radiation\n(Muon impacts & phonon cascades)"]:::physics
+        QP["Quasiparticle Poisoning\n(Cooper pair breaking / T1 decay)"]:::physics
+        LeakagePhys["Transmon Anharmonicity & Drive\n(|0>, |1> -> |2> non-computational)"]:::physics
+    end
+
+    subgraph QECBlock ["3. Fault-Tolerant Circuit Synthesis"]
+        StimCirc["Stim Fault-Tolerant Circuit\n(Rotated Surface Code d=3, 5, 7)"]:::qec
+        DEM["Detector Error Model (DEM)\n(Separators ^, Hyperedges)"]:::qec

@@ -348,3 +348,17 @@ class UnionFindDecoder(Decoder):
             f"UF decoder configured: {self._num_detectors} detectors, "
             f"{self._num_observables} observables, "
             f"{len(self._graph.edges)} edges"
+        )
+
+    def _decode_single(self, syndrome: np.ndarray) -> np.ndarray:
+        """
+        Decode a single syndrome vector using radius-weighted Union-Find.
+
+        Active clusters of defects grow at unit speed towards each other,
+        so two defects merge at radius r = dist(di, dj) / 2.
+        Defects grow towards the static boundary at radius r = dist(di, boundary).
+        Merging in radius order preserves maximum-likelihood cluster boundaries.
+
+        Args:
+            syndrome: shape (num_detectors,), dtype uint8
+

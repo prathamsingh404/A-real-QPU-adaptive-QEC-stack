@@ -61,3 +61,10 @@ class TestThresholdAnalyzer:
         # p_L(3) = 0.005, p_L(5) = 0.015 -> Lambda = 0.333
         assert pytest.approx(lam, rel=1e-2) == 0.333
         assert lam < 1.0
+
+    def test_missing_distance_raises(self):
+        analyzer = ThresholdAnalyzer()
+        analyzer.add_result(3, _mock_metrics(100, 5), physical_error_rate=0.005)
+        with pytest.raises(ValueError, match="Need results for both"):
+            analyzer.compute_lambda(3, 7)
+

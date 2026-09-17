@@ -128,3 +128,13 @@ class DistanceSweep:
             if d not in self.rounds_per_distance:
                 self.rounds_per_distance[d] = d
 
+    def run(self) -> DistanceSweepResults:
+        """
+        Execute the distance sweep.
+
+        Returns:
+            DistanceSweepResults with all (distance, decoder) results.
+        """
+        results = DistanceSweepResults(
+            noise_config={
+                "two_qubit": self.noise.gate.two_qubit,

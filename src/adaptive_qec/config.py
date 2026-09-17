@@ -232,3 +232,42 @@ class GPUConfig(BaseModel):
     device: int = Field(default=0, ge=0)
     backend: GPUBackendType = GPUBackendType.PYTORCH
 
+
+class LatencyBudgetConfig(BaseModel):
+    """Latency budget configuration for real-time QEC."""
+    deadline_us: float = Field(default=1000.0, gt=0)
+    warning_threshold: float = Field(default=0.8, gt=0.0, le=1.0)
+    tracking: bool = True
+
+
+class RuntimeConfig(BaseModel):
+    """Complete runtime configuration."""
+    cpu: CPUConfig = Field(default_factory=CPUConfig)
+    gpu: GPUConfig = Field(default_factory=GPUConfig)
+    batch_size: int = Field(default=1000, ge=1)
+    latency_budget: LatencyBudgetConfig = Field(default_factory=LatencyBudgetConfig)
+
+
+class ExperimentConfig(BaseModel):
+    """Experiment management configuration."""
+    output_dir: str = "experiments"
+    shots: int = Field(default=10000, ge=1)
+    repetitions: int = Field(default=1, ge=1)
+    save_raw: bool = True
+    save_circuits: bool = True
+    save_calibration: bool = True
+    save_plots: bool = True
+    name_template: str = "{code}_d{distance}_r{rounds}_{backend}_{timestamp}"
+
+
+class DataConfig(BaseModel):
+    """Data storage configuration."""
+    storage_backend: StorageBackend = StorageBackend.FILESYSTEM
+    base_path: str = "experiments"
+    compression: bool = False
+    format: DataFormat = DataFormat.JSON
+
+
+class AnalysisConfig(BaseModel):
+    """Statistical analysis configuration."""
+    confidence_level: float = Field(default=0.95, gt=0.0, lt=1.0)

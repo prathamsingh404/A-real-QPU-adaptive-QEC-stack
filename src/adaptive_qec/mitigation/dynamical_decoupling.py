@@ -34,3 +34,12 @@ import stim
 from adaptive_qec.digital_twin.twin import HardwareDigitalTwin
 
 logger = logging.getLogger(__name__)
+
+
+class DDSequenceType(str, Enum):
+    """Dynamical decoupling pulse sequences."""
+    NONE = "none"
+    CPMG = "cpmg"  # 2 pulses: X - X
+    XY4 = "xy4"    # 4 pulses: X - Y - X - Y
+    XY8 = "xy8"    # 8 pulses: X - Y - X - Y - Y - X - Y - X
+

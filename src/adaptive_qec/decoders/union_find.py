@@ -96,3 +96,17 @@ class UnionFindForest:
         """
         Union by rank, tracking observable XOR along the merge edge.
 
+        The edge from x to y has observable bitmask edge_obs_mask.
+        After union, the obs_to_parent chain correctly tracks the
+        cumulative XOR from any node to the new root.
+
+        Returns the new root.
+        """
+        rx = self.find(x)
+        ry = self.find(y)
+        if rx == ry:
+            return rx
+
+        # Compute obs from ry to rx via the path: ry←y—edge—x→rx
+        obs_y_to_ry = self.obs_to_parent[y]
+        obs_x_to_rx = self.obs_to_parent[x]

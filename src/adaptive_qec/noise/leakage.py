@@ -108,3 +108,14 @@ class LeakageDetector:
         """
         Analyze a syndrome tensor for leakage signatures.
 
+        Args:
+            syndrome_tensor: shape (rounds, detectors_per_round), dtype uint8.
+
+        Returns:
+            LeakageAnalysis with detected leaked qubits.
+        """
+        R, N_d = syndrome_tensor.shape
+        leaked: list[LeakedQubit] = []
+
+        for det_idx in range(N_d):
+            trace = syndrome_tensor[:, det_idx].astype(np.float64)

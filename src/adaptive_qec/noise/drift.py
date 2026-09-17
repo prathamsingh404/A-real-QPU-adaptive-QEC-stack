@@ -178,3 +178,18 @@ class EWMADriftDetector:
             affected_parameters=affected_params,
             detector_drift_values=z_scores,
             details={
+                "max_z_score": max_z,
+                "mean_z_score": mean_z,
+                "num_warning": len(warning_dets),
+                "num_alarm": len(alarm_dets),
+                "num_severe": len(severe_dets),
+                "sample_count": self._sample_count,
+            },
+        )
+
+        if status != DriftStatus.STABLE:
+            logger.warning(
+                f"Drift {status.value}: magnitude={max_z:.2f}, "
+                f"affected_detectors={len(alarm_dets)}"
+            )
+

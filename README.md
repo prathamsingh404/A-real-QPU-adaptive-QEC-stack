@@ -16,3 +16,12 @@ AdaptiveQEC is a production-grade, hardware-aware, adaptive Quantum Error Correc
 The following interactive graph maps the interdependencies across physical hardware, noise phenomenology, syndrome extraction, statistical inference, low-latency decoding, and closed-loop control:
 
 ```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'fontSize': '13px', 'fontFamily': 'Fira Code, monospace'}}}%%
+graph TD
+    classDef hardware fill:#1e1e2e,stroke:#89b4fa,stroke-width:2px,color:#cdd6f4;
+    classDef physics fill:#181825,stroke:#f38ba8,stroke-width:2px,color:#cdd6f4;
+    classDef qec fill:#1e1e2e,stroke:#a6e3a1,stroke-width:2px,color:#cdd6f4;
+    classDef noise fill:#181825,stroke:#fab387,stroke-width:2px,color:#cdd6f4;
+    classDef decoder fill:#1e1e2e,stroke:#cba6f7,stroke-width:2px,color:#cdd6f4;
+    classDef mitigation fill:#181825,stroke:#94e2d5,stroke-width:2px,color:#cdd6f4;
+    classDef analysis fill:#1e1e2e,stroke:#f9e2af,stroke-width:2px,color:#cdd6f4;

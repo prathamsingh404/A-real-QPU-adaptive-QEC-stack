@@ -152,3 +152,17 @@ class DetectorEdge:
     observables: int  # bitmask
     is_boundary: bool = False
 
+
+@dataclass
+class DetectorGraph:
+    """Graph structure from a Stim DetectorErrorModel."""
+    num_detectors: int
+    num_observables: int
+    edges: list[DetectorEdge]
+    boundary_node: int
+    adjacency: dict[int, list[int]] = field(default_factory=dict)
+
+    def build_adjacency(self) -> None:
+        self.adjacency = {}
+        for i, edge in enumerate(self.edges):
+            self.adjacency.setdefault(edge.u, []).append(i)

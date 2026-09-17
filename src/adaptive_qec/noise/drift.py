@@ -373,3 +373,27 @@ class CompositeDriftDetector:
             if len(analysis.bursts_detected) > 0:
                 burst_dets = []
                 for b in analysis.bursts_detected:
+                    burst_dets.extend(b.affected_detectors)
+                burst_dets = sorted(set(burst_dets))
+
+                max_sev = max(b.severity for b in analysis.bursts_detected)
+                report = DriftReport(
+                    status=DriftStatus.BURST_EVENT,
+                    magnitude=max_sev,
+                    affected_detectors=burst_dets,
+                    details={
+                        "burst_analysis": analysis.to_dict(),
+                        "num_bursts": len(analysis.bursts_detected),
+                    },
+                )
+
+        # Merge affected detectors
+        all_affected = list(set(
+            ewma_report.affected_detectors + cusum_report.affected_detectors + report.affected_detectors
+        ))
+        report.affected_detectors = all_affected
+
+        report.details["ewma"] = ewma_report.details
+        report.details["cusum"] = cusum_report.details
+
+        return report

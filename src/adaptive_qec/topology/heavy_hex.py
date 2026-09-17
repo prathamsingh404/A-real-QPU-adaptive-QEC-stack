@@ -178,3 +178,13 @@ class HeavyHexTopology:
                 avg_degree=0.0, degree_distribution={}, diameter=0,
                 is_heavy_hex=False,
             )
+
+        # Degree distribution
+        deg_dist: dict[int, int] = {}
+        for d in degrees:
+            deg_dist[d] = deg_dist.get(d, 0) + 1
+
+        # Diameter via BFS from each node (for small topologies)
+        diameter = 0
+        if self.num_qubits <= 500:
+            for start in range(min(self.num_qubits, 20)):

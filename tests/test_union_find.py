@@ -241,3 +241,12 @@ class TestUnionFindDecoder:
 # Comparison: UF vs MWPM
 # ---------------------------------------------------------------------------
 
+class TestUFvsMWPM:
+    """Compare UF decoder against MWPM baseline."""
+
+    def test_uf_vs_mwpm_same_data(self):
+        """
+        Run both decoders on identical syndrome data.
+        UF should be within ~20% error rate of MWPM.
+        """
+        code = create_code("surface", distance=3, rounds=3)

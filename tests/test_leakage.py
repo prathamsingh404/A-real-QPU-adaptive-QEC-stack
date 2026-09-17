@@ -62,3 +62,11 @@ class TestLeakageDetector:
         assert q4.confidence > 0.5
 
     def test_longest_streak_utility(self):
+        arr = np.array([0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0])
+        streak, onset = LeakageDetector._longest_streak(arr)
+        assert streak == 4
+        assert onset == 8
+
+
+class TestLeakageRateEstimator:
+    """Tests for LeakageRateEstimator."""

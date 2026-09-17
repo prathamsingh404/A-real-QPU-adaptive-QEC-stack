@@ -79,3 +79,12 @@ graph TD
     Twin --> StimCirc
     Twin --> DDPlanner
 
+    FluxNoise --> Twin
+    Cosmic --> QP
+    QP --> BurstDet
+    LeakagePhys --> LeakageDet
+
+    StimCirc --> DEM
+    StimCirc --> SyndromeStream
+
+    SyndromeStream --> CompositeDrift

@@ -103,3 +103,18 @@ class EWMADriftDetector:
         Returns:
             DriftReport with current status.
         """
+        self._sample_count += 1
+        self._history.append(detection_rates.copy())
+
+        if self._ewma is None or self._ewma.shape != detection_rates.shape:
+            self._ewma = detection_rates.copy()
+            self._baseline_mean = detection_rates.copy()
+            self._baseline_var = np.zeros_like(detection_rates)
+            self._sample_count = 1
+            self._history = [detection_rates.copy()]
+            return DriftReport(
+                status=DriftStatus.STABLE,
+                magnitude=0.0,
+                details={"message": "Initializing baseline"},
+            )
+

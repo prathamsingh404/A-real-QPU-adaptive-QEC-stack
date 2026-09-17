@@ -34,3 +34,12 @@ class TestUnionFindForest:
 
     def test_union_and_find(self):
         uf = UnionFindForest(5)
+        uf.union(0, 1)
+        assert uf.find(0) == uf.find(1)
+
+    def test_transitive_union(self):
+        uf = UnionFindForest(5)
+        uf.union(0, 1)
+        uf.union(1, 2)
+        assert uf.find(0) == uf.find(2)
+

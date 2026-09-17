@@ -141,3 +141,14 @@ class LeakageDetector:
 
             # Compute leakage confidence
             confidence = self._compute_confidence(
+                autocorr=autocorr,
+                persistence=persistence,
+                firing_rate=firing_rate,
+                total_rounds=R,
+            )
+
+            leaked.append(LeakedQubit(
+                detector_index=det_idx,
+                onset_round=onset,
+                persistence_length=persistence,
+                autocorrelation=autocorr,

@@ -188,3 +188,13 @@ class HeavyHexTopology:
         diameter = 0
         if self.num_qubits <= 500:
             for start in range(min(self.num_qubits, 20)):
+                dist = self._bfs_distances(start)
+                max_dist = max(dist.values()) if dist else 0
+                diameter = max(diameter, max_dist)
+        else:
+            # Sample a few nodes for large topologies
+            sample = np.random.choice(self.num_qubits, min(10, self.num_qubits), replace=False)
+            for start in sample:
+                dist = self._bfs_distances(int(start))
+                max_dist = max(dist.values()) if dist else 0
+                diameter = max(diameter, max_dist)

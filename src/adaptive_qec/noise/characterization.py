@@ -46,3 +46,15 @@ class NoiseProfile:
     gate_errors_2q: Optional[dict[tuple[int, int], float]] = None
 
     # From detector analysis
+    detector_stats: Optional[DetectorStatistics] = None
+    temporal_corr: Optional[TemporalCorrelation] = None
+    spatial_corr: Optional[SpatialCorrelation] = None
+
+    # Estimated noise parameters
+    estimated_physical_error_rate: Optional[float] = None
+    estimated_readout_error_rate: Optional[float] = None
+    estimated_depolarizing_rate: Optional[float] = None
+    correlated_noise_detected: bool = False
+    leakage_detected: bool = False
+
+    # Summary

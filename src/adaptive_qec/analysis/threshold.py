@@ -124,3 +124,17 @@ class ThresholdAnalyzer:
         }
 
         # Compute Wilson score 95% CI
+        n = metrics.total_shots
+        p = metrics.logical_error_rate
+        z = 1.96
+        denom = 1.0 + z**2 / n
+        center = (p + z**2 / (2 * n)) / denom
+        delta = z * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denom
+        self._results[distance]["ci_lower"] = max(0.0, float(center - delta))
+        self._results[distance]["ci_upper"] = min(1.0, float(center + delta))
+
+        logger.info(
+            f"Added d={distance}: LER={metrics.logical_error_rate:.6f} "
+            f"[{self._results[distance]['ci_lower']:.6f}, "
+            f"{self._results[distance]['ci_upper']:.6f}] "
+            f"({metrics.num_logical_errors}/{metrics.total_shots})"

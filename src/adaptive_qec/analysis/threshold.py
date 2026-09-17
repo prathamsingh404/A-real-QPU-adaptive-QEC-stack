@@ -208,3 +208,17 @@ class ThresholdAnalyzer:
         p_phys = self._results[distances[0]]["physical_error_rate"]
 
         # Filter out zero error rates (can't fit log)
+        valid = [(d, e) for d, e in zip(distances, error_rates) if e > 0]
+        if len(valid) < 2:
+            logger.warning("Too few non-zero error rates for threshold fit")
+            return ThresholdFit(
+                p_threshold=0.0,
+                A=0.0,
+                fit_residual=float("inf"),
+                distances=distances,
+                logical_error_rates=error_rates,
+                physical_error_rate=p_phys,
+                is_below_threshold=False,
+            )
+
+        d_valid = [v[0] for v in valid]

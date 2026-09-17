@@ -88,3 +88,13 @@ class DistanceSweepResults:
                 for r in self.results
             ],
         }
+
+
+class DistanceSweep:
+    """
+    Run QEC experiments across multiple code distances.
+
+    Generates surface code circuits, samples syndromes, decodes, and
+    collects metrics for threshold scaling analysis.
+    """
+

@@ -178,3 +178,18 @@ class HardwareDigitalTwin:
         Useful for qubit selection and calibration targeting.
         """
         values = []
+        for idx, state in self._qubits.items():
+            val = getattr(state, metric, 0.0)
+            values.append((idx, val))
+
+        values.sort(key=lambda x: x[1], reverse=True)
+        return [idx for idx, _ in values[:n]]
+
+    def update_leakage_from_analysis(self, analysis: Any) -> None:
+        """
+        Update per-qubit leakage probabilities from a LeakageAnalysis report.
+        """
+        for state in self._qubits.values():
+            state.leakage_probability = 0.0
+
+        for lq in getattr(analysis, "leaked_qubits", []):

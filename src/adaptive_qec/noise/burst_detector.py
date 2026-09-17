@@ -108,3 +108,13 @@ class BurstDetector:
     ) -> None:
         """
         Args:
+            window_size: Number of rounds in the sliding window.
+            significance: p-value threshold for burst detection (α).
+            min_defects_for_burst: Minimum defects in a window to trigger.
+        """
+        self.window_size = window_size
+        self.significance = significance
+        self.min_defects = min_defects_for_burst
+
+    def analyze(
+        self,

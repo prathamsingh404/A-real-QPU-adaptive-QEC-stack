@@ -33,3 +33,10 @@ def get_decoder(name: str) -> Decoder:
 
     # Lazy-register built-in decoders
     if name_lower == "mwpm" and name_lower not in _DECODERS:
+        from adaptive_qec.decoders.mwpm import MWPMDecoder
+        register_decoder("mwpm", MWPMDecoder)
+
+    if name_lower == "union_find" and name_lower not in _DECODERS:
+        from adaptive_qec.decoders.union_find import UnionFindDecoder
+        register_decoder("union_find", UnionFindDecoder)
+

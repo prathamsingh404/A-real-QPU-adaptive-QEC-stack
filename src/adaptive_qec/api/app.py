@@ -523,3 +523,38 @@ async def get_noise_characterization() -> dict[str, Any]:
 
     return {
         "source": source,
+        "num_detectors": int(stats.num_detectors),
+        "mean_detection_rate": round(float(stats.mean_detection_rate), 4),
+        "max_detection_rate": round(float(stats.max_detection_rate), 4),
+        "hotspot_detectors": [int(h) for h in stats.hotspot_detectors],
+        "temporal_lag_correlations": [round(float(c), 4) for c in temp_corr.mean_autocorrelation],
+        "significant_correlated_pairs": [[int(i), int(j), round(float(v), 4)] for i, j, v in spatial_corr.significant_pairs[:6]],
+        "drift_status": {
+            "status": "DRIFT DETECTED" if is_alarm else "STABLE",
+            "is_drift": bool(is_alarm),
+            "magnitude": round(float(magnitude), 3),
+            "affected_qubits": [int(q) for q in affected_qubits],
+            "cusum_score": round(float(magnitude), 3),
+            "ewma_value": round(float(stats.mean_detection_rate), 4),
+            "history": _DRIFT_HISTORY[-10:] if _DRIFT_HISTORY else [],
+        }
+    }
+
+
+@app.get("/api/adaptive/policy")
+async def get_adaptive_policy() -> dict[str, Any]:
+    """
+    Adaptive control & selective calibration state.
+
+    When experiment data is available, derives sensitivity ranking
+    from actual detector statistics. Otherwise returns the system's
+    default policy configuration.
+    """
+    # Derive from real experiment data when available
+    last_exp = _CURRENT_EXPERIMENT
+    has_data = bool(last_exp.get("detector_rates"))
+
+    if has_data:
+        detector_rates = last_exp.get("detector_rates", [])
+        mean_defect = last_exp.get("mean_defect_rate", 0.0)
+        latency_p99 = last_exp.get("latency_p99_us", 0.0)

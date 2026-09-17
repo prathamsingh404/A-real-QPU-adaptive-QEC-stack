@@ -110,3 +110,17 @@ class ThresholdAnalyzer:
             metrics: decoder metrics from the experiment
             physical_error_rate: the physical error rate used
         """
+        if distance % 2 == 0:
+            raise ValueError(f"Code distance must be odd, got {distance}")
+
+        self._results[distance] = {
+            "distance": distance,
+            "logical_error_rate": metrics.logical_error_rate,
+            "num_logical_errors": metrics.num_logical_errors,
+            "total_shots": metrics.total_shots,
+            "physical_error_rate": physical_error_rate,
+            "decode_time_s": metrics.decode_time_s,
+            "latency_mean_us": metrics.latency_mean_us,
+        }
+
+        # Compute Wilson score 95% CI

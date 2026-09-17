@@ -168,3 +168,13 @@ class BurstDetector:
                     total_defects - 1, expected_per_window
                 )
             else:
+                p_value = 0.0 if total_defects > 0 else 1.0
+
+            if p_value < self.significance:
+                # Burst detected — characterize it
+                affected_dets = list(np.where(window.sum(axis=0) > 0)[0])
+                spatial_radius = len(affected_dets) / max(N_d, 1)
+
+                # Temporal extent: find the actual start/end within window
+                round_activity = window.sum(axis=1)
+                active_rounds = np.where(round_activity > 0)[0]

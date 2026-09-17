@@ -168,3 +168,13 @@ class HeavyHexTopology:
     def neighbors(self, qubit: int) -> set[int]:
         """Get the neighbors of a qubit."""
         return self.adjacency.get(qubit, set())
+
+    def compute_metrics(self) -> TopologyMetrics:
+        """Compute topology metrics."""
+        degrees = list(self._degree.values())
+        if not degrees:
+            return TopologyMetrics(
+                num_qubits=0, num_edges=0, min_degree=0, max_degree=0,
+                avg_degree=0.0, degree_distribution={}, diameter=0,
+                is_heavy_hex=False,
+            )

@@ -88,3 +88,13 @@ class HeavyHexTopology:
 
         # Build adjacency
         for q1, q2 in topo.edges:
+            topo.adjacency.setdefault(q1, set()).add(q2)
+            topo.adjacency.setdefault(q2, set()).add(q1)
+
+        # Ensure all qubits are in adjacency
+        for q in range(num_qubits):
+            topo.adjacency.setdefault(q, set())
+
+        topo._degree = {q: len(neighbors) for q, neighbors in topo.adjacency.items()}
+        return topo
+

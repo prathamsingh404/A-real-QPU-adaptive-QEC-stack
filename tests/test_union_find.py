@@ -124,3 +124,12 @@ class TestDetectorGraph:
         graph = build_detector_graph(dem)
 
         boundary_edges = [e for e in graph.edges if e.is_boundary]
+        assert len(boundary_edges) > 0, "Surface code must have boundary edges"
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: UF decoder correctness
+# ---------------------------------------------------------------------------
+
+class TestUnionFindDecoder:
+    """Test the full Union-Find decoder."""

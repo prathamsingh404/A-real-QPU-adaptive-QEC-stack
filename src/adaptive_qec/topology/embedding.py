@@ -229,3 +229,14 @@ class EmbeddingFinder:
                 if neighbor not in used_physical and neighbor not in ancilla_positions:
                     ancilla_positions.append(neighbor)
                     if len(ancilla_positions) >= n_ancilla_needed:
+                        break
+            if len(ancilla_positions) >= n_ancilla_needed:
+                break
+
+        for idx, pq in enumerate(ancilla_positions):
+            row = idx // (distance - 1) if distance > 1 else 0
+            col = idx % (distance - 1) if distance > 1 else 0
+            embedding.ancilla_map[(row, col)] = pq
+
+        # Compute SWAP overhead
+        swap_count = 0

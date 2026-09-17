@@ -133,3 +133,18 @@ class EWMADriftDetector:
                 magnitude=0.0,
                 details={"message": f"Warmup: {self._sample_count}/{self._warmup}"},
             )
+
+        # Compute baseline standard deviation
+        baseline_std = np.sqrt(self._baseline_var / (self._warmup - 1))
+        baseline_std[baseline_std < 1e-8] = 1e-8  # prevent division by zero
+
+        # Compute z-scores for EWMA deviation from baseline
+        # EWMA variance is reduced by factor alpha / (2 - alpha)
+        ewma_std = baseline_std * np.sqrt(self._alpha / (2 - self._alpha))
+        z_scores = np.abs(self._ewma - self._baseline_mean) / ewma_std
+
+        # Classify drift
+        max_z = float(z_scores.max())
+        mean_z = float(z_scores.mean())
+
+        severe_dets = list(np.where(z_scores > self._severe_sigma)[0])

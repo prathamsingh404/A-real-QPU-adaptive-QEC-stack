@@ -88,3 +88,12 @@ graph TD
     StimCirc --> SyndromeStream
 
     SyndromeStream --> CompositeDrift
+    SyndromeStream --> BurstDet
+    SyndromeStream --> LeakageDet
+    LeakageDet --> RateEst
+    RateEst --> Twin
+
+    StimCirc --> IdleEst
+    IdleEst --> DDDecision
+    DDDecision --> DDPlanner
+    DDPlanner --> StimCirc

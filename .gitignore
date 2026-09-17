@@ -14,3 +14,11 @@ __pycache__/
 htmlcov/
 .tox/
 
+# Package build & distribution
+build/
+dist/
+*.egg-info/
+*.egg
+
+# IDE & OS
+.vscode/

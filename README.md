@@ -196,3 +196,12 @@ A real-QPU adaptive QEC stack/
     ├── test_threshold.py              # ThresholdAnalyzer and DistanceSweep tests
     ├── test_burst_detector.py         # BurstDetector Poisson test and drift alarms
     ├── test_leakage.py                # LeakageDetector autocorrelation and streak tests
+    ├── test_topology.py               # Heavy-hex graph metrics and embedding finder tests
+    ├── test_dd.py                     # Dynamical decoupling planner and candidate tests
+    ├── test_union_find.py             # Union-Find correctness, latency, and MWPM benchmarks
+    ├── test_decoders.py               # MWPM baseline tests and decoder registry
+    ├── test_noise.py                  # EWMA and CUSUM drift detection tests
+    ├── test_qec.py                    # Stim circuit builders and detector checks
+    └── test_qpu.py                    # Backend abstractions and mock calibrations
+```
+

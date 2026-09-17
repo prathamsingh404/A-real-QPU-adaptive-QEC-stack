@@ -187,3 +187,12 @@ A real-QPU adaptive QEC stack/
 │       │   └── codes.py               # Stim RepetitionCode and SurfaceCode with embedding
 │       ├── qpu/
 │       │   ├── base.py                # QPU abstract base class
+│       │   ├── ibm.py                 # Qiskit Runtime IBM QPU backend
+│       │   └── mock.py                # Realistic synthetic QPU simulator
+│       └── topology/
+│           ├── heavy_hex.py           # IBM heavy-hex coupling map parser and BFS paths
+│           └── embedding.py           # SurfaceCodeEmbedding and EmbeddingFinder
+└── tests/                             # 113 unit and integration tests (100% passing)
+    ├── test_threshold.py              # ThresholdAnalyzer and DistanceSweep tests
+    ├── test_burst_detector.py         # BurstDetector Poisson test and drift alarms
+    ├── test_leakage.py                # LeakageDetector autocorrelation and streak tests

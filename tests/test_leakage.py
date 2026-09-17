@@ -86,3 +86,11 @@ class TestLeakageRateEstimator:
                     autocorrelation=0.8,
                     firing_rate=0.7,
                     confidence=0.85,
+                )
+            ],
+            estimated_leakage_rate=0.001,
+        )
+
+        estimator.add_analysis(mock_analysis)
+        rates = estimator.estimate_rates()
+

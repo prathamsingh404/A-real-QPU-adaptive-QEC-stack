@@ -102,3 +102,11 @@ class TestLeakageRateEstimator:
         assert rates["p_leak_steady"] > 0
 
 
+class TestDigitalTwinLeakage:
+    """Tests for Digital Twin integration with leakage."""
+
+    def test_update_leakage_from_analysis(self):
+        twin = HardwareDigitalTwin(num_qubits=10)
+
+        analysis = LeakageAnalysis(
+            total_rounds=50,

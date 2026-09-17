@@ -12,3 +12,10 @@ from typing import Type
 
 from adaptive_qec.decoders.base import Decoder
 
+logger = logging.getLogger(__name__)
+
+_DECODERS: dict[str, Type[Decoder]] = {}
+
+
+def register_decoder(name: str, decoder_class: Type[Decoder]) -> None:
+    """Register a decoder class."""

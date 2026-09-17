@@ -82,3 +82,17 @@ class ThresholdAnalyzer:
 
     Usage:
         analyzer = ThresholdAnalyzer()
+
+        # From individual metrics
+        analyzer.add_result(distance=3, metrics=d3_metrics, p_phys=0.003)
+        analyzer.add_result(distance=5, metrics=d5_metrics, p_phys=0.003)
+        analyzer.add_result(distance=7, metrics=d7_metrics, p_phys=0.003)
+
+        # Analyze
+        fit = analyzer.fit_threshold_model()
+        lambda_val = analyzer.compute_lambda(d_low=3, d_high=5)
+    """
+
+    def __init__(self) -> None:
+        self._results: dict[int, dict[str, Any]] = {}
+

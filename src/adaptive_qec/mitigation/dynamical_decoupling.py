@@ -160,3 +160,12 @@ class AdaptiveDDPlanner:
         logger.info(
             f"DD plan: {len(schedule.protected_qubits)}/{len(idle_map)} qubits protected, "
             f"total pulses={total_pulses}, avg saving={schedule.estimated_noise_reduction:.6f}"
+        )
+        return schedule
+
+    @staticmethod
+    def estimate_idle_map_from_circuit(
+        circuit: stim.Circuit,
+        gate_duration_us: float = 0.05,
+    ) -> dict[int, float]:
+        """

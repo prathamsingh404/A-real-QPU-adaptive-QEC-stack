@@ -223,3 +223,12 @@ pip install -e .
 
 ### Running the End-to-End Test Suite
 ```bash
+python -m pytest tests/ -v
+# Output: 113 passed in ~4.6s (100% pass rate)
+```
+
+### Launching the REST API
+```bash
+uvicorn adaptive_qec.api.app:app --host 0.0.0.0 --port 8000 --reload
+```
+

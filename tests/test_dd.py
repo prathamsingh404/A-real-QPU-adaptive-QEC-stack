@@ -54,3 +54,10 @@ class TestDynamicalDecoupling:
 
     def test_cpmg_and_xy8_sequences(self):
         twin = HardwareDigitalTwin(num_qubits=2)
+        s0 = twin.get_qubit_state(0)
+        s0.t2_us = 30.0
+
+        planner = AdaptiveDDPlanner(digital_twin=twin)
+
+        # CPMG test
+        sched_cpmg = planner.plan_schedule({0: 50.0}, preferred_sequence=DDSequenceType.CPMG)

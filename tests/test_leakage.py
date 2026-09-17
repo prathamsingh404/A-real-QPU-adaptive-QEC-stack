@@ -78,3 +78,11 @@ class TestLeakageRateEstimator:
         mock_analysis = LeakageAnalysis(
             total_rounds=100,
             total_detectors=10,
+            leaked_qubits=[
+                LeakedQubit(
+                    detector_index=2,
+                    onset_round=15,
+                    persistence_length=10,
+                    autocorrelation=0.8,
+                    firing_rate=0.7,
+                    confidence=0.85,

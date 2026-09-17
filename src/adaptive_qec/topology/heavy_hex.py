@@ -158,3 +158,13 @@ class HeavyHexTopology:
         for q in range(topo.num_qubits):
             topo.adjacency.setdefault(q, set())
         topo._degree = {q: len(n) for q, n in topo.adjacency.items()}
+
+        return topo
+
+    def degree(self, qubit: int) -> int:
+        """Get the degree (number of neighbors) of a qubit."""
+        return self._degree.get(qubit, 0)
+
+    def neighbors(self, qubit: int) -> set[int]:
+        """Get the neighbors of a qubit."""
+        return self.adjacency.get(qubit, set())

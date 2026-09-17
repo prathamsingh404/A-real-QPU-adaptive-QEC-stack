@@ -151,3 +151,20 @@ class RepetitionCode(QECCode):
                         [2 * i + 1, 0, r],
                     )
                 else:
+                    # Subsequent rounds: compare to previous round
+                    circuit.append(
+                        "DETECTOR",
+                        [
+                            stim.target_rec(-(num_ancilla - i)),
+                            stim.target_rec(-(2 * num_ancilla - i)),
+                        ],
+                        [2 * i + 1, 0, r],
+                    )
+
+            circuit.append("SHIFT_COORDS", [], [0, 0, 1])
+
+        # Final data measurement
+        if p_ro > 0:
+            circuit.append("X_ERROR", data_qubits, [p_ro])
+        circuit.append("M", data_qubits)
+

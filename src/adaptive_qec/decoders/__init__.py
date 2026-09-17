@@ -10,3 +10,9 @@ __all__ = [
     "Decoder",
     "DecoderMetrics",
     "MWPMDecoder",
+    "UnionFindDecoder",
+    "UnionFindForest",
+    "get_decoder",
+    "list_decoders",
+    "register_decoder",
+]

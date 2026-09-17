@@ -108,3 +108,13 @@ class DistanceSweep:
         code_type: str = "surface",
     ) -> None:
         """
+        Args:
+            distances: Code distances to sweep. Default: [3, 5, 7]
+            rounds_per_distance: Rounds for each distance. Default: d rounds.
+            noise: Noise configuration. Default: NoiseConfig with p=0.005.
+            decoder_names: Decoders to benchmark. Default: ["mwpm"].
+            shots_per_distance: Shots per (distance, decoder) pair.
+            code_type: Code type ("surface" or "repetition").
+        """
+        self.distances = distances or [3, 5, 7]
+        self.rounds_per_distance = rounds_per_distance or {}

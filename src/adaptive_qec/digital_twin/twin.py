@@ -163,3 +163,18 @@ class HardwareDigitalTwin:
         if avg_error < p_th:
             p_logical = 0.1 * (avg_error / p_th) ** ((code_distance + 1) / 2)
         else:
+            p_logical = min(0.5, avg_error * code_distance)
+
+        return float(p_logical)
+
+    def get_qubit_state(self, qubit: int) -> Optional[QubitState]:
+        """Get the current state of a qubit."""
+        return self._qubits.get(qubit)
+
+    def get_worst_qubits(self, metric: str = "readout_error", n: int = 10) -> list[int]:
+        """
+        Find the N worst-performing qubits by a given metric.
+
+        Useful for qubit selection and calibration targeting.
+        """
+        values = []

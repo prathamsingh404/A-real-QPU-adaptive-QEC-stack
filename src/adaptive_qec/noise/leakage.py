@@ -53,3 +53,14 @@ class LeakedQubit:
             "confidence": round(self.confidence, 3),
         }
 
+
+@dataclass
+class LeakageAnalysis:
+    """Complete leakage analysis results."""
+    total_rounds: int
+    total_detectors: int
+    leaked_qubits: list[LeakedQubit] = field(default_factory=list)
+    estimated_leakage_rate: float = 0.0  # leakage events per round per qubit
+
+    def to_dict(self) -> dict[str, Any]:
+        return {

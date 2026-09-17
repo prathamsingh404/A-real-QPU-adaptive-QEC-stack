@@ -94,3 +94,11 @@ class TestLeakageRateEstimator:
         estimator.add_analysis(mock_analysis)
         rates = estimator.estimate_rates()
 
+        assert "gamma_leakage" in rates
+        assert "gamma_seepage" in rates
+        assert "p_leak_steady" in rates
+        assert rates["gamma_leakage"] > 0
+        assert pytest.approx(rates["gamma_seepage"], rel=1e-2) == 0.1  # 1 / 10 rounds
+        assert rates["p_leak_steady"] > 0
+
+

@@ -33,3 +33,10 @@ class TestBurstDetector:
 
         assert analysis.total_rounds == 20
         assert analysis.total_detectors == 8
+        assert len(analysis.bursts_detected) == 0
+        assert analysis.burst_rate_per_round == 0.0
+
+    def test_detect_cosmic_ray_burst(self):
+        """A sudden burst across many detectors should be classified as COSMIC_RAY."""
+        rng = np.random.default_rng(42)
+        syndromes = (rng.random((30, 16)) < 0.01).astype(np.uint8)

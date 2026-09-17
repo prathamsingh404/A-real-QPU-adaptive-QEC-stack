@@ -25,3 +25,12 @@ from adaptive_qec.qec.codes import create_code
 # ---------------------------------------------------------------------------
 
 class TestUnionFindForest:
+    """Test the core union-find data structure."""
+
+    def test_find_self(self):
+        uf = UnionFindForest(5)
+        for i in range(5):
+            assert uf.find(i) == i
+
+    def test_union_and_find(self):
+        uf = UnionFindForest(5)

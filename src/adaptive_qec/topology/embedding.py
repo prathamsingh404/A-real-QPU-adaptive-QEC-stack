@@ -273,3 +273,15 @@ class EmbeddingFinder:
         conn_deficit = missing / max(required_edges, 1)
 
         total = (
+            embedding._swap_count * 1.0 +
+            embedding._depth_overhead * 10.0 +
+            conn_deficit * 50.0
+        )
+
+        return EmbeddingScore(
+            swap_count=embedding._swap_count,
+            circuit_depth_overhead=embedding._depth_overhead,
+            idle_time_slots=embedding._idle_slots,
+            connectivity_deficit=conn_deficit,
+            total_score=total,
+        )

@@ -133,3 +133,12 @@ class AdaptiveDDPlanner:
         total_pulses = 0
         noise_savings = []
 
+        for qubit, idle_us in idle_map.items():
+            state = self.twin.get_qubit_state(qubit)
+            t2 = state.t2_us if state and state.t2_us > 0 else 100.0  # default 100us if unknown
+
+            # Dephasing probability during idle time: p = 1 - exp(-t / T2)
+            p_dephase = 1.0 - float(np.exp(-idle_us / max(t2, 1.0)))
+
+            # Decision rule: only apply DD if net noise improves
+            suppressed_dephase = p_dephase * self.SUPPRESSION_FACTORS[seq_type]

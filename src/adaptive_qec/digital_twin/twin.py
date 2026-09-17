@@ -103,3 +103,18 @@ class HardwareDigitalTwin:
                 state.readout_history.append((timestamp, qc.readout_error))
                 if len(state.readout_history) > 100:
                     state.readout_history = state.readout_history[-100:]
+
+            if qc.single_qubit_gate_error is not None:
+                state.single_qubit_fidelity = 1.0 - qc.single_qubit_gate_error
+
+        # Update gate fidelities
+        for gc in calibration.gate_calibrations:
+            if len(gc.qubits) == 2 and gc.error is not None:
+                q1, q2 = gc.qubits
+                if q1 in self._qubits:
+                    self._qubits[q1].two_qubit_fidelities[q2] = 1.0 - gc.error
+                if q2 in self._qubits:
+                    self._qubits[q2].two_qubit_fidelities[q1] = 1.0 - gc.error
+
+        self._topology = calibration.coupling_map
+        self._update_count += 1

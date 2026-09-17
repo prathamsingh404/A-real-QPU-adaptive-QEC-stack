@@ -13,3 +13,8 @@ The goal of this project transcends standard academic exercises or superficial t
 - **Commitment to Technical Excellence**: Reaching a level of technical depth where one can work on genuinely difficult, high-impact problems across quantum computing, hardware, HPC, and AI, contributing to research that pushes the field forward.
 
 ### 1.2 Hardware Context: IBM Heron r2 (`ibm_marrakesh`)
+- **Processor architecture**: Heron revision 2, 156 superconducting transmon qubits arranged in a **heavy-hexagonal lattice**.
+- **Coupling constraints**: Average vertex degree $\approx 2.1$, maximum degree 3. Qubits are categorized into data/code vertices and intermediate edge/coupler qubits.
+- **Calibration baselines**:
+  - Median $T_1 \approx 188.5\ \mu\text{s}$, median $T_2 \approx 130.4\ \mu\text{s}$
+  - Single-qubit gate error ($SX, X$) $\approx 2.4 \times 10^{-4}$

@@ -43,3 +43,8 @@ The goal of this project transcends standard academic exercises or superficial t
 ### Problem 2: Correlated Error Burst Detection (Cosmic Rays & Quasiparticle Poisoning)
 * **Why it matters**: Standard fault-tolerant QEC theory assumes independent, identically distributed (i.i.d.) Pauli errors. Experiments by Google Quantum AI (Nature 2025, Willow processor) and IBM show that high-energy ionizing radiation (cosmic ray muons, environmental radioactivity) causes localized energy absorption in the substrate. This breaks superconducting Cooper pairs, generating cascades of quasiparticles and phonon avalanches that temporarily degrade $T_1$ across dozens of qubits simultaneously.
 * **The Detection Theory**:
+  - We model the syndrome detection events $S \in \{0, 1\}^{R \times N_d}$ across $R$ rounds and $N_d$ detectors.
+  - Under $H_0$ (independent errors), the defect count in a sliding time window $w$ follows a Binomial distribution $\text{Binom}(w \cdot N_d, p_0)$, approximated as $\text{Poisson}(\lambda = w \cdot N_d \cdot p_0)$.
+  - When a burst occurs, the defect count spikes with $p$-value $< 10^{-3}$:
+    $$P(k \ge K \mid \lambda) = 1 - \sum_{i=0}^{K-1} \frac{\lambda^i e^{-\lambda}}{i!}$$
+  - We classify bursts into:

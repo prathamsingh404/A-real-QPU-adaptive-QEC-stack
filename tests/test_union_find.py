@@ -142,3 +142,12 @@ class TestUnionFindDecoder:
 
         decoder = UnionFindDecoder()
         decoder.configure(circuit=circuit)
+        assert decoder.name == "union_find"
+
+    def test_configure_from_dem(self):
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+        dem = circuit.detector_error_model(decompose_errors=True)
+

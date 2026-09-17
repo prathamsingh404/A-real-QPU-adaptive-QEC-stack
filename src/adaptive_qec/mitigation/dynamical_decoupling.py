@@ -106,3 +106,12 @@ class AdaptiveDDPlanner:
             single_qubit_pulse_error: Estimated error per DD pulse (1Q X/Y gate).
             default_sequence: Default candidate sequence when DD is beneficial.
         """
+        self.twin = digital_twin or HardwareDigitalTwin(num_qubits=156)
+        self.pulse_error = single_qubit_pulse_error
+        self.default_sequence = default_sequence
+
+    def plan_schedule(
+        self,
+        idle_map: dict[int, float],
+        preferred_sequence: Optional[DDSequenceType] = None,
+    ) -> DDSchedule:

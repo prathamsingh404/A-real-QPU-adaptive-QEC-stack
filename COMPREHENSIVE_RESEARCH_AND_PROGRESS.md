@@ -78,3 +78,8 @@ The goal of this project transcends standard academic exercises or superficial t
 * **Why it matters**: Minimum-Weight Perfect Matching (MWPM) via Edmonds' blossom algorithm scales as $O(N^3)$, or $O(N^2 \log N)$ with localized heuristics. For distance $d \ge 7$ in real-time control (where the decoder must return corrections within the qubit coherence time $\sim 10\ \mu\text{s}$), MWPM is latency-prohibitive. Delfosse & Nickerson (Quantum 2021) introduced the Union-Find decoder, which runs in almost-linear time:
   $$\mathcal{O}(N \cdot \alpha(N))$$
 * **The Physics & Algorithmic Breakthroughs**:
+  1. **DEM Target Separator Decomposition**: Stim error instructions contain `^` (decomposed targets). Flat indexing mistakenly groups unrelated error mechanisms. Parsing target separators decomposes complex hyperedges into clean graph components and combines parallel edges with exact log-odds: $p_{\text{comb}} = p_1 + p_2 - 2p_1 p_2$.
+  2. **Cluster Radius Matching Formulation**:
+     In Union-Find, active defect clusters grow outward at unit velocity. Two defect clusters growing towards each other meet when their combined radii equal the shortest path distance:
+     $$r(d_i, d_j) = \frac{1}{2} D(d_i, d_j)$$
+     However, the boundary node is static (does not grow). A defect cluster must grow the full distance to reach the boundary:

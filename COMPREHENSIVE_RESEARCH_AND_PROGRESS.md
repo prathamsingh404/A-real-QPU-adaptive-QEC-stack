@@ -68,3 +68,8 @@ The goal of this project transcends standard academic exercises or superficial t
 * **What We Built**:
   - `src/adaptive_qec/mitigation/dynamical_decoupling.py`: `AdaptiveDDPlanner` and `DDSchedule` supporting `CPMG` (2 pulses), `XY4` (4 pulses), and `XY8` (8 pulses).
   - Inspects circuit structure to estimate per-qubit idle durations via `estimate_idle_map_from_circuit`.
+  - Queries the hardware digital twin to compare per-qubit $T_2$ and single-qubit pulse error, generating per-qubit selective schedules.
+  - `apply_dd_to_circuit`: Constructs protected Stim circuits with dephasing noise suppression.
+  - `src/adaptive_qec/digital_twin/twin.py`: Added `get_dd_candidates` method to identify qubits requiring protection.
+
+---

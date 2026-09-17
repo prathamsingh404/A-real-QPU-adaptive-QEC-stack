@@ -283,3 +283,18 @@ class CUSUMDriftDetector:
         self._s_minus = np.maximum(0, self._s_minus - z - k)
 
         # Check for threshold crossings
+        cusum_values = np.maximum(self._s_plus, self._s_minus)
+        max_cusum = float(cusum_values.max())
+
+        alarm_dets = list(np.where(cusum_values > self._threshold)[0])
+
+        if len(alarm_dets) > 0:
+            status = DriftStatus.DRIFT_DETECTED
+            # Reset CUSUM for alarmed detectors
+            self._s_plus[alarm_dets] = 0
+            self._s_minus[alarm_dets] = 0
+        else:
+            status = DriftStatus.STABLE
+
+        return DriftReport(
+            status=status,

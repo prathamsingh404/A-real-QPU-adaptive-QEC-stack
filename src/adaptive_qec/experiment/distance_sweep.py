@@ -138,3 +138,13 @@ class DistanceSweep:
         results = DistanceSweepResults(
             noise_config={
                 "two_qubit": self.noise.gate.two_qubit,
+            },
+        )
+
+        t_total_start = time.perf_counter()
+        p_phys = self.noise.gate.two_qubit
+
+        for d in sorted(self.distances):
+            rounds = self.rounds_per_distance[d]
+            logger.info(f"=== Distance {d}, {rounds} rounds, {self.shots} shots ===")
+

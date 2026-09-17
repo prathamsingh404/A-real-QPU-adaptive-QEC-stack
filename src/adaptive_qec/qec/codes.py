@@ -321,3 +321,22 @@ def create_code(code_type: str, distance: int, rounds: int) -> QECCode:
     """
     Factory function to create a QEC code.
 
+    Args:
+        code_type: "repetition" or "surface"
+        distance: Code distance (must be odd, >= 3)
+        rounds: Number of QEC rounds
+
+    Returns:
+        QECCode instance.
+    """
+    codes = {
+        "repetition": RepetitionCode,
+        "surface": SurfaceCode,
+    }
+
+    if code_type not in codes:
+        raise ValueError(
+            f"Unknown code type '{code_type}'. Available: {list(codes.keys())}"
+        )
+
+    return codes[code_type](distance=distance, rounds=rounds)

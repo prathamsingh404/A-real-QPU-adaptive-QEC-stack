@@ -18,3 +18,8 @@ The goal of this project transcends standard academic exercises or superficial t
 - **Calibration baselines**:
   - Median $T_1 \approx 188.5\ \mu\text{s}$, median $T_2 \approx 130.4\ \mu\text{s}$
   - Single-qubit gate error ($SX, X$) $\approx 2.4 \times 10^{-4}$
+  - Two-qubit gate error (ECR / native two-qubit pulse) $\approx 3.02 \times 10^{-3}$
+  - Readout error $\approx 1.2 \times 10^{-2}$
+- **Primary hardware mismatch**: Topological surface codes require a 2D square grid connectivity graph with degree-4 data qubits and degree-4 ancillas. Mapping this onto heavy-hex requires bridge routing, SWAP insertion, or fold-unfold embeddings that introduce idle-time windows where noise accumulates.
+
+---

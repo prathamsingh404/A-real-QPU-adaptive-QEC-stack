@@ -54,3 +54,17 @@ logger = logging.getLogger(__name__)
 class UnionFindForest:
     """
     Weighted union-find (disjoint set) with observable XOR tracking.
+
+    Each node stores obs_to_parent: the XOR of observables along the
+    path from this node to its parent. Path compression maintains this
+    invariant by accumulating XORs during find().
+
+    Supports:
+        - find(x): root + obs_to_root, amortized O(α(N))
+        - union(x, y, edge_obs): amortized O(α(N))
+        - cluster parity and boundary tracking
+    """
+
+    def __init__(self, n: int, n_obs: int = 1) -> None:
+        self.n = n
+        self.n_obs = n_obs

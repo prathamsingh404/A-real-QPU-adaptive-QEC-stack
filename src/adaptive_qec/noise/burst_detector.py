@@ -188,3 +188,13 @@ class BurstDetector:
                 duration = t_end - t_start + 1
                 severity = float(total_defects / max(expected_per_window, 1e-6))
 
+                # Heuristic classification
+                burst_type, confidence = self._classify_burst(
+                    spatial_radius=spatial_radius,
+                    duration=duration,
+                    severity=severity,
+                    total_defects=total_defects,
+                    window=window,
+                )
+
+                burst = BurstEvent(

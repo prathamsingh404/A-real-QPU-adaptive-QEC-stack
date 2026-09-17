@@ -124,3 +124,12 @@ graph TD
 * **Physics Context**: When high-energy ionizing radiation (cosmic ray muons, substrate trace radioactivity) strikes the silicon substrate, it deposits mega-electronvolts of energy. This phonon avalanche breaks superconducting Cooper pairs into quasiparticles, temporarily collapsing $T_1$ coherence across dozens of physical transmons simultaneously.
 * **Detection Formalism**:
   $$\text{Poisson Test}: \quad P(k \ge K \mid \lambda = w \cdot N_d \cdot p_0) = 1 - \sum_{i=0}^{K-1} \frac{\lambda^i e^{-\lambda}}{i!}$$
+* **Engineering Solution**: `adaptive_qec.noise.burst_detector.BurstDetector` continuously evaluates sliding syndrome windows, classifies events into `COSMIC_RAY`, `QP_POISONING`, or `CROSSTALK`, triggers `DriftStatus.BURST_EVENT` in `CompositeDriftDetector`, and enables `MWPMDecoder.decode_burst_aware` for masked logical recovery.
+
+### Problem 3: Syndrome-Based Leakage Characterization
+* **Physics Context**: Transmons are weakly anharmonic oscillators ($\alpha \approx -300\ \text{MHz}$). Fast microwave gates can induce transitions outside the computational subspace $\{|0\rangle, |1\rangle\}$ into $|2\rangle$. A leaked transmon produces persistent, repeated syndrome defects across consecutive rounds.
+* **Mathematical Estimator**:
+  $$R(1) = \frac{\sum_{t=1}^{R-1} (s_t - \bar{s})(s_{t+1} - \bar{s})}{(R-1)\sigma^2}, \qquad \gamma_S \approx \frac{1}{\langle \text{streak length} \rangle}, \qquad p_{\text{leak}}^{\text{steady}} = \frac{\gamma_L}{\gamma_L + \gamma_S}$$
+* **Engineering Solution**: `adaptive_qec.noise.leakage.LeakageDetector` and `LeakageRateEstimator`. Integrates with `NoiseCharacterizer` and updates `HardwareDigitalTwin` qubit state vectors.
+
+### Problem 4: Linear-Time Union-Find Decoder ($O(N \alpha(N))$)

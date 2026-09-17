@@ -128,3 +128,33 @@ def check(config: str) -> None:
 
     try:
         cfg = load_config(config)
+        click.echo(f"✓ Config valid: {config}")
+        click.echo(f"  Backend:  {cfg.hardware.backend}")
+        click.echo(f"  Channel:  {cfg.hardware.channel}")
+        click.echo(f"  Qubits:   {cfg.hardware.qubits}")
+        click.echo(f"  Code:     {cfg.qec.code.value} d={cfg.qec.distance}")
+        click.echo(f"  Token:    {'SET' if cfg.hardware.api_token else 'MISSING'}")
+        click.echo(f"  Instance: {'SET' if cfg.hardware.instance else 'MISSING'}")
+
+        if not cfg.hardware.api_token:
+            click.echo("\n⚠  IBM_QUANTUM_TOKEN not set. Add it to .env or export it.")
+            sys.exit(1)
+
+        if cfg.hardware.channel == "ibm_cloud" and not cfg.hardware.instance:
+            click.echo("\n⚠  IBM_QUANTUM_INSTANCE not set. Required for ibm_cloud channel.")
+            sys.exit(1)
+
+        click.echo("\n✓ All checks passed.")
+
+    except Exception as e:
+        click.echo(f"✗ Config error: {e}")
+        sys.exit(1)
+
+
+def main() -> None:
+    """Entry point for the aqec CLI."""
+    cli()
+
+
+if __name__ == "__main__":
+    main()

@@ -16,3 +16,9 @@ from adaptive_qec.topology.heavy_hex import HeavyHexTopology, TopologyMetrics
 class TestHeavyHexTopology:
     """Tests for HeavyHexTopology class."""
 
+    def test_from_coupling_map(self):
+        # A simple hex cell: 0-1-2-3-4-5-0
+        edges = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0]]
+        topo = HeavyHexTopology.from_coupling_map(edges, num_qubits=6)
+
+        assert topo.num_qubits == 6

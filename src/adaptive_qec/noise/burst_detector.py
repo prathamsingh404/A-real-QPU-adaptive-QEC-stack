@@ -228,3 +228,13 @@ class BurstDetector:
             baseline_defect_rate=baseline_rate,
             bursts_detected=bursts,
             burst_rate_per_round=burst_rate,
+        )
+
+    @staticmethod
+    def _classify_burst(
+        spatial_radius: float,
+        duration: int,
+        severity: float,
+        total_defects: int,
+        window: np.ndarray,
+    ) -> tuple[BurstType, float]:

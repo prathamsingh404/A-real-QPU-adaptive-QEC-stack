@@ -248,3 +248,13 @@ class BurstDetector:
               (>3 rounds), moderate severity
             - Crosstalk: moderate spatial extent, specific geometric pattern
 
+        Returns:
+            (burst_type, confidence)
+        """
+        confidence = 0.5  # Default moderate confidence
+
+        if spatial_radius > 0.3 and duration <= 2:
+            # Wide spatial, sharp temporal → cosmic ray
+            confidence = min(0.9, 0.5 + 0.2 * severity)
+            return BurstType.COSMIC_RAY, confidence
+

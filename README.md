@@ -259,3 +259,24 @@ To execute adaptive QEC circuits directly on IBM Quantum hardware (`ibm_marrakes
        channel="ibm_cloud",
        token="WHQiem5SJ0-iTLZBqPs10H1gNfTxFcE6lbobBRoLVVMI",
        instance="crn:v1:bluemix:public:quantum-computing:us-east:a/8ae29ae2e0204424ab76bf7397315239:5031eafb-df34-4dd9-8912-1fb14dc9b74f::",
+       backend_name="ibm_marrakesh"
+   )
+
+   # Extract physical heavy-hex topology
+   topo = HeavyHexTopology.from_backend(backend)
+   finder = EmbeddingFinder(topo)
+   embedding = finder.find_embedding(distance=3)
+
+   # Generate heavy-hex routed Stim circuit
+   code = create_code("surface", distance=3, rounds=3)
+   circuit = code.generate_circuit(embedding=embedding)
+   ```
+
+---
+
+## 6. Scientific Publications & References
+* Delfosse & Nickerson, *"Almost-linear time decoding of topological codes"*, Quantum 5, 595 (2021).
+* Fowler et al., *"Surface codes: Towards practical large-scale quantum computation"*, Phys. Rev. A 86, 032324 (2012).
+* Google Quantum AI, *"Quantum error correction below the surface code threshold"*, Nature 614, 676–681 (2023).
+* Google Quantum AI, *"Suppressing quantum errors by scaling a quantum error-correcting code"*, Nature 638, (Willow processor, 2025).
+* Chamberland et al., *"Topological and subsystem codes on low-degree graphs with flag qubits"*, PRX Quantum 1, 020302 (2020).

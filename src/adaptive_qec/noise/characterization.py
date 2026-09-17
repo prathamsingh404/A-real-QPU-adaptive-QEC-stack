@@ -166,3 +166,15 @@ class NoiseCharacterizer:
         if calibration:
             profile.t1_values = calibration.t1_values()
             profile.t2_values = calibration.t2_values()
+            profile.readout_errors = calibration.readout_errors()
+
+            # Average readout error
+            re = profile.readout_errors
+            profile.estimated_readout_error_rate = float(re[re > 0].mean()) if np.any(re > 0) else 0.0
+
+            # Extract 2Q gate errors
+            profile.gate_errors_2q = {}
+            for gc in calibration.gate_calibrations:
+                if len(gc.qubits) == 2 and gc.error is not None:
+                    profile.gate_errors_2q[gc.qubits] = gc.error
+

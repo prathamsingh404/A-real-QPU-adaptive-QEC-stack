@@ -54,3 +54,10 @@ class TestBurstDetector:
         assert burst.severity > 2.0
         assert burst.p_value < 0.001
 
+    def test_detect_qp_poisoning_burst(self):
+        """A persistent localized burst should be classified as QP_POISONING."""
+        rng = np.random.default_rng(42)
+        syndromes = (rng.random((30, 16)) < 0.01).astype(np.uint8)
+
+        # Inject localized burst on only 2 detectors across 6 consecutive rounds (12..17)
+        syndromes[12:18, 0:2] = 1

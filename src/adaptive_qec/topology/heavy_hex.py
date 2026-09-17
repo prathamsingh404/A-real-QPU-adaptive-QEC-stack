@@ -108,3 +108,13 @@ class HeavyHexTopology:
             edges = []
             for qargs in target.qargs:
                 if len(qargs) == 2:
+                    edges.append(list(qargs))
+            num_qubits = target.num_qubits
+            return cls.from_coupling_map(edges, num_qubits)
+        except AttributeError:
+            # Fallback: try coupling_map attribute
+            cm = backend.configuration().coupling_map
+            n = backend.configuration().n_qubits
+            return cls.from_coupling_map(cm, n)
+
+    @classmethod

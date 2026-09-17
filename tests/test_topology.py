@@ -76,3 +76,16 @@ class TestEmbeddingFinder:
         assert d_dict["distance"] == 3
         assert d_dict["num_data_qubits"] == 9
 
+    def test_surface_code_circuit_with_embedding(self):
+        topo = HeavyHexTopology.synthetic(rows=6, cols=6)
+        finder = EmbeddingFinder(topo)
+        embedding = finder.find_embedding(distance=3)
+
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+
+        circuit = code.generate_circuit(noise=noise, embedding=embedding)
+        assert isinstance(circuit, stim.Circuit)
+        assert circuit.num_detectors > 0
+        assert circuit.num_observables == 1

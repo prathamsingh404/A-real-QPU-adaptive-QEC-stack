@@ -143,3 +143,8 @@ All 113 unit and integration tests across all 10 test modules execute and pass w
 | `tests/test_dd.py` | CPMG/XY4/XY8 Sequences, Idle Window Profiling, Selective Threshold Rule | 3 | **PASSED** |
 | `tests/test_union_find.py` | DEM Separator Decomposition, Radius Matching, UF Latency, MWPM Error Ratio | 18 | **PASSED** |
 | `tests/test_decoders.py` | PyMatching MWPM Correctness, Distance Scaling, Latency Percentiles, Registry | 7 | **PASSED** |
+| `tests/test_noise.py` | EWMA Filtering, CUSUM Change-Point Alarms, Hotspot Detectors, Correlation | 9 | **PASSED** |
+| `tests/test_qec.py` | Repetition & Surface Code Stim Circuit Generation, Detector Scaling, Noise Models | 11 | **PASSED** |
+| `tests/test_qpu.py` | IBMQPUBackend Abstractions, Mock QPU Calibrations, Registry Lookup | 6 | **PASSED** |
+| `tests/test_syndrome.py` | Syndrome Bit Extraction, Stim Sampling, Detector Records, Noise Injection | 7 | **PASSED** |
+| `tests/test_config.py` & `test_experiment.py` | Pydantic v2 Schema Validation, Experiment Persistence & Serialization | 19 | **PASSED** |

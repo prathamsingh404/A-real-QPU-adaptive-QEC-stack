@@ -26,3 +26,10 @@ def _mock_metrics(shots: int, errors: int, latency_us: float = 5.0) -> DecoderMe
         latency_p50_us=latency_us,
         latency_p95_us=latency_us,
         latency_p99_us=latency_us,
+        latency_p999_us=latency_us,
+        throughput_shots_per_s=10000.0,
+        peak_memory_mb=1.5,
+    )
+
+
+class TestThresholdAnalyzer:

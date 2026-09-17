@@ -118,3 +118,16 @@ class TestDigitalTwinLeakage:
                     persistence_length=20,
                     autocorrelation=0.75,
                     firing_rate=0.8,
+                    confidence=0.9,
+                )
+            ],
+        )
+
+        twin.update_leakage_from_analysis(analysis)
+        q3 = twin.get_qubit_state(3)
+        assert q3 is not None
+        assert q3.leakage_probability == 0.9
+
+        q1 = twin.get_qubit_state(1)
+        assert q1 is not None
+        assert q1.leakage_probability == 0.0

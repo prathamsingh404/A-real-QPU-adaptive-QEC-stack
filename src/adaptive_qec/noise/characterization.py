@@ -82,3 +82,15 @@ class NoiseProfile:
             }
 
         if self.temporal_corr:
+            d["temporal_correlation"] = {
+                "mean_lag1_correlation": (
+                    float(self.temporal_corr.mean_autocorrelation[0])
+                    if len(self.temporal_corr.mean_autocorrelation) > 0
+                    else 0.0
+                ),
+                "num_persistent_detectors": len(self.temporal_corr.persistence_detectors),
+            }
+
+        if self.spatial_corr:
+            d["spatial_correlation"] = {
+                "num_significant_pairs": len(self.spatial_corr.significant_pairs),

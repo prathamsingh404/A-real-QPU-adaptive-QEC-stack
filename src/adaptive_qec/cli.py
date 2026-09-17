@@ -76,3 +76,29 @@ def run(config: str, shots: int | None, distances: str | None, temporal: int | N
                 f"[{r.logical_error_rate_ci_low:.6f}, {r.logical_error_rate_ci_high:.6f}]"
             )
 
+    elif temporal:
+        logger.info(f"Running temporal series: {temporal} experiments")
+        results = manager.run_temporal_series(
+            num_experiments=temporal,
+            interval_seconds=interval,
+            shots=shots,
+        )
+
+        logger.info("\n=== TEMPORAL SERIES RESULTS ===")
+        for i, r in enumerate(results):
+            logger.info(
+                f"  Experiment {i+1}: LER={r.logical_error_rate:.6f}, "
+                f"drift={r.drift_report.get('status', 'unknown')}"
+            )
+
+    else:
+        metrics = manager.run_experiment(shots=shots)
+        logger.info(
+            f"\nResult: LER = {metrics.logical_error_rate:.6f} "
+            f"[{metrics.logical_error_rate_ci_low:.6f}, "
+            f"{metrics.logical_error_rate_ci_high:.6f}]"
+        )
+
+
+@cli.command()
+@click.option("--host", default="0.0.0.0", help="Host to bind to")

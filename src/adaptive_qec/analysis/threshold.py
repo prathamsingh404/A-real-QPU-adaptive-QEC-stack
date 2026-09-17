@@ -54,3 +54,17 @@ class ThresholdFit:
     # Input data
     distances: list[int]
     logical_error_rates: list[float]
+    physical_error_rate: float
+
+    # Derived
+    lambda_ratios: dict[str, float] = field(default_factory=dict)
+    is_below_threshold: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-serializable representation."""
+        return {
+            "p_threshold": round(self.p_threshold, 6),
+            "A": round(self.A, 6),
+            "fit_residual": round(self.fit_residual, 8),
+            "distances": self.distances,
+            "logical_error_rates": [round(r, 6) for r in self.logical_error_rates],

@@ -93,3 +93,8 @@ The goal of this project transcends standard academic exercises or superficial t
   - Registered in `src/adaptive_qec/decoders/registry.py`.
   - Replaced projected metrics with measured real-time UF execution in `/api/decoders/benchmark`.
 
+---
+
+### Problem 5: Fault-Tolerant Threshold Scaling Analysis ($\Lambda$ Ratio)
+* **Why it matters**: A quantum system is only fault-tolerant if increasing the code distance $d$ suppresses the logical error rate $p_L$. The key figure of merit is the **Lambda ratio**:
+  $$\Lambda = \frac{p_L(d)}{p_L(d+2)}$$

@@ -218,3 +218,14 @@ class EmbeddingFinder:
         for idx, pq in enumerate(data_positions):
             row = idx // distance
             col = idx % distance
+            embedding.data_map[(row, col)] = pq
+
+        # Find ancilla positions: neighbors of data qubits not yet used
+        ancilla_positions: list[int] = []
+        n_ancilla_needed = 2 * (distance - 1) * distance  # X and Z stabilizers
+
+        for pq in data_positions:
+            for neighbor in self.topology.neighbors(pq):
+                if neighbor not in used_physical and neighbor not in ancilla_positions:
+                    ancilla_positions.append(neighbor)
+                    if len(ancilla_positions) >= n_ancilla_needed:

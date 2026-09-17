@@ -236,3 +236,17 @@ class ThresholdAnalyzer:
 
         try:
             popt, _ = optimize.curve_fit(
+                model,
+                np.array(d_valid, dtype=float),
+                np.array(e_valid, dtype=float),
+                p0=[0.1, 0.01],
+                bounds=([1e-10, 1e-6], [10.0, 0.5]),
+                maxfev=5000,
+            )
+            A_fit, p_th_fit = popt
+
+            # Compute residual
+            predicted = model(np.array(d_valid, dtype=float), A_fit, p_th_fit)
+            residual = float(np.sum((np.array(e_valid) - predicted) ** 2))
+
+        except (RuntimeError, ValueError) as e:

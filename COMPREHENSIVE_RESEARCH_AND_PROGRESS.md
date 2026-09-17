@@ -53,3 +53,8 @@ The goal of this project transcends standard academic exercises or superficial t
     3. `CROSSTALK`: Periodic spatial defect pattern, short temporal duration.
 * **What We Built**:
   - `src/adaptive_qec/noise/burst_detector.py`: `BurstDetector` implementing sliding-window Poisson tests, temporal boundary localization, and heuristic classification (`BurstEvent`, `BurstAnalysis`).
+  - `src/adaptive_qec/noise/drift.py`: Integrated `BurstDetector` into `CompositeDriftDetector` alongside EWMA and CUSUM, with a dedicated `DriftStatus.BURST_EVENT` high-priority alarm state.
+  - `src/adaptive_qec/decoders/mwpm.py`: Implemented `decode_burst_aware`, which isolates and masks burst-corrupted detector spikes to evaluate logical error suppression.
+
+---
+

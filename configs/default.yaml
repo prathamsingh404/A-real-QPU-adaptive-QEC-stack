@@ -3,94 +3,10 @@
 # ============================================================================
 # This is the master configuration template. Copy and customize per experiment.
 #
+# Credentials are loaded from .env file (see .env.example).
+#
 # Environment variable overrides:
 #   AQEC_HARDWARE__PROVIDER=ibm
-#   AQEC_HARDWARE__BACKEND=ibm_brisbane
+#   AQEC_HARDWARE__BACKEND=ibm_marrakesh
 #   AQEC_QEC__DISTANCE=5
 # ============================================================================
-
-hardware:
-  provider: ibm                    # ibm | iqm | quantinuum | simulator
-  backend: ibm_brisbane            # specific backend name
-  qubits: 127                     # total qubits on device
-  topology: heavy_hex             # heavy_hex | square | other
-  api_token_env: IBM_QUANTUM_TOKEN  # env var holding the API token
-
-qec:
-  code: surface                   # repetition | surface | color | qldpc
-  distance: 3                     # code distance: 3, 5, 7, ...
-  rounds: 3                      # QEC rounds: 1, 3, 5, 10, ...
-  logical_basis: Z                # Z | X
-  boundary: planar               # planar | toric
-
-noise:
-  readout:
-    enabled: true
-    p0_given_1: 0.01              # P(measure 0 | state 1)
-    p1_given_0: 0.005             # P(measure 1 | state 0)
-  gate:
-    single_qubit: 0.001           # single-qubit gate error rate
-    two_qubit: 0.01               # two-qubit gate error rate
-    model: depolarizing           # depolarizing | pauli | custom
-  correlated:
-    enabled: false
-    spatial_range: 1              # nearest-neighbor range
-    strength: 0.001               # correlation strength
-  leakage:
-    enabled: false
-    rate: 0.001                   # leakage probability per gate
-    seepage: 0.01                 # seepage back probability
-  drift:
-    enabled: true
-    model: linear                 # linear | sinusoidal | random_walk
-    rate: 0.0001                  # drift rate per second
-    monitoring_window: 100        # number of experiments to track
-
-decoder:
-  baseline: mwpm                  # mwpm (PyMatching)
-  ml:
-    enabled: false
-    model: cnn                    # cnn | gnn | transformer
-    checkpoint: null              # path to model weights
-    batch_size: 256
-  adaptive:
-    enabled: false
-    noise_estimation: true
-    routing: false
-    uncertainty: false
-
-runtime:
-  cpu:
-    threads: 4
-    affinity: false
-  gpu:
-    enabled: false
-    device: 0
-    backend: pytorch              # pytorch | tensorrt | cuda
-  batch_size: 1000                # number of syndromes per batch
-  latency_budget:
-    deadline_us: 1000             # microseconds per QEC round
-    warning_threshold: 0.8        # fraction of deadline to trigger WARNING
-    tracking: true
-
-experiment:
-  output_dir: experiments
-  shots: 10000                    # shots per circuit execution
-  repetitions: 1                  # number of times to repeat experiment
-  save_raw: true                  # save individual shot outcomes
-  save_circuits: true             # save QASM circuits
-  save_calibration: true          # save calibration snapshot
-  save_plots: true                # auto-generate plots
-  name_template: "{code}_d{distance}_r{rounds}_{backend}_{timestamp}"
-
-data:
-  storage_backend: filesystem     # filesystem | postgresql
-  base_path: experiments          # base directory for experiment data
-  compression: false              # compress raw data
-  format: json                   # json | parquet | hdf5
-
-analysis:
-  confidence_level: 0.95          # for confidence intervals
-  min_shots: 1000                 # minimum shots for statistical validity
-  bootstrap_samples: 10000        # bootstrap resampling count
-  hypothesis_test: two_sided     # two_sided | one_sided

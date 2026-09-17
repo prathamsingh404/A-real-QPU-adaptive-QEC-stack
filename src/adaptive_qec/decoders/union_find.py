@@ -138,3 +138,17 @@ class UnionFindForest:
         root = self.find(x)
         return (self.parity[root] % 2 == 0) or bool(self.boundary_connected[root])
 
+
+# ---------------------------------------------------------------------------
+# Graph representation
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DetectorEdge:
+    """An edge in the detector graph."""
+    u: int
+    v: int
+    weight: float
+    observables: int  # bitmask
+    is_boundary: bool = False
+

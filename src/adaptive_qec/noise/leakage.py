@@ -196,3 +196,14 @@ class LeakageDetector:
     def _longest_streak(trace: np.ndarray) -> tuple[int, int]:
         """
         Find the longest consecutive run of 1s.
+
+        Returns:
+            (streak_length, onset_index)
+        """
+        max_streak = 0
+        max_onset = 0
+        current_streak = 0
+        current_onset = 0
+
+        for i, val in enumerate(trace):
+            if val > 0:

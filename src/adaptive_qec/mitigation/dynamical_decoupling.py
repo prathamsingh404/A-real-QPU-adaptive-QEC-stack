@@ -196,3 +196,12 @@ class AdaptiveDDPlanner:
         return idle_map
 
     def apply_dd_to_circuit(
+        self,
+        circuit: stim.Circuit,
+        schedule: DDSchedule,
+    ) -> stim.Circuit:
+        """
+        Return a modified Stim circuit reflecting DD protection.
+
+        For protected qubits, dephasing noise during idle windows is suppressed
+        by the factor corresponding to the selected sequence, while inserting

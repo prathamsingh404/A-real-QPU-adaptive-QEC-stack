@@ -383,3 +383,38 @@ async def benchmark_decoders(req: BenchmarkRequest) -> dict[str, Any]:
     router_throughput = round(m_metrics.throughput_shots_per_s * 2.15, 0)
 
     return {
+        "distance": req.distance,
+        "rounds": req.rounds,
+        "shots": req.shots,
+        "decoders": [
+            {
+                "name": "MWPM (PyMatching)",
+                "source": "measured",
+                "category": "Baseline Graph",
+                "accuracy": round((1.0 - m_metrics.logical_error_rate) * 100, 2),
+                "logical_error_rate": round(m_metrics.logical_error_rate, 4),
+                "latency_mean_us": round(m_metrics.latency_mean_us, 2),
+                "latency_p99_us": round(m_metrics.latency_p99_us, 2),
+                "throughput_shots_per_s": round(m_metrics.throughput_shots_per_s, 0),
+                "memory_mb": round(m_metrics.peak_memory_mb, 2),
+                "scaling": "O(N^3)",
+            },
+            {
+                "name": "Union-Find (UF)",
+                "source": "measured",
+                "category": "Fast Heuristic",
+                "accuracy": round((1.0 - uf_metrics.logical_error_rate) * 100, 2),
+                "logical_error_rate": round(uf_metrics.logical_error_rate, 4),
+                "latency_mean_us": round(uf_metrics.latency_mean_us, 2),
+                "latency_p99_us": round(uf_metrics.latency_p99_us, 2),
+                "throughput_shots_per_s": round(uf_metrics.throughput_shots_per_s, 0),
+                "memory_mb": round(uf_metrics.peak_memory_mb, 2),
+                "scaling": "O(N alpha(N))",
+            },
+            {
+                "name": "ML Predecoder (CNN)",
+                "source": "projected",
+                "projection_basis": "Chamberland et al. 2022",
+                "category": "Neural + Residual MWPM",
+                "accuracy": round((1.0 - ml_error_rate) * 100, 2),
+                "logical_error_rate": ml_error_rate,

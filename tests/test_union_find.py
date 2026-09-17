@@ -205,3 +205,12 @@ class TestUnionFindDecoder:
         circuit = code.generate_circuit(noise=noise)
 
         sampler = circuit.compile_detector_sampler()
+        detectors, observables = sampler.sample(
+            shots=1000, separate_observables=True
+        )
+
+        decoder = UnionFindDecoder()
+        decoder.configure(circuit=circuit)
+        metrics = decoder.decode_batch(detectors, observables)
+
+        # At p=0.5%, d=3, error rate should be well below 50%

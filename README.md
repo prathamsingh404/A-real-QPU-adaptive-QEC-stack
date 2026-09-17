@@ -232,3 +232,12 @@ python -m pytest tests/ -v
 uvicorn adaptive_qec.api.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+---
+
+## 5. Live IBM Quantum QPU Execution Guide
+
+To execute adaptive QEC circuits directly on IBM Quantum hardware (`ibm_marrakesh`, 156 qubits):
+
+1. **Configure Environment Variables**:
+   In `.env` (or via OS environment):
+   ```bash

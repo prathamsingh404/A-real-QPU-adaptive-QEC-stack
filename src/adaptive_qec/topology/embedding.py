@@ -152,3 +152,14 @@ class EmbeddingFinder:
         if total_needed > self.topology.num_qubits:
             logger.warning(
                 f"Need {total_needed} qubits for d={distance} but topology "
+                f"has only {self.topology.num_qubits}"
+            )
+
+        # Generate candidate starting positions
+        # Prefer high-connectivity qubits as starting points
+        candidates = sorted(
+            range(self.topology.num_qubits),
+            key=lambda q: -self.topology.degree(q),
+        )[:max_candidates]
+
+        best_embedding: Optional[SurfaceCodeEmbedding] = None

@@ -153,3 +153,28 @@ All 113 unit and integration tests across all 10 test modules execute and pass w
 ---
 
 ## 4. Hardware Configuration & User Action Checklist
+
+To run live experiments on physical IBM Quantum hardware (`ibm_marrakesh`, Heron r2):
+
+1. **Service Instance Details**:
+   - The user provided IBM Cloud CRN:
+     `crn:v1:bluemix:public:quantum-computing:us-east:a/8ae29ae2e0204424ab76bf7397315239:5031eafb-df34-4dd9-8912-1fb14dc9b74f::`
+   - The user provided API Key:
+     `WHQiem5SJ0-iTLZBqPs10H1gNfTxFcE6lbobBRoLVVMI`
+   - Channel: `ibm_cloud` (because the CRN indicates IBM Cloud Quantum Service, not IBM Quantum Platform `ibm_quantum`).
+2. **Qiskit Runtime Setup**:
+   Ensure `qiskit-ibm-runtime` is authenticated:
+   ```python
+   from qiskit_ibm_runtime import QiskitRuntimeService
+
+   service = QiskitRuntimeService(
+       channel="ibm_cloud",
+       token="WHQiem5SJ0-iTLZBqPs10H1gNfTxFcE6lbobBRoLVVMI",
+       instance="crn:v1:bluemix:public:quantum-computing:us-east:a/8ae29ae2e0204424ab76bf7397315239:5031eafb-df34-4dd9-8912-1fb14dc9b74f::"
+   )
+   backend = service.backend("ibm_marrakesh")
+   ```
+3. **Execution Safety**:
+   When launching jobs on `ibm_marrakesh`:
+   - Start with distance $d=3, \text{rounds}=3, \text{shots}=1000$ to verify queue priority and readout overhead before scaling to $d=5$ (which requires 25 data qubits and 24 ancillas = 49 transmons).
+   - Use our `AdaptiveDDPlanner` to protect spectators during routing SWAP cycles.

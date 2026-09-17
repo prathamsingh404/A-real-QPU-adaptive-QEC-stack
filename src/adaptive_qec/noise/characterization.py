@@ -142,3 +142,15 @@ class NoiseCharacterizer:
 
         # 2. Temporal correlation
         temporal_corr = compute_temporal_correlation(
+            detection_events,
+            num_rounds=num_rounds,
+            max_lag=min(10, num_rounds),
+        )
+
+        # 3. Spatial correlation
+        spatial_corr = compute_spatial_correlation(
+            detection_events,
+            detector_coordinates=detector_coordinates,
+        )
+
+        # 4. Build profile

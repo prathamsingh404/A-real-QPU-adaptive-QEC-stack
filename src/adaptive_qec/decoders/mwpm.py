@@ -138,3 +138,17 @@ class MWPMDecoder(Decoder):
 
             # Approximate per-shot latency within batch
             batch_time = (t_batch_end - t_batch_start)
+            batch_shots = end - start
+            per_shot_times[start:end] = batch_time / batch_shots
+
+        t_total = time.perf_counter() - t_start
+
+        # Memory measurement
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        # Combine predictions
+        all_preds = np.vstack(all_predictions).astype(np.uint8)
+
+        # Compute logical errors
+        # A logical error occurs when the predicted correction, combined

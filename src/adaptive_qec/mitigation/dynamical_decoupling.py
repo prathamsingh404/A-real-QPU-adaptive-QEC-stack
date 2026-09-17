@@ -142,3 +142,12 @@ class AdaptiveDDPlanner:
 
             # Decision rule: only apply DD if net noise improves
             suppressed_dephase = p_dephase * self.SUPPRESSION_FACTORS[seq_type]
+            net_noise_with_dd = suppressed_dephase + pulse_cost
+
+            if net_noise_with_dd < p_dephase:
+                schedule.qubit_sequences[qubit] = seq_type
+                schedule.pulse_counts[qubit] = num_pulses
+                schedule.protected_qubits.append(qubit)
+                total_pulses += num_pulses
+                noise_savings.append(p_dephase - net_noise_with_dd)
+            else:

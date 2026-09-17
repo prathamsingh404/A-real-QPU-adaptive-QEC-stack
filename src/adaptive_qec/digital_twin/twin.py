@@ -28,3 +28,18 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+import numpy as np
+
+from adaptive_qec.qpu.base import CalibrationSnapshot
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class QubitState:
+    """Current estimated state of a single qubit."""
+    index: int
+    t1_us: float = 0.0
+    t2_us: float = 0.0
+    readout_error: float = 0.0
+    single_qubit_fidelity: float = 1.0

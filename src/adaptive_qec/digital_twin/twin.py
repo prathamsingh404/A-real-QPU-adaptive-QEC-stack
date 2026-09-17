@@ -43,3 +43,18 @@ class QubitState:
     t2_us: float = 0.0
     readout_error: float = 0.0
     single_qubit_fidelity: float = 1.0
+    two_qubit_fidelities: dict[int, float] = field(default_factory=dict)  # neighbor → fidelity
+    leakage_probability: float = 0.0
+    last_updated: str = ""
+
+    # Temporal history
+    t1_history: list[tuple[str, float]] = field(default_factory=list)
+    t2_history: list[tuple[str, float]] = field(default_factory=list)
+    readout_history: list[tuple[str, float]] = field(default_factory=list)
+
+
+class HardwareDigitalTwin:
+    """
+    Maintains an internal model of the QPU hardware state.
+
+    Updated from calibration snapshots and experimental observations.

@@ -88,3 +88,18 @@ class EWMADriftDetector:
 
         # State
         self._ewma: Optional[np.ndarray] = None
+        self._baseline_mean: Optional[np.ndarray] = None
+        self._baseline_var: Optional[np.ndarray] = None
+        self._sample_count = 0
+        self._history: list[np.ndarray] = []
+
+    def update(self, detection_rates: np.ndarray) -> DriftReport:
+        """
+        Update the drift detector with new detection rates.
+
+        Args:
+            detection_rates: P(D_i = 1) for each detector from latest experiment.
+
+        Returns:
+            DriftReport with current status.
+        """

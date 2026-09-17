@@ -28,3 +28,18 @@ dependencies = [
     "qiskit-ibm-runtime>=0.35",
 
     # Numerical / scientific
+    "numpy>=1.26",
+    "scipy>=1.12",
+
+    # Configuration
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+
+    # Visualization
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "plotly>=5.18",
+
+    # API layer
+    "fastapi>=0.115",
+    "uvicorn>=0.32",

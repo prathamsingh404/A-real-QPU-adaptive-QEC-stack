@@ -16,3 +16,12 @@ Supported sequences:
 
 Sources:
     - IBM Qiskit "Orbit" dynamical decoupling framework
+    - Georgia Tech / ETH Zurich ADAPT framework (arXiv 2026)
+    - Pokharel et al., "Demonstration of algorithmic quantum speedup for
+      an abelian hidden subgroup problem with dynamical decoupling" (2023)
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field

@@ -193,3 +193,18 @@ class EWMADriftDetector:
                 f"affected_detectors={len(alarm_dets)}"
             )
 
+        return report
+
+
+class CUSUMDriftDetector:
+    """
+    Cumulative Sum (CUSUM) drift detector.
+
+    More sensitive to sudden shifts than EWMA. Tracks cumulative
+    deviations from the baseline mean.
+    """
+
+    def __init__(
+        self,
+        threshold: float = 5.0,
+        drift_allowance: float = 0.5,

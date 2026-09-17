@@ -118,3 +118,15 @@ class NoiseCharacterizer:
         num_rounds: int,
         calibration: Optional[CalibrationSnapshot] = None,
         detector_coordinates: Optional[np.ndarray] = None,
+    ) -> NoiseProfile:
+        """
+        Build a complete noise profile.
+
+        Args:
+            detection_events: shape (shots, num_detectors)
+            num_rounds: number of QEC rounds
+            calibration: optional calibration snapshot
+            detector_coordinates: optional detector coordinates
+
+        Returns:
+            NoiseProfile with all analyses.

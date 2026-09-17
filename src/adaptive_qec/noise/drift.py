@@ -28,3 +28,18 @@ class DriftStatus(str, Enum):
     WARNING = "warning"
     DRIFT_DETECTED = "drift_detected"
     SEVERE = "severe"
+    BURST_EVENT = "burst_event"
+
+
+@dataclass
+class DriftReport:
+    """Complete drift analysis report."""
+    status: DriftStatus
+    magnitude: float                              # overall drift magnitude
+    affected_detectors: list[int] = field(default_factory=list)
+    affected_parameters: list[str] = field(default_factory=list)
+    detector_drift_values: Optional[np.ndarray] = None  # per-detector drift metric
+    change_points: list[int] = field(default_factory=list)  # indices where drift occurs
+    details: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:

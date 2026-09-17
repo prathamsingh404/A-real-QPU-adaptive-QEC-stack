@@ -119,3 +119,14 @@ class EmbeddingFinder:
     """
     Find optimal surface code embeddings on hardware topologies.
 
+    Search strategy:
+        1. Generate candidate starting positions
+        2. For each start, greedily assign data qubits using BFS
+        3. Assign ancilla qubits to remaining nearby physical qubits
+        4. Score each embedding by SWAP count + idle time
+        5. Return the best scoring embedding
+    """
+
+    def __init__(self, topology: HeavyHexTopology) -> None:
+        self.topology = topology
+

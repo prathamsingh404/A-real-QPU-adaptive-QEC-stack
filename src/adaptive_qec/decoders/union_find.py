@@ -82,3 +82,17 @@ class UnionFindForest:
         if p != x:
             root = self.find(p)
             if p != root:
+                self.obs_to_parent[x] ^= self.obs_to_parent[p]
+                self.parent[x] = root
+            return root
+        return x
+
+    def obs_to_root(self, x: int) -> np.ndarray:
+        """Get observable XOR from x to its root. Calls find() first."""
+        self.find(x)  # Ensure path is compressed
+        return self.obs_to_parent[x].copy()
+
+    def union(self, x: int, y: int, edge_obs_mask: int = 0) -> int:
+        """
+        Union by rank, tracking observable XOR along the merge edge.
+

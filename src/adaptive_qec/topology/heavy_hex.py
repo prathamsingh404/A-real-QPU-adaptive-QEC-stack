@@ -228,3 +228,13 @@ class HeavyHexTopology:
         return dist
 
     def find_shortest_path(self, start: int, end: int) -> list[int]:
+        """Find shortest path between two qubits."""
+        from collections import deque
+        if start == end:
+            return [start]
+
+        visited = {start: None}
+        queue = deque([start])
+
+        while queue:
+            node = queue.popleft()

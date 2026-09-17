@@ -10,3 +10,9 @@ from adaptive_qec.noise.burst_detector import (
 from adaptive_qec.noise.leakage import (
     LeakageAnalysis,
     LeakageDetector,
+    LeakageRateEstimator,
+    LeakedQubit,
+)
+from adaptive_qec.noise.drift import (
+    CompositeDriftDetector,
+    CUSUMDriftDetector,

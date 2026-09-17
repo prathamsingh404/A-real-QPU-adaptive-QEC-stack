@@ -37,3 +37,42 @@ class HardwareProvider(str, Enum):
     IQM = "iqm"
     QUANTINUUM = "quantinuum"
     SIMULATOR = "simulator"
+    MOCK = "mock"
+
+
+class QECCode(str, Enum):
+    REPETITION = "repetition"
+    SURFACE = "surface"
+    COLOR = "color"
+    QLDPC = "qldpc"
+
+
+class LogicalBasis(str, Enum):
+    Z = "Z"
+    X = "X"
+
+
+class Boundary(str, Enum):
+    PLANAR = "planar"
+    TORIC = "toric"
+
+
+class NoiseModel(str, Enum):
+    DEPOLARIZING = "depolarizing"
+    PAULI = "pauli"
+    CUSTOM = "custom"
+
+
+class DriftModel(str, Enum):
+    LINEAR = "linear"
+    SINUSOIDAL = "sinusoidal"
+    RANDOM_WALK = "random_walk"
+
+
+class DecoderType(str, Enum):
+    MWPM = "mwpm"
+    UNION_FIND = "union_find"
+    BELIEF_PROPAGATION = "belief_propagation"
+    OSD = "osd"
+    CNN = "cnn"
+    GNN = "gnn"

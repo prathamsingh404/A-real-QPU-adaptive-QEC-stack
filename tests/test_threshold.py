@@ -96,3 +96,10 @@ class TestThresholdAnalyzer:
 
 
 class TestDistanceSweep:
+    """Tests for automated DistanceSweep runner."""
+
+    def test_sweep_execution(self):
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.008
+
+        sweep = DistanceSweep(

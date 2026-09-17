@@ -18,3 +18,13 @@ Detection approach:
 Sources:
     - Google Quantum AI, "Quantum error correction below the surface code
       threshold" (2025) — cosmic ray discussion
+    - McEwen et al., "Resolving catastrophic error bursts from cosmic rays
+      in large arrays of superconducting qubits" (2022)
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Optional

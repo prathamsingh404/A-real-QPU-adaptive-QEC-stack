@@ -193,3 +193,18 @@ class HardwareDigitalTwin:
             state.leakage_probability = 0.0
 
         for lq in getattr(analysis, "leaked_qubits", []):
+            idx = lq.detector_index
+            if idx in self._qubits:
+                self._qubits[idx].leakage_probability = float(lq.confidence)
+
+    def get_dd_candidates(
+        self,
+        idle_duration_us: float,
+        pulse_error_budget: float = 0.001,
+    ) -> list[int]:
+        """
+        Identify qubits that benefit from Dynamical Decoupling during idle periods.
+
+        Decision rule (IBM Orbit / ADAPT framework):
+            Apply DD on qubit q if estimated_idle_dephasing(q) > dd_pulse_error(q).
+            Estimated dephasing: p_idle ≈ 1 - exp(-idle_duration / T2).

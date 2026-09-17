@@ -40,3 +40,9 @@ class TestHeavyHexTopology:
     def test_shortest_path_and_swap_distance(self):
         edges = [[0, 1], [1, 2], [2, 3], [3, 4]]
         topo = HeavyHexTopology.from_coupling_map(edges, num_qubits=5)
+
+        path = topo.find_shortest_path(0, 3)
+        assert path == [0, 1, 2, 3]
+
+        # Adjacent qubits require 0 SWAPs
+        assert topo.swap_distance(0, 1) == 0

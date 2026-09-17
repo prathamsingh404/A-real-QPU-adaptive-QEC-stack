@@ -122,3 +122,34 @@ class IBMQuantumBackend(QPUBackend):
         from qiskit.compiler import transpile
         from qiskit_ibm_runtime import SamplerV2
 
+        if self._backend is None:
+            raise RuntimeError("Backend not connected. Call connect() first.")
+
+        experiment_id = str(uuid.uuid4())[:12]
+        logger.info(
+            f"Experiment {experiment_id}: running {shots} shots "
+            f"on {self._backend_name}"
+        )
+
+        # Transpile for the target backend
+        initial_layout = None
+        if qubit_mapping:
+            initial_layout = [qubit_mapping.get(i, i) for i in range(circuit.num_qubits)]
+
+        transpiled = transpile(
+            circuit,
+            backend=self._backend,
+            initial_layout=initial_layout,
+            optimization_level=1,
+        )
+
+        # Execute via SamplerV2
+        import time
+        t_start = time.perf_counter()
+
+        sampler = SamplerV2(backend=self._backend)
+        job = sampler.run([transpiled], shots=shots)
+        result = job.result()
+
+        t_elapsed = time.perf_counter() - t_start
+

@@ -151,3 +151,12 @@ class TestUnionFindDecoder:
         circuit = code.generate_circuit(noise=noise)
         dem = circuit.detector_error_model(decompose_errors=True)
 
+        decoder = UnionFindDecoder()
+        decoder.configure(dem=dem)
+
+    def test_unconfigured_raises(self):
+        decoder = UnionFindDecoder()
+        with pytest.raises(RuntimeError, match="not configured"):
+            decoder.decode(np.zeros(10, dtype=np.uint8))
+
+    def test_decode_single_no_defects(self):

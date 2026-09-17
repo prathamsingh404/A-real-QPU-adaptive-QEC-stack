@@ -8,3 +8,8 @@ from adaptive_qec.topology.embedding import (
     CodeEmbedding,
     EmbeddingFinder,
     EmbeddingScore,
+    SurfaceCodeEmbedding,
+)
+
+__all__ = [
+    "HeavyHexTopology",

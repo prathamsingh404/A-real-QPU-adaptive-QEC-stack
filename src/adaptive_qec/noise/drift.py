@@ -268,3 +268,18 @@ class CUSUMDriftDetector:
                 self._s_plus = np.zeros(num_detectors)
                 self._s_minus = np.zeros(num_detectors)
 
+            return DriftReport(
+                status=DriftStatus.STABLE,
+                magnitude=0.0,
+                details={"message": f"CUSUM warmup: {self._sample_count}/{self._warmup}"},
+            )
+
+        # Normalized deviation
+        z = (detection_rates - self._baseline_mean) / self._baseline_std
+
+        # Update CUSUM statistics
+        k = self._allowance
+        self._s_plus = np.maximum(0, self._s_plus + z - k)
+        self._s_minus = np.maximum(0, self._s_minus - z - k)
+
+        # Check for threshold crossings

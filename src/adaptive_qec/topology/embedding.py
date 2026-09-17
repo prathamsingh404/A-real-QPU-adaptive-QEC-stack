@@ -31,3 +31,14 @@ import numpy as np
 from adaptive_qec.topology.heavy_hex import HeavyHexTopology
 
 logger = logging.getLogger(__name__)
+
+
+class CodeEmbedding(Protocol):
+    """Protocol for code-to-hardware qubit mappings."""
+
+    def data_qubit_map(self) -> dict[tuple[int, int], int]:
+        """Map logical (row, col) → physical qubit index for data qubits."""
+        ...
+
+    def ancilla_qubit_map(self) -> dict[tuple[int, int], int]:
+        """Map logical (row, col) → physical qubit index for ancilla qubits."""

@@ -6,27 +6,3 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-
-# Testing & coverage
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# Package build & distribution
-build/
-dist/
-*.egg-info/
-*.egg
-
-# IDE & OS
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-*.swp
-
-# Logs and scratch files
-*.log
-scratch/

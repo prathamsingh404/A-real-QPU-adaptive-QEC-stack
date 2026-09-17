@@ -78,3 +78,13 @@ class HeavyHexTopology:
         """Build from a coupling map (list of [q1, q2] pairs)."""
         topo = cls()
         topo.num_qubits = num_qubits
+
+        seen_edges: set[tuple[int, int]] = set()
+        for pair in coupling_map:
+            q1, q2 = min(pair), max(pair)
+            if (q1, q2) not in seen_edges:
+                seen_edges.add((q1, q2))
+                topo.edges.append((q1, q2))
+
+        # Build adjacency
+        for q1, q2 in topo.edges:

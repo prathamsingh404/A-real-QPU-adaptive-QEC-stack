@@ -328,3 +328,18 @@ class CompositeDriftDetector:
         self._ewma = EWMADriftDetector(
             alpha=ewma_alpha,
             warmup_samples=warmup_samples,
+        )
+        self._cusum = CUSUMDriftDetector(
+            threshold=cusum_threshold,
+            warmup_samples=warmup_samples,
+        )
+        self._burst_detector = burst_detector
+
+    def update(
+        self,
+        detection_rates: np.ndarray,
+        syndrome_tensor: Optional[np.ndarray] = None,
+        num_detectors_per_round: Optional[int] = None,
+    ) -> DriftReport:
+        """
+        Update detectors and return the most severe report.

@@ -96,3 +96,17 @@ class MWPMDecoder(Decoder):
     def decode_batch(
         self,
         syndromes: np.ndarray,
+        observable_flips: np.ndarray,
+    ) -> DecoderMetrics:
+        """
+        Decode a batch and compute comprehensive metrics.
+
+        Args:
+            syndromes: shape (shots, num_detectors)
+            observable_flips: shape (shots, num_observables) — actual flips
+
+        Returns:
+            DecoderMetrics with error rate, latency distribution, throughput.
+        """
+        if self._matching is None:
+            raise RuntimeError("Decoder not configured. Call configure() first.")

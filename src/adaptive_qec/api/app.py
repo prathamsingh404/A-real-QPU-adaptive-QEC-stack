@@ -68,3 +68,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+# ---- Request / Response Models ----
+
+class QECRunRequest(BaseModel):
+    code_type: str = "surface"
+    distance: int = 3
+    rounds: int = 3
+    basis: str = "Z"
+    physical_error_rate: float = _DEFAULT_PHYSICAL_ERROR_RATE
+    shots: int = 200
+
+
+class BenchmarkRequest(BaseModel):
+    distance: int = 3
+    rounds: int = 3
+    shots: int = 200
+    physical_error_rate: float = _DEFAULT_PHYSICAL_ERROR_RATE
+
+
+class ThresholdRequest(BaseModel):
+    distances: list[int] = [3, 5]
+    physical_error_rate: float = _DEFAULT_PHYSICAL_ERROR_RATE
+    shots: int = 300
+    code_type: str = "surface"
+
+
+class RecalibrateRequest(BaseModel):
+    target_error_rate: float = 0.015
+    budget_shots: int = 2000
+
+

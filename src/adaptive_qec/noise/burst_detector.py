@@ -48,3 +48,13 @@ class BurstEvent:
     """A detected error burst."""
     round_start: int           # First round of the burst
     round_end: int             # Last round of the burst
+    affected_detectors: list[int]  # Detector indices involved
+    severity: float            # Chi-squared test statistic
+    p_value: float             # p-value under null hypothesis
+    burst_type: BurstType      # Heuristic classification
+    spatial_radius: float      # Estimated spatial extent
+    confidence: float          # Classification confidence [0, 1]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "round_start": self.round_start,

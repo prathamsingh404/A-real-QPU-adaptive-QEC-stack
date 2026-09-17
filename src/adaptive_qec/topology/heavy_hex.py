@@ -148,3 +148,13 @@ class HeavyHexTopology:
                 # Vertical neighbors (heavy-hex / brickwall alternating pattern:
                 # even rows connect down at c % 4 == 0, odd rows connect down at c % 4 == 2)
                 connect_down = (r % 2 == 0 and c % 4 == 0) or (r % 2 == 1 and c % 4 == 2)
+                if r + 1 < rows and connect_down:
+                    edges.append((q, grid[(r + 1, c)]))
+
+        topo.edges = edges
+        for q1, q2 in edges:
+            topo.adjacency.setdefault(q1, set()).add(q2)
+            topo.adjacency.setdefault(q2, set()).add(q1)
+        for q in range(topo.num_qubits):
+            topo.adjacency.setdefault(q, set())
+        topo._degree = {q: len(n) for q, n in topo.adjacency.items()}

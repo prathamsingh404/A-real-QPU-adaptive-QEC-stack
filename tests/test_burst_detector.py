@@ -89,3 +89,10 @@ class TestDriftIntegration:
             warmup_samples=3,
             burst_detector=burst_detector,
         )
+
+        rates = np.full(8, 0.01)
+        # Normal warmup
+        for _ in range(5):
+            composite.update(rates)
+
+        # Create burst syndrome tensor

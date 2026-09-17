@@ -460,3 +460,17 @@ class UnionFindDecoder(Decoder):
             raise RuntimeError("Decoder not configured. Call configure() first.")
 
         if syndrome.ndim == 1:
+            corrections = self._decode_single(syndrome.astype(np.uint8))
+            return Correction(observable_corrections=corrections)
+
+        results = np.zeros(
+            (syndrome.shape[0], self._num_observables), dtype=np.uint8
+        )
+        for i in range(syndrome.shape[0]):
+            results[i] = self._decode_single(syndrome[i].astype(np.uint8))
+
+        return Correction(observable_corrections=results)
+
+    def decode_batch(
+        self,
+        syndromes: np.ndarray,

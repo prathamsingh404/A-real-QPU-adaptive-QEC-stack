@@ -278,3 +278,13 @@ class BurstDetector:
             confidence = 0.4
             return BurstType.CROSSTALK, confidence
 
+        return BurstType.UNKNOWN, 0.3
+
+
+def reshape_syndromes_to_tensor(
+    flat_syndromes: np.ndarray,
+    num_rounds: int,
+    num_detectors_per_round: int,
+) -> np.ndarray:
+    """
+    Reshape flat syndrome array to (rounds, detectors_per_round) tensor.

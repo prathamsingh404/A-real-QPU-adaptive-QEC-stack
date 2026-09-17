@@ -88,3 +88,18 @@ class HardwareDigitalTwin:
             if qc.t1_us is not None:
                 state.t1_us = qc.t1_us
                 state.t1_history.append((timestamp, qc.t1_us))
+                # Keep last 100 entries
+                if len(state.t1_history) > 100:
+                    state.t1_history = state.t1_history[-100:]
+
+            if qc.t2_us is not None:
+                state.t2_us = qc.t2_us
+                state.t2_history.append((timestamp, qc.t2_us))
+                if len(state.t2_history) > 100:
+                    state.t2_history = state.t2_history[-100:]
+
+            if qc.readout_error is not None:
+                state.readout_error = qc.readout_error
+                state.readout_history.append((timestamp, qc.readout_error))
+                if len(state.readout_history) > 100:
+                    state.readout_history = state.readout_history[-100:]

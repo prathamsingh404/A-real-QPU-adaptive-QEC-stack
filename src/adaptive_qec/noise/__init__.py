@@ -22,3 +22,9 @@ from adaptive_qec.noise.drift import (
 )
 
 __all__ = [
+    "BurstAnalysis",
+    "BurstDetector",
+    "BurstEvent",
+    "BurstType",
+    "reshape_syndromes_to_tensor",
+    "LeakageAnalysis",

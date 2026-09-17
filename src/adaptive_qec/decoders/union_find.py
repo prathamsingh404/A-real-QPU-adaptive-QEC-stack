@@ -376,3 +376,17 @@ class UnionFindDecoder(Decoder):
         events = []
         for i in range(len(defects)):
             di = int(defects[i])
+            wb = dist[di, boundary]
+            ob = path_obs[di, boundary]
+            events.append((wb, di, boundary, ob, True))
+            for j in range(i + 1, len(defects)):
+                dj = int(defects[j])
+                w = dist[di, dj] / 2.0
+                o = path_obs[di, dj]
+                events.append((w, di, dj, o, False))
+
+        events.sort(key=lambda x: x[0])
+
+        parent = {d: d for d in defects}
+        parent[boundary] = boundary
+        parity = {d: 1 for d in defects}

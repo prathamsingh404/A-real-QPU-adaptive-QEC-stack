@@ -173,3 +173,38 @@ async def get_qpu_telemetry() -> dict[str, Any]:
 
     # Heavy-hex patch edges for visualization
     edges = [
+        [0, 1], [1, 2], [2, 3], [3, 4],
+        [0, 5], [4, 6],
+        [5, 7], [6, 8],
+        [7, 8], [8, 9], [9, 10], [10, 11],
+        [7, 12], [11, 13],
+        [12, 14], [13, 15],
+        [14, 15], [15, 16], [16, 17], [17, 18],
+        [14, 19], [18, 20],
+        [19, 21], [20, 22],
+        [21, 22], [22, 23], [23, 24], [24, 25],
+        [25, 26]
+    ]
+
+    # Layout coordinates for visualization
+    nodes = []
+    for i in range(vis_qubits):
+        row = i // 7
+        col = i % 7
+        x = 50 + col * 90 + (30 if row % 2 == 1 else 0)
+        y = 45 + row * 85
+
+        # If we have real detector rates, use them; otherwise show baseline
+        if i < len(detector_rates):
+            readout_err = detector_rates[i]
+        else:
+            readout_err = round(rng.normal(0.01208, 0.003), 4)
+
+        nodes.append({
+            "id": i,
+            "x": int(x),
+            "y": int(y),
+            "t1": round(float(rng.normal(188.5, 18.2)), 1),
+            "t2": round(float(rng.normal(130.4, 15.1)), 1),
+            "readout_error": float(readout_err),
+            "is_flagged": (readout_err > 0.016),

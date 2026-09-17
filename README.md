@@ -97,3 +97,12 @@ graph TD
     IdleEst --> DDDecision
     DDDecision --> DDPlanner
     DDPlanner --> StimCirc
+
+    DEM --> MWPM
+    DEM --> UF
+    SyndromeStream --> MWPM
+    SyndromeStream --> UF
+    BurstDet --> BurstAware
+    BurstAware --> MWPM
+
+    MWPM --> DistSweep

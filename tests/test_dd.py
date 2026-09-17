@@ -61,3 +61,10 @@ class TestDynamicalDecoupling:
 
         # CPMG test
         sched_cpmg = planner.plan_schedule({0: 50.0}, preferred_sequence=DDSequenceType.CPMG)
+        assert sched_cpmg.qubit_sequences[0] == DDSequenceType.CPMG
+        assert sched_cpmg.total_pulses_inserted == 2
+
+        # XY8 test
+        sched_xy8 = planner.plan_schedule({0: 50.0}, preferred_sequence=DDSequenceType.XY8)
+        assert sched_xy8.qubit_sequences[0] == DDSequenceType.XY8
+        assert sched_xy8.total_pulses_inserted == 8

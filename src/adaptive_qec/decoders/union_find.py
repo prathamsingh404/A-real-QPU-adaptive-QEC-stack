@@ -334,3 +334,17 @@ class UnionFindDecoder(Decoder):
                 cur = j
                 o = 0
                 while cur != i and cur >= 0:
+                    p = predecessors[i, cur]
+                    if p < 0:
+                        break
+                    o ^= obs_mat[p, cur]
+                    cur = p
+                path_obs[i, j] = o
+                path_obs[j, i] = o
+
+        self._path_obs = path_obs
+
+        logger.info(
+            f"UF decoder configured: {self._num_detectors} detectors, "
+            f"{self._num_observables} observables, "
+            f"{len(self._graph.edges)} edges"

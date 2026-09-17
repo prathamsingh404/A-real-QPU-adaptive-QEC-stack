@@ -70,3 +70,15 @@ class NoiseProfile:
             "estimated_depolarizing_rate": self.estimated_depolarizing_rate,
             "correlated_noise_detected": self.correlated_noise_detected,
             "leakage_detected": self.leakage_detected,
+        }
+
+        if self.detector_stats:
+            d["detector_stats"] = {
+                "mean_detection_rate": self.detector_stats.mean_detection_rate,
+                "max_detection_rate": self.detector_stats.max_detection_rate,
+                "std_detection_rate": self.detector_stats.std_detection_rate,
+                "num_hotspots": len(self.detector_stats.hotspot_detectors),
+                "hotspot_detectors": self.detector_stats.hotspot_detectors[:20],
+            }
+
+        if self.temporal_corr:

@@ -154,3 +154,15 @@ class NoiseCharacterizer:
         )
 
         # 4. Build profile
+        profile = NoiseProfile(
+            timestamp=timestamp,
+            backend=backend,
+            detector_stats=detector_stats,
+            temporal_corr=temporal_corr,
+            spatial_corr=spatial_corr,
+        )
+
+        # 5. Add calibration data
+        if calibration:
+            profile.t1_values = calibration.t1_values()
+            profile.t2_values = calibration.t2_values()

@@ -168,3 +168,20 @@ class RepetitionCode(QECCode):
             circuit.append("X_ERROR", data_qubits, [p_ro])
         circuit.append("M", data_qubits)
 
+        # Final detectors: compare data measurements to last round of ancillas
+        for i in range(num_ancilla):
+            circuit.append(
+                "DETECTOR",
+                [
+                    stim.target_rec(-(num_data - i)),
+                    stim.target_rec(-(num_data - i - 1)),
+                    stim.target_rec(-(num_data + num_ancilla - i)),
+                ],
+                [2 * i + 1, 0, self.rounds],
+            )
+
+        # Observable: parity of all data qubits
+        obs_targets = [stim.target_rec(-(num_data - i)) for i in range(num_data)]
+        circuit.append("OBSERVABLE_INCLUDE", obs_targets, [0])
+
+        logger.info(

@@ -98,3 +98,8 @@ The goal of this project transcends standard academic exercises or superficial t
 ### Problem 5: Fault-Tolerant Threshold Scaling Analysis ($\Lambda$ Ratio)
 * **Why it matters**: A quantum system is only fault-tolerant if increasing the code distance $d$ suppresses the logical error rate $p_L$. The key figure of merit is the **Lambda ratio**:
   $$\Lambda = \frac{p_L(d)}{p_L(d+2)}$$
+  - $\Lambda > 1.0$: Operating below threshold (increasing code distance protects the logical qubit).
+  - $\Lambda \le 1.0$: Operating above threshold (adding physical qubits introduces more noise than QEC can remove).
+  - Google Willow achieved $\Lambda \approx 2.14 \pm 0.02$.
+* **Phenomenological Scaling Model**:
+  $$p_L = A \cdot \left(\frac{p_{\text{phys}}}{p_{\text{th}}}\right)^{\frac{d+1}{2}}$$

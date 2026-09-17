@@ -48,3 +48,13 @@ class TopologyMetrics:
             "max_degree": self.max_degree,
             "avg_degree": round(self.avg_degree, 3),
             "degree_distribution": self.degree_distribution,
+            "diameter": self.diameter,
+            "is_heavy_hex": self.is_heavy_hex,
+        }
+
+
+class HeavyHexTopology:
+    """
+    Representation and analysis of IBM's heavy-hex qubit topology.
+
+    Heavy-hex is a modified hexagonal lattice where each edge of the

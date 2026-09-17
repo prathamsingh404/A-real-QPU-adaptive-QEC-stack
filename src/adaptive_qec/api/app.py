@@ -208,3 +208,38 @@ async def get_qpu_telemetry() -> dict[str, Any]:
             "t2": round(float(rng.normal(130.4, 15.1)), 1),
             "readout_error": float(readout_err),
             "is_flagged": (readout_err > 0.016),
+        })
+
+    # Drift status from live detector
+    global _LATEST_DRIFT_REPORT
+    is_drift = (_LATEST_DRIFT_REPORT is not None and
+                _LATEST_DRIFT_REPORT.status in (DriftStatus.DRIFT_DETECTED, DriftStatus.SEVERE))
+
+    return {
+        "source": source,
+        "backend": backend_name,
+        "provider": _DEFAULT_PROVIDER,
+        "processor_type": _DEFAULT_PROCESSOR_TYPE,
+        "status": "ONLINE / CALIBRATED",
+        "num_qubits": num_qubits,
+        "vis_qubits": vis_qubits,
+        "avg_cnot_error": _DEFAULT_PHYSICAL_ERROR_RATE,
+        "avg_readout_error": 0.01208,
+        "drift_detected": bool(is_drift),
+        "topology": {
+            "nodes": nodes,
+            "edges": edges,
+        }
+    }
+
+
+@app.post("/api/qec/run")
+async def run_qec_experiment(req: QECRunRequest) -> dict[str, Any]:
+    """
+    Execute real QEC experiment on Stim circuit, sample detection events,
+    extract syndrome tensor S in {0, 1}^(R x N_d), and decode with PyMatching MWPM.
+    """
+    try:
+        code = create_code(
+            code_type=req.code_type,
+            distance=req.distance,

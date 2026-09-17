@@ -558,3 +558,38 @@ async def get_adaptive_policy() -> dict[str, Any]:
         detector_rates = last_exp.get("detector_rates", [])
         mean_defect = last_exp.get("mean_defect_rate", 0.0)
         latency_p99 = last_exp.get("latency_p99_us", 0.0)
+
+        # Rank detectors by sensitivity (highest defect rate = most sensitive)
+        indexed_rates = [(i, r) for i, r in enumerate(detector_rates)]
+        indexed_rates.sort(key=lambda x: x[1], reverse=True)
+
+        ranking = []
+        for rank, (det_idx, rate) in enumerate(indexed_rates[:5]):
+            priority = "HIGH" if rate > mean_defect * 1.5 else ("MEDIUM" if rate > mean_defect else "LOW")
+            ranking.append({
+                "param": f"D{det_idx}",
+                "name": f"Detector {det_idx} (rate={rate:.4f})",
+                "sensitivity": round(rate / max(mean_defect, 1e-6), 2),
+                "priority": priority,
+                "source": "measured",
+            })
+
+        source = "measured"
+        drift_magnitude = float(_LATEST_DRIFT_REPORT.magnitude) if _LATEST_DRIFT_REPORT else 0.0
+    else:
+        ranking = [
+            {"param": "—", "name": "No experiment data yet", "sensitivity": 0.0, "priority": "—", "source": "none"},
+        ]
+        source = "no_data"
+        mean_defect = 0.0
+        latency_p99 = 0.0
+        drift_magnitude = 0.0
+
+    return {
+        "source": source,
+        "policy_id": "ADAPTIVE_QEC_POLICY_V1",
+        "parameters_ranked": ranking,
+        "rl_controller": {
+            "state_vector": {
+                "syndrome_entropy": round(mean_defect * 8.0, 3) if mean_defect else 0.0,
+                "drift_magnitude": round(drift_magnitude, 3),

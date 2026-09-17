@@ -178,3 +178,12 @@ A real-QPU adaptive QEC stack/
 │       │   └── distance_sweep.py      # Automated multi-distance QEC sweep harness
 │       ├── mitigation/
 │       │   └── dynamical_decoupling.py # AdaptiveDDPlanner (CPMG, XY4, XY8 schedules)
+│       ├── noise/
+│       │   ├── burst_detector.py      # Poisson burst detector for cosmic rays/QP poisoning
+│       │   ├── leakage.py             # Lag-1 autocorrelation and streak leakage estimators
+│       │   ├── drift.py               # CompositeDriftDetector (EWMA + CUSUM + Burst)
+│       │   └── characterization.py    # NoiseCharacterizer hardware telemetry parser
+│       ├── qec/
+│       │   └── codes.py               # Stim RepetitionCode and SurfaceCode with embedding
+│       ├── qpu/
+│       │   ├── base.py                # QPU abstract base class

@@ -68,3 +68,17 @@ class ThresholdFit:
             "fit_residual": round(self.fit_residual, 8),
             "distances": self.distances,
             "logical_error_rates": [round(r, 6) for r in self.logical_error_rates],
+            "physical_error_rate": round(self.physical_error_rate, 6),
+            "lambda_ratios": {
+                k: round(v, 4) for k, v in self.lambda_ratios.items()
+            },
+            "is_below_threshold": self.is_below_threshold,
+        }
+
+
+class ThresholdAnalyzer:
+    """
+    Computes threshold scaling metrics from distance-sweep experiments.
+
+    Usage:
+        analyzer = ThresholdAnalyzer()

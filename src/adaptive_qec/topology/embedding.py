@@ -141,3 +141,14 @@ class EmbeddingFinder:
         Args:
             distance: Code distance (3, 5, 7, ...)
             max_candidates: Maximum starting positions to try.
+
+        Returns:
+            Best SurfaceCodeEmbedding found.
+        """
+        n_data = distance ** 2
+        n_ancilla = (distance - 1) ** 2 + (distance - 1) ** 2
+        total_needed = n_data + n_ancilla
+
+        if total_needed > self.topology.num_qubits:
+            logger.warning(
+                f"Need {total_needed} qubits for d={distance} but topology "

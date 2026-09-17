@@ -187,3 +187,12 @@ class TestUnionFindDecoder:
             shots=200, separate_observables=True
         )
 
+        decoder = UnionFindDecoder()
+        decoder.configure(circuit=circuit)
+        metrics = decoder.decode_batch(detectors, observables)
+
+        assert isinstance(metrics, DecoderMetrics)
+        assert metrics.total_shots == 200
+        assert 0 <= metrics.logical_error_rate <= 1
+        assert metrics.decode_time_s > 0
+        assert metrics.throughput_shots_per_s > 0

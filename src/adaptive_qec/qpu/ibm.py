@@ -153,3 +153,34 @@ class IBMQuantumBackend(QPUBackend):
 
         t_elapsed = time.perf_counter() - t_start
 
+        # Extract measurement outcomes
+        pub_result = result[0]
+        # SamplerV2 returns BitArray; convert to numpy
+        bitstrings = pub_result.data.meas
+        outcomes = np.array(
+            [[int(b) for b in bits] for bits in bitstrings.get_bitstrings()],
+            dtype=np.uint8,
+        )
+
+        # Build counts dict
+        counts: dict[str, int] = {}
+        for bitstring in bitstrings.get_bitstrings():
+            key = bitstring
+            counts[key] = counts.get(key, 0) + 1
+
+        logger.info(
+            f"Experiment {experiment_id}: completed in {t_elapsed:.2f}s, "
+            f"{len(counts)} unique outcomes"
+        )
+
+        return ExperimentResult(
+            experiment_id=experiment_id,
+            backend_name=self._backend_name,
+            shots=shots,
+            measurement_outcomes=outcomes,
+            counts=counts,
+            metadata={
+                "transpiled_depth": transpiled.depth(),
+                "transpiled_gate_count": transpiled.size(),
+                "qubit_mapping": qubit_mapping,
+            },

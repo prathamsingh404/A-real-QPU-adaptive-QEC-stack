@@ -151,3 +151,12 @@ class AdaptiveDDPlanner:
                 total_pulses += num_pulses
                 noise_savings.append(p_dephase - net_noise_with_dd)
             else:
+                schedule.qubit_sequences[qubit] = DDSequenceType.NONE
+                schedule.pulse_counts[qubit] = 0
+
+        schedule.total_pulses_inserted = total_pulses
+        schedule.estimated_noise_reduction = float(np.mean(noise_savings)) if noise_savings else 0.0
+
+        logger.info(
+            f"DD plan: {len(schedule.protected_qubits)}/{len(idle_map)} qubits protected, "
+            f"total pulses={total_pulses}, avg saving={schedule.estimated_noise_reduction:.6f}"

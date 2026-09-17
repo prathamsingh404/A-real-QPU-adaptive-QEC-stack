@@ -304,3 +304,20 @@ class SurfaceCode(QECCode):
         dem = circuit.detector_error_model()
         coords = []
         for instruction in dem:
+            if instruction.type == "error":
+                for target in instruction.targets_copy():
+                    if target.is_relative_detector_id():
+                        pass  # coordinates come from circuit
+        # Use Stim's built-in coordinate extraction
+        coord_dict = circuit.get_detector_coordinates()
+        result = np.zeros((len(coord_dict), 3))
+        for det_id, coord in coord_dict.items():
+            if det_id < len(result):
+                result[det_id, :len(coord)] = coord[:3]
+        return result
+
+
+def create_code(code_type: str, distance: int, rounds: int) -> QECCode:
+    """
+    Factory function to create a QEC code.
+

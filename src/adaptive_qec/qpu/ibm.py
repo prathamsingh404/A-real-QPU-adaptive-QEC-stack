@@ -60,3 +60,34 @@ class IBMQuantumBackend(QPUBackend):
                 f"IBM Quantum API token not found. "
                 f"Set the {self._config.api_token_env} environment variable "
                 f"or add it to your .env file."
+            )
+
+        channel = self._config.channel
+        logger.info(f"Connecting to IBM Quantum service (channel={channel})...")
+
+        service_kwargs: dict[str, Any] = {
+            "channel": channel,
+            "token": token,
+        }
+
+        # ibm_cloud channel requires CRN instance
+        if channel == "ibm_cloud":
+            instance = self._config.instance
+            if not instance:
+                raise RuntimeError(
+                    f"IBM Cloud channel requires a CRN instance. "
+                    f"Set the {self._config.instance_env} environment variable "
+                    f"or add it to your .env file."
+                )
+            service_kwargs["instance"] = instance
+            logger.info(f"Using CRN instance: {instance[:60]}...")
+
+        self._service = QiskitRuntimeService(**service_kwargs)
+
+        logger.info(f"Selecting backend: {self._backend_name}")
+        self._backend = self._service.backend(self._backend_name)
+
+        # Auto-detect qubit count from the actual backend
+        actual_qubits = self._backend.num_qubits
+        if actual_qubits != self._config.qubits:
+            logger.warning(

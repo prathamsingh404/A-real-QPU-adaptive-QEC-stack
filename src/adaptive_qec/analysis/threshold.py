@@ -264,3 +264,17 @@ class ThresholdAnalyzer:
                 lambda_ratios[f"d{d_lo}_to_d{d_hi}"] = lam
             except ValueError:
                 pass
+
+        is_below = all(v > 1.0 for v in lambda_ratios.values()) if lambda_ratios else False
+
+        fit = ThresholdFit(
+            p_threshold=float(p_th_fit),
+            A=float(A_fit),
+            fit_residual=residual,
+            distances=distances,
+            logical_error_rates=error_rates,
+            physical_error_rate=p_phys,
+            lambda_ratios=lambda_ratios,
+            is_below_threshold=is_below,
+        )
+

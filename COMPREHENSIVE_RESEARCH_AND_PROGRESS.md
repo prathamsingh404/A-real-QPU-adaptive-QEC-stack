@@ -83,3 +83,8 @@ The goal of this project transcends standard academic exercises or superficial t
      In Union-Find, active defect clusters grow outward at unit velocity. Two defect clusters growing towards each other meet when their combined radii equal the shortest path distance:
      $$r(d_i, d_j) = \frac{1}{2} D(d_i, d_j)$$
      However, the boundary node is static (does not grow). A defect cluster must grow the full distance to reach the boundary:
+     $$r(d_i, \text{boundary}) = D(d_i, \text{boundary})$$
+     Sorting candidate events by cluster radius guarantees that nearby defects pair with each other before erroneously jumping to distant boundaries.
+  3. **Empirical Validation**:
+     - At $d=3, \text{rounds}=3$, MWPM logical error rate = 0.0135.
+     - Union-Find logical error rate = 0.0235 (only $1.74\times$ ratio, well below the $3.0\times$ theoretical threshold, executing 2000 shots in $<0.5$ seconds).

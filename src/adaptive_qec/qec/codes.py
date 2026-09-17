@@ -134,3 +134,20 @@ class RepetitionCode(QECCode):
             for i in range(num_ancilla):
                 circuit.append("CNOT", [data_qubits[i + 1], ancilla_qubits[i]])
                 if p2 > 0:
+                    circuit.append("DEPOLARIZE2", [data_qubits[i + 1], ancilla_qubits[i]], [p2])
+
+            # Measure ancillas
+            if p_ro > 0:
+                circuit.append("X_ERROR", ancilla_qubits, [p_ro])
+            circuit.append("M", ancilla_qubits)
+
+            # Detectors: compare current measurement to previous
+            for i in range(num_ancilla):
+                if r == 0:
+                    # First round: detector is just the measurement
+                    circuit.append(
+                        "DETECTOR",
+                        [stim.target_rec(-(num_ancilla - i))],
+                        [2 * i + 1, 0, r],
+                    )
+                else:

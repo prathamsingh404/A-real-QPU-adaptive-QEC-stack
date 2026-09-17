@@ -14,3 +14,11 @@ from adaptive_qec.noise.leakage import (
     LeakageAnalysis,
     LeakageDetector,
     LeakageRateEstimator,
+    LeakedQubit,
+)
+
+
+class TestLeakageDetector:
+    """Tests for LeakageDetector."""
+
+    def test_transient_noise_no_leakage(self):

@@ -40,3 +40,10 @@ def get_decoder(name: str) -> Decoder:
         from adaptive_qec.decoders.union_find import UnionFindDecoder
         register_decoder("union_find", UnionFindDecoder)
 
+    if name_lower not in _DECODERS:
+        available = list(_DECODERS.keys()) or ["none registered"]
+        raise ValueError(
+            f"Unknown decoder '{name}'. "
+            f"Available: {', '.join(available)}. "
+            f"Register new decoders with register_decoder()."
+        )

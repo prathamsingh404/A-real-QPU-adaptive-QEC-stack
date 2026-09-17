@@ -251,3 +251,14 @@ class LeakageRateEstimator:
     """
     Estimate per-qubit leakage and seepage-back rates from repeated
     experiments.
+
+    Leakage rate (γ_L): probability per round of transitioning |0⟩/|1⟩ → |2⟩
+    Seepage rate (γ_S): probability per round of transitioning |2⟩ → |0⟩/|1⟩
+
+    These rates govern the steady-state leaked population:
+        p_leak_steady = γ_L / (γ_L + γ_S)
+    """
+
+    def __init__(self) -> None:
+        self._leakage_events: list[float] = []
+        self._seepage_events: list[float] = []

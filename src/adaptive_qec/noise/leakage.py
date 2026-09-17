@@ -185,3 +185,14 @@ class LeakageDetector:
         mean = trace.mean()
         var = trace.var()
         if var < 1e-10:
+            return 0.0 if mean < 0.5 else 1.0
+
+        shifted = trace[1:] - mean
+        original = trace[:-1] - mean
+        autocorr = float(np.sum(shifted * original) / ((n - 1) * var))
+        return np.clip(autocorr, -1.0, 1.0)
+
+    @staticmethod
+    def _longest_streak(trace: np.ndarray) -> tuple[int, int]:
+        """
+        Find the longest consecutive run of 1s.

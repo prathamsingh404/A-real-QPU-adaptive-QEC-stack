@@ -163,3 +163,14 @@ class LeakageDetector:
             )
 
         # Estimate leakage rate
+        if R > 0 and N_d > 0:
+            leakage_rate = len(leaked) / (R * N_d)
+        else:
+            leakage_rate = 0.0
+
+        return LeakageAnalysis(
+            total_rounds=R,
+            total_detectors=N_d,
+            leaked_qubits=leaked,
+            estimated_leakage_rate=leakage_rate,
+        )

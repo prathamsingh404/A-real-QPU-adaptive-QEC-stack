@@ -278,3 +278,38 @@ async def run_qec_experiment(req: QECRunRequest) -> dict[str, Any]:
         ci_lower = max(0.0, float(center - delta))
         ci_upper = min(1.0, float(center + delta))
 
+        # Format sample matrix for interactive visualization
+        sample_matrix = detectors[:min(12, req.shots)].astype(int).tolist()
+
+        exp_data = {
+            "source": "measured",
+            "experiment_id": f"qec_run_{int(time.time())}",
+            "backend": _DEFAULT_BACKEND,
+            "code_type": req.code_type,
+            "distance": req.distance,
+            "rounds": req.rounds,
+            "basis": req.basis,
+            "shots": req.shots,
+            "num_detectors": num_detectors,
+            "num_observables": observables.shape[1],
+            "logical_error_rate": round(p, 4),
+            "logical_errors_count": metrics.num_logical_errors,
+            "confidence_interval_95": [round(ci_lower, 4), round(ci_upper, 4)],
+            "mean_defect_rate": round(mean_defect_rate, 4),
+            "detector_rates": detector_rates[:30],
+            "latency_mean_us": round(metrics.latency_mean_us, 2),
+            "latency_p99_us": round(metrics.latency_p99_us, 2),
+            "throughput_shots_per_s": round(metrics.throughput_shots_per_s, 0),
+            "sample_matrix": sample_matrix,
+            "detection_events": detectors,
+        }
+
+        # Update drift detector with real data
+        global _LATEST_DRIFT_REPORT
+        _LATEST_DRIFT_REPORT = _DRIFT_DETECTOR.update(np.array(detector_rates))
+
+        # Record drift history
+        _DRIFT_HISTORY.append({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "defect_rate": round(mean_defect_rate, 4),
+            "drift_status": _LATEST_DRIFT_REPORT.status.name if _LATEST_DRIFT_REPORT else "UNKNOWN",

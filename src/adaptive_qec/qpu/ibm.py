@@ -184,3 +184,34 @@ class IBMQuantumBackend(QPUBackend):
                 "transpiled_gate_count": transpiled.size(),
                 "qubit_mapping": qubit_mapping,
             },
+            execution_time_s=t_elapsed,
+            job_id=job.job_id(),
+        )
+
+    def get_calibration(self) -> CalibrationSnapshot:
+        """
+        Capture current calibration snapshot from IBM backend.
+
+        Extracts T1, T2, readout errors, gate errors, coupling map
+        from backend.properties() and backend.target.
+        """
+        if self._backend is None:
+            raise RuntimeError("Backend not connected. Call connect() first.")
+
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        # Heron r2 processors (e.g. ibm_marrakesh) may not expose legacy
+        # BackendProperties API — handle gracefully.
+        properties = None
+        try:
+            properties = self._backend.properties()
+        except (AttributeError, NotImplementedError, Exception) as e:
+            logger.info(f"backend.properties() unavailable ({e}); using backend.target only")
+
+        target = self._backend.target
+
+        # Extract per-qubit calibration
+        qubit_calibrations = []
+        for qubit_idx in range(self._backend.num_qubits):
+            qc = QubitCalibration(qubit_index=qubit_idx)
+

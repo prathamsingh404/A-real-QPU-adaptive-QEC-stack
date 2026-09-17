@@ -236,3 +236,20 @@ class SurfaceCode(QECCode):
     ) -> stim.Circuit:
         """
         Generate rotated surface code circuit.
+
+        Uses Stim's generated circuit with appropriate noise parameters.
+        If an embedding is provided, accounts for hardware topology mapping and
+        SWAP routing overhead.
+        """
+        # Determine noise level for Stim's circuit generation
+        p = 0.0
+        if noise:
+            # Use the two-qubit gate error as the primary noise parameter
+            p = noise.gate.two_qubit
+
+        if p > 0:
+            circuit = stim.Circuit.generated(
+                "surface_code:rotated_memory_z",
+                distance=self.distance,
+                rounds=self.rounds,
+                after_clifford_depolarization=p,

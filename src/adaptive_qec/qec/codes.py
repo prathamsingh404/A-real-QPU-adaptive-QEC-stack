@@ -185,3 +185,20 @@ class RepetitionCode(QECCode):
         circuit.append("OBSERVABLE_INCLUDE", obs_targets, [0])
 
         logger.info(
+            f"Generated repetition code circuit: d={d}, R={self.rounds}, "
+            f"detectors={circuit.num_detectors}, observables={circuit.num_observables}"
+        )
+        return circuit
+
+    def get_info(self) -> CodeInfo:
+        """Get repetition code info."""
+        return CodeInfo(
+            name="repetition",
+            distance=self.distance,
+            rounds=self.rounds,
+            num_data_qubits=self.num_data,
+            num_ancilla_qubits=self.num_ancilla,
+            num_detectors=self.num_ancilla * (self.rounds + 1),
+            num_observables=1,
+        )
+

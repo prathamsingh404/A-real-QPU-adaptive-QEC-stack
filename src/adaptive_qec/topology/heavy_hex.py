@@ -38,3 +38,13 @@ class TopologyMetrics:
     avg_degree: float
     degree_distribution: dict[int, int]  # degree → count
     diameter: int  # longest shortest path
+    is_heavy_hex: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "num_qubits": self.num_qubits,
+            "num_edges": self.num_edges,
+            "min_degree": self.min_degree,
+            "max_degree": self.max_degree,
+            "avg_degree": round(self.avg_degree, 3),
+            "degree_distribution": self.degree_distribution,

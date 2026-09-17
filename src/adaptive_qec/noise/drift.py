@@ -343,3 +343,18 @@ class CompositeDriftDetector:
     ) -> DriftReport:
         """
         Update detectors and return the most severe report.
+        """
+        ewma_report = self._ewma.update(detection_rates)
+        cusum_report = self._cusum.update(detection_rates)
+
+        severity = {
+            DriftStatus.STABLE: 0,
+            DriftStatus.WARNING: 1,
+            DriftStatus.DRIFT_DETECTED: 2,
+            DriftStatus.SEVERE: 3,
+            DriftStatus.BURST_EVENT: 4,
+        }
+
+        if severity[ewma_report.status] >= severity[cusum_report.status]:
+            report = ewma_report
+        else:

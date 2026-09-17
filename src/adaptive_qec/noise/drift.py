@@ -58,3 +58,18 @@ class EWMADriftDetector:
     """
     Exponentially Weighted Moving Average drift detector.
 
+    Tracks p_i(t) over time using EWMA and detects when the
+    smoothed rate deviates significantly from the baseline.
+
+    Simple, interpretable, and effective for gradual drift.
+    """
+
+    def __init__(
+        self,
+        alpha: float = 0.1,
+        warning_sigma: float = 2.0,
+        alarm_sigma: float = 3.0,
+        severe_sigma: float = 5.0,
+        warmup_samples: int = 20,
+    ) -> None:
+        """

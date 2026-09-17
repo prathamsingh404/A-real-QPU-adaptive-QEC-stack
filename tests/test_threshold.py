@@ -40,3 +40,10 @@ class TestThresholdAnalyzer:
         with pytest.raises(ValueError, match="Code distance must be odd"):
             analyzer.add_result(distance=4, metrics=_mock_metrics(100, 5), physical_error_rate=0.005)
 
+    def test_add_and_compute_lambda_below_threshold(self):
+        analyzer = ThresholdAnalyzer()
+        # Below threshold: d=3 has higher logical error than d=5
+        analyzer.add_result(3, _mock_metrics(10000, 200), physical_error_rate=0.003)
+        analyzer.add_result(5, _mock_metrics(10000, 50), physical_error_rate=0.003)
+
+        lam = analyzer.compute_lambda(3, 5)

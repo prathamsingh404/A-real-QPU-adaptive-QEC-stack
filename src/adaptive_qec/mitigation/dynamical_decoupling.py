@@ -79,3 +79,12 @@ class AdaptiveDDPlanner:
             p_dephase(q, t_idle) > error_cost(S, q)
     """
 
+    PULSE_COUNTS = {
+        DDSequenceType.NONE: 0,
+        DDSequenceType.CPMG: 2,
+        DDSequenceType.XY4: 4,
+        DDSequenceType.XY8: 8,
+    }
+
+    # Noise suppression factors (empirical from IBM Heron DD studies)
+    SUPPRESSION_FACTORS = {

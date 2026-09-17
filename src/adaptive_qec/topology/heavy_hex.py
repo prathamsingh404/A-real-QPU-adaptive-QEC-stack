@@ -28,3 +28,13 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class TopologyMetrics:
+    """Metrics characterizing a qubit topology."""
+    num_qubits: int
+    num_edges: int
+    min_degree: int
+    max_degree: int
+    avg_degree: float
+    degree_distribution: dict[int, int]  # degree → count
+    diameter: int  # longest shortest path

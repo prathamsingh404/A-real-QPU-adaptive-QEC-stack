@@ -166,3 +166,17 @@ class ThresholdAnalyzer:
 
         p_low = self._results[d_low]["logical_error_rate"]
         p_high = self._results[d_high]["logical_error_rate"]
+
+        if p_high <= 0:
+            logger.warning(
+                f"p_L(d={d_high}) = 0 — cannot compute Λ. "
+                f"Need more shots for statistical significance."
+            )
+            return float("inf")
+
+        if p_low <= 0:
+            return 0.0
+
+        lambda_ratio = p_low / p_high
+        logger.info(
+            f"Λ(d={d_low}→d={d_high}) = {lambda_ratio:.4f} "

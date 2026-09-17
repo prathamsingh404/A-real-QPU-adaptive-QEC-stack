@@ -268,3 +268,13 @@ class BurstDetector:
             # Check for geometric pattern (even/odd detector alternation)
             col_sums = window.sum(axis=0)
             active = np.where(col_sums > 0)[0]
+            if len(active) >= 2:
+                diffs = np.diff(active)
+                if np.all(diffs == diffs[0]):
+                    # Regular spacing pattern
+                    confidence = 0.7
+                    return BurstType.CROSSTALK, confidence
+
+            confidence = 0.4
+            return BurstType.CROSSTALK, confidence
+

@@ -166,3 +166,17 @@ class DetectorGraph:
         self.adjacency = {}
         for i, edge in enumerate(self.edges):
             self.adjacency.setdefault(edge.u, []).append(i)
+            self.adjacency.setdefault(edge.v, []).append(i)
+
+
+def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
+    """Build a detector graph from a Stim DetectorErrorModel.
+
+    Properly decomposes DEM error instructions containing separators (^),
+    combines independent error mechanisms on parallel edges, and selects
+    the maximum-likelihood observable mask for each edge.
+    """
+    num_detectors = dem.num_detectors
+    num_observables = dem.num_observables
+    boundary_node = num_detectors
+

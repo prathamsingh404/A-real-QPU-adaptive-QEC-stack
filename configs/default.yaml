@@ -10,3 +10,15 @@
 #   AQEC_HARDWARE__BACKEND=ibm_marrakesh
 #   AQEC_QEC__DISTANCE=5
 # ============================================================================
+
+hardware:
+  provider: ibm                    # ibm | iqm | quantinuum | simulator
+  backend: ibm_marrakesh           # specific backend name
+  qubits: 156                     # programmable qubits on device (Heron r2)
+  topology: heavy_hex             # heavy_hex | square | other
+  api_token_env: IBM_QUANTUM_TOKEN  # env var holding the API token
+  channel: ibm_cloud               # ibm_cloud (CRN) | ibm_quantum (legacy)
+  instance_env: IBM_QUANTUM_INSTANCE  # env var holding the CRN/instance
+
+qec:
+  code: surface                   # repetition | surface | color | qldpc

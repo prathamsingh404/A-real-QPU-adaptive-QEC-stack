@@ -25,3 +25,12 @@ graph TD
     classDef decoder fill:#1e1e2e,stroke:#cba6f7,stroke-width:2px,color:#cdd6f4;
     classDef mitigation fill:#181825,stroke:#94e2d5,stroke-width:2px,color:#cdd6f4;
     classDef analysis fill:#1e1e2e,stroke:#f9e2af,stroke-width:2px,color:#cdd6f4;
+
+    subgraph HW ["1. Physical Hardware & Topology"]
+        IBM["IBM Heron r2 (ibm_marrakesh)\n156 Transmons | Degree <= 3"]:::hardware
+        HH["Heavy-Hex Coupling Map\n(hex cells + flag edge qubits)"]:::hardware
+        Twin["Hardware Digital Twin\n(Per-Qubit T1, T2, Readout, CX)"]:::hardware
+        Embedding["Surface Code EmbeddingFinder\n(Greedy BFS / SWAP Distance)"]:::hardware
+    end
+
+    subgraph Phys ["2. Transmon Physics & Non-Markovian Noise"]

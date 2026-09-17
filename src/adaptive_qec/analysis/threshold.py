@@ -138,3 +138,17 @@ class ThresholdAnalyzer:
             f"[{self._results[distance]['ci_lower']:.6f}, "
             f"{self._results[distance]['ci_upper']:.6f}] "
             f"({metrics.num_logical_errors}/{metrics.total_shots})"
+        )
+
+    def compute_lambda(
+        self,
+        d_low: int,
+        d_high: int,
+    ) -> float:
+        """
+        Compute Λ = p_L(d_low) / p_L(d_high).
+
+        Λ > 1 indicates below-threshold operation.
+
+        Args:
+            d_low: lower code distance

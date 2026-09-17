@@ -178,3 +178,13 @@ class BurstDetector:
                 # Temporal extent: find the actual start/end within window
                 round_activity = window.sum(axis=1)
                 active_rounds = np.where(round_activity > 0)[0]
+                if len(active_rounds) > 0:
+                    t_start = round_idx + int(active_rounds[0])
+                    t_end = round_idx + int(active_rounds[-1])
+                else:
+                    t_start = round_idx
+                    t_end = round_idx + w - 1
+
+                duration = t_end - t_start + 1
+                severity = float(total_defects / max(expected_per_window, 1e-6))
+

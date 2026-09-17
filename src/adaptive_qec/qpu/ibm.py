@@ -246,3 +246,34 @@ class IBMQuantumBackend(QPUBackend):
                         props = qubit_props[qubit_idx]
                         if props:
                             if hasattr(props, 't1') and props.t1 is not None:
+                                qc.t1_us = props.t1 * 1e6
+                            if hasattr(props, 't2') and props.t2 is not None:
+                                qc.t2_us = props.t2 * 1e6
+                            if hasattr(props, 'frequency') and props.frequency is not None:
+                                qc.frequency_ghz = props.frequency * 1e-9
+                except Exception as e:
+                    logger.warning(f"Failed to extract target props for qubit {qubit_idx}: {e}")
+
+            qubit_calibrations.append(qc)
+
+        # Extract gate calibrations
+        gate_calibrations = []
+        if target is not None:
+            for gate_name in target.operation_names:
+                for qargs in target.qargs_for_operation_name(gate_name):
+                    try:
+                        gate_props = target[gate_name][qargs]
+                        if gate_props:
+                            gc = GateCalibration(
+                                gate_name=gate_name,
+                                qubits=tuple(qargs),
+                                error=gate_props.error,
+                                gate_length_ns=(
+                                    gate_props.duration * 1e9
+                                    if gate_props.duration is not None
+                                    else None
+                                ),
+                            )
+                            gate_calibrations.append(gc)
+
+                            # Update qubit single-qubit gate error

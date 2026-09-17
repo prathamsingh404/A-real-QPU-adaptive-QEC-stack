@@ -19,3 +19,10 @@ from adaptive_qec.noise.drift import CompositeDriftDetector, DriftStatus
 from adaptive_qec.qec.codes import create_code
 
 
+class TestBurstDetector:
+    """Tests for BurstDetector."""
+
+    def test_clean_syndromes_no_burst(self):
+        """Clean syndromes with low independent error should have zero bursts."""
+        # 20 rounds, 8 detectors, independent error rate ~1%
+        rng = np.random.default_rng(42)

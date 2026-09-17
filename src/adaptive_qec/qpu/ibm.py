@@ -215,3 +215,34 @@ class IBMQuantumBackend(QPUBackend):
         for qubit_idx in range(self._backend.num_qubits):
             qc = QubitCalibration(qubit_index=qubit_idx)
 
+            if properties is not None:
+                # Try to extract from properties
+                try:
+                    qubit_props = properties.qubit_property(qubit_idx)
+                    if qubit_props:
+                        t1_data = qubit_props.get("T1")
+                        if t1_data:
+                            qc.t1_us = t1_data[0] * 1e6 if t1_data[0] < 1 else t1_data[0]
+
+                        t2_data = qubit_props.get("T2")
+                        if t2_data:
+                            qc.t2_us = t2_data[0] * 1e6 if t2_data[0] < 1 else t2_data[0]
+
+                        readout_data = qubit_props.get("readout_error")
+                        if readout_data:
+                            qc.readout_error = readout_data[0]
+
+                        freq_data = qubit_props.get("frequency")
+                        if freq_data:
+                            qc.frequency_ghz = freq_data[0] * 1e-9 if freq_data[0] > 1e6 else freq_data[0]
+                except Exception as e:
+                    logger.warning(f"Failed to extract properties for qubit {qubit_idx}: {e}")
+
+            # Fallback to target if properties didn't work
+            if target is not None and qc.t1_us is None:
+                try:
+                    qubit_props = target.qubit_properties
+                    if qubit_props and qubit_idx < len(qubit_props):
+                        props = qubit_props[qubit_idx]
+                        if props:
+                            if hasattr(props, 't1') and props.t1 is not None:

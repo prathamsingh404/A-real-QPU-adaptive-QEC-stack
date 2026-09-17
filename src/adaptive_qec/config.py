@@ -76,3 +76,42 @@ class DecoderType(str, Enum):
     OSD = "osd"
     CNN = "cnn"
     GNN = "gnn"
+    TRANSFORMER = "transformer"
+    ADAPTIVE = "adaptive"
+    LOOKUP = "lookup"
+
+
+class MLModel(str, Enum):
+    CNN = "cnn"
+    GNN = "gnn"
+    TRANSFORMER = "transformer"
+
+
+class GPUBackendType(str, Enum):
+    PYTORCH = "pytorch"
+    TENSORRT = "tensorrt"
+    CUDA = "cuda"
+
+
+class StorageBackend(str, Enum):
+    FILESYSTEM = "filesystem"
+    POSTGRESQL = "postgresql"
+
+
+class DataFormat(str, Enum):
+    JSON = "json"
+    PARQUET = "parquet"
+    HDF5 = "hdf5"
+
+
+class HypothesisTest(str, Enum):
+    TWO_SIDED = "two_sided"
+    ONE_SIDED = "one_sided"
+
+
+# ---------------------------------------------------------------------------
+# Configuration sub-models
+# ---------------------------------------------------------------------------
+
+class HardwareConfig(BaseModel):
+    """QPU hardware configuration."""

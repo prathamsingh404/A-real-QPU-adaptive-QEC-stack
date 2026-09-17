@@ -287,3 +287,20 @@ class SurfaceCode(QECCode):
         return CodeInfo(
             name="surface",
             distance=d,
+            rounds=self.rounds,
+            num_data_qubits=num_data,
+            num_ancilla_qubits=num_ancilla,
+            num_detectors=(d * d - 1) * self.rounds + (d * d - 1) // 2,
+            num_observables=1,
+        )
+
+    def get_detector_coordinates(self) -> np.ndarray:
+        """
+        Get detector coordinates from the generated Stim circuit.
+
+        Returns coordinates from the circuit itself for accuracy.
+        """
+        circuit = self.generate_circuit()
+        dem = circuit.detector_error_model()
+        coords = []
+        for instruction in dem:

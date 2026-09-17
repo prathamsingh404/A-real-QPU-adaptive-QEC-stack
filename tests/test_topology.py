@@ -28,3 +28,9 @@ class TestHeavyHexTopology:
 
     def test_synthetic_heavy_hex(self):
         topo = HeavyHexTopology.synthetic(rows=6, cols=6)
+        assert topo.num_qubits == 36
+        metrics = topo.compute_metrics()
+
+        assert isinstance(metrics, TopologyMetrics)
+        assert metrics.num_qubits == 36
+        assert metrics.num_edges > 0

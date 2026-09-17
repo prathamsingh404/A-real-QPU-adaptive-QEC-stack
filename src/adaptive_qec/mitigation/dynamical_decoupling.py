@@ -169,3 +169,12 @@ class AdaptiveDDPlanner:
         gate_duration_us: float = 0.05,
     ) -> dict[int, float]:
         """
+        Estimate per-qubit idle durations from a Stim circuit.
+
+        Counts circuit depth per qubit and finds total idle cycles.
+        """
+        qubit_activity: dict[int, int] = {}
+        max_tick = 0
+
+        current_tick = 0
+        for instruction in circuit:

@@ -46,3 +46,15 @@ noise:
     seepage: 0.01                 # seepage back probability
   drift:
     enabled: true
+    model: linear                 # linear | sinusoidal | random_walk
+    rate: 0.0001                  # drift rate per second
+    monitoring_window: 100        # number of experiments to track
+
+decoder:
+  baseline: mwpm                  # mwpm (PyMatching)
+  ml:
+    enabled: false
+    model: cnn                    # cnn | gnn | transformer
+    checkpoint: null              # path to model weights
+    batch_size: 256
+  adaptive:

@@ -313,3 +313,18 @@ class CompositeDriftDetector:
     """
     Combines EWMA, CUSUM, and optional spatiotemporal burst detection.
 
+    EWMA catches gradual drift, CUSUM catches sudden shifts, and BurstDetector
+    catches correlated error bursts (cosmic rays, quasiparticles).
+    Reports drift if any detector fires.
+    """
+
+    def __init__(
+        self,
+        ewma_alpha: float = 0.1,
+        cusum_threshold: float = 5.0,
+        warmup_samples: int = 20,
+        burst_detector: Optional[Any] = None,
+    ) -> None:
+        self._ewma = EWMADriftDetector(
+            alpha=ewma_alpha,
+            warmup_samples=warmup_samples,

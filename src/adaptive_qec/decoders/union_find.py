@@ -320,3 +320,17 @@ class UnionFindDecoder(Decoder):
         for e in self._graph.edges:
             if e.weight < adj[e.u, e.v]:
                 adj[e.u, e.v] = e.weight
+                adj[e.v, e.u] = e.weight
+                obs_mat[e.u, e.v] = e.observables
+                obs_mat[e.v, e.u] = e.observables
+
+        import scipy.sparse.csgraph as csgraph
+        dist, predecessors = csgraph.dijkstra(adj, directed=False, return_predecessors=True)
+        self._dist = dist
+
+        path_obs = np.zeros((n_total, n_total), dtype=np.uint8)
+        for i in range(n_total):
+            for j in range(i + 1, n_total):
+                cur = j
+                o = 0
+                while cur != i and cur >= 0:

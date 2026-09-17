@@ -133,3 +133,12 @@ graph TD
 * **Engineering Solution**: `adaptive_qec.noise.leakage.LeakageDetector` and `LeakageRateEstimator`. Integrates with `NoiseCharacterizer` and updates `HardwareDigitalTwin` qubit state vectors.
 
 ### Problem 4: Linear-Time Union-Find Decoder ($O(N \alpha(N))$)
+* **Algorithmic Context**: Minimum-Weight Perfect Matching (MWPM) via Edmonds' blossom algorithm scales as $O(N^3)$, causing unacceptable latency bottlenecks at $d \ge 7$ for real-time control.
+* **Cluster Radius Matching Breakthrough**: Active defect clusters grow at unit speed towards each other, meeting at radius $r = D(d_i, d_j) / 2$. Defects grow towards the static boundary at radius $r = D(d_i, \text{boundary})$. We precompute all-pairs shortest paths and path observable XORs with Stim DEM separator decomposition, sorting candidate merge events by cluster radius.
+* **Performance**: Achieves near-MWPM logical error rates (within $1.74\times$ at $d=3$) with sub-millisecond execution times.
+
+### Problem 5: Fault-Tolerant Threshold Scaling ($\Lambda$ Metric)
+* **Theoretical Framework**: A fault-tolerant system is only viable if increasing code distance $d$ exponentially suppresses logical error rate $p_L$:
+  $$\Lambda = \frac{p_L(d)}{p_L(d+2)} > 1.0$$
+  $$p_L = A \cdot \left(\frac{p_{\text{phys}}}{p_{\text{th}}}\right)^{\frac{d+1}{2}}$$
+* **Engineering Solution**: `adaptive_qec.analysis.threshold.ThresholdAnalyzer` with Wilson score 95% confidence intervals and non-linear least-squares fitting for $p_{\text{th}}$ and $A$.

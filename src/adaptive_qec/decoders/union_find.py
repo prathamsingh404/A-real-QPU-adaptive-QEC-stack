@@ -40,3 +40,17 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import numpy as np
+import stim
+
+from adaptive_qec.decoders.base import Correction, Decoder, DecoderMetrics
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Union-Find forest with observable tracking
+# ---------------------------------------------------------------------------
+
+class UnionFindForest:
+    """
+    Weighted union-find (disjoint set) with observable XOR tracking.

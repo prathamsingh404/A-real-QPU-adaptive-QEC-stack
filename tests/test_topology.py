@@ -58,3 +58,9 @@ class TestEmbeddingFinder:
     def test_find_embedding_d3(self):
         # Synthetic heavy-hex with plenty of qubits
         topo = HeavyHexTopology.synthetic(rows=7, cols=7)
+        finder = EmbeddingFinder(topo)
+
+        embedding = finder.find_embedding(distance=3)
+        assert isinstance(embedding, SurfaceCodeEmbedding)
+        assert embedding.distance == 3
+        # d=3 surface code requires 9 data qubits

@@ -110,3 +110,17 @@ class UnionFindForest:
         # Compute obs from ry to rx via the path: ry←y—edge—x→rx
         obs_y_to_ry = self.obs_to_parent[y]
         obs_x_to_rx = self.obs_to_parent[x]
+
+        edge_obs = np.zeros(self.n_obs, dtype=np.uint8)
+        for i in range(self.n_obs):
+            if edge_obs_mask & (1 << i):
+                edge_obs[i] = 1
+
+        obs_ry_to_rx = obs_y_to_ry ^ edge_obs ^ obs_x_to_rx
+
+        # Union by rank
+        if self.rank[rx] < self.rank[ry]:
+            rx, ry = ry, rx
+
+        self.parent[ry] = rx
+        self.obs_to_parent[ry] = obs_ry_to_rx.copy()

@@ -138,3 +138,8 @@ All 113 unit and integration tests across all 10 test modules execute and pass w
 | :--- | :--- | :---: | :---: |
 | `tests/test_threshold.py` | Wilson Score CIs, $\Lambda$ Ratio, Phenomenological Curve Fitting, DistanceSweep Harness | 7 | **PASSED** |
 | `tests/test_burst_detector.py` | Poisson Sliding Window, Spatial Radius, Temporal Duration, CompositeDrift Alarm | 6 | **PASSED** |
+| `tests/test_leakage.py` | Lag-1 Autocorrelation, Streak Lengths, Rate Estimator ($\gamma_L, \gamma_S$), Digital Twin | 5 | **PASSED** |
+| `tests/test_topology.py` | Heavy-Hex Parsing, Max Degree $\le 3$, BFS Paths, SWAP Distance, Surface Embedding | 5 | **PASSED** |
+| `tests/test_dd.py` | CPMG/XY4/XY8 Sequences, Idle Window Profiling, Selective Threshold Rule | 3 | **PASSED** |
+| `tests/test_union_find.py` | DEM Separator Decomposition, Radius Matching, UF Latency, MWPM Error Ratio | 18 | **PASSED** |
+| `tests/test_decoders.py` | PyMatching MWPM Correctness, Distance Scaling, Latency Percentiles, Registry | 7 | **PASSED** |

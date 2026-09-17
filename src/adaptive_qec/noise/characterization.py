@@ -178,3 +178,15 @@ class NoiseCharacterizer:
                 if len(gc.qubits) == 2 and gc.error is not None:
                     profile.gate_errors_2q[gc.qubits] = gc.error
 
+            # Estimate physical error rate from gate errors
+            if profile.gate_errors_2q:
+                errors_2q = list(profile.gate_errors_2q.values())
+                profile.estimated_physical_error_rate = float(np.mean(errors_2q))
+                profile.estimated_depolarizing_rate = profile.estimated_physical_error_rate
+
+        # 6. Detect correlated noise signatures
+        if temporal_corr and len(temporal_corr.persistence_detectors) > 0:
+            persistence_fraction = (
+                len(temporal_corr.persistence_detectors) /
+                max(1, temporal_corr.autocorrelation.shape[0])
+            )

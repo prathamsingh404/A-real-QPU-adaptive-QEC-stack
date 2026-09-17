@@ -133,3 +133,12 @@ class TestDetectorGraph:
 
 class TestUnionFindDecoder:
     """Test the full Union-Find decoder."""
+
+    def test_configure_from_circuit(self):
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+
+        decoder = UnionFindDecoder()
+        decoder.configure(circuit=circuit)

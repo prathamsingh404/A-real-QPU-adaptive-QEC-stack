@@ -128,3 +128,13 @@ class BurstDetector:
             syndrome_tensor: shape (rounds, detectors_per_round), dtype uint8.
                 Each entry is 1 if the detector fired, 0 otherwise.
             num_detectors_per_round: Number of detectors per QEC round.
+
+        Returns:
+            BurstAnalysis with detected bursts.
+        """
+        R, N_d = syndrome_tensor.shape
+        assert N_d == num_detectors_per_round, (
+            f"Expected {num_detectors_per_round} detectors/round, got {N_d}"
+        )
+
+        # Compute baseline defect rate (excluding obvious outlier rounds)

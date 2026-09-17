@@ -288,3 +288,40 @@ def reshape_syndromes_to_tensor(
 ) -> np.ndarray:
     """
     Reshape flat syndrome array to (rounds, detectors_per_round) tensor.
+
+    The Stim sampler produces flat arrays of shape (shots, total_detectors).
+    For burst detection, we need the temporal structure.
+
+    For a single shot, total_detectors = rounds × detectors_per_round.
+
+    Args:
+        flat_syndromes: shape (total_detectors,) — single shot
+        num_rounds: number of QEC rounds
+        num_detectors_per_round: detectors per round
+
+    Returns:
+        shape (num_rounds, num_detectors_per_round)
+    """
+    expected = num_rounds * num_detectors_per_round
+    actual = flat_syndromes.shape[0] if flat_syndromes.ndim == 1 else flat_syndromes.shape[1]
+
+    if actual != expected:
+        # Stim may include extra detectors for first-round comparison
+        # Try to reshape what we can
+        if actual > expected:
+            flat_syndromes = flat_syndromes[..., :expected]
+        else:
+            # Pad with zeros
+            pad_width = expected - actual
+            if flat_syndromes.ndim == 1:
+                flat_syndromes = np.pad(flat_syndromes, (0, pad_width))
+            else:
+                flat_syndromes = np.pad(
+                    flat_syndromes, ((0, 0), (0, pad_width))
+                )
+
+    if flat_syndromes.ndim == 1:
+        return flat_syndromes.reshape(num_rounds, num_detectors_per_round)
+    else:
+        # Batch of shots — return first shot for single analysis
+        return flat_syndromes[0].reshape(num_rounds, num_detectors_per_round)

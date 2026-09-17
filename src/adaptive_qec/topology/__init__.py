@@ -13,3 +13,9 @@ from adaptive_qec.topology.embedding import (
 
 __all__ = [
     "HeavyHexTopology",
+    "TopologyMetrics",
+    "CodeEmbedding",
+    "EmbeddingFinder",
+    "EmbeddingScore",
+    "SurfaceCodeEmbedding",
+]

@@ -158,3 +158,13 @@ class DistanceSweep:
                 shots=self.shots, separate_observables=True
             )
 
+            logger.info(
+                f"  Sampled {self.shots} shots: "
+                f"{detectors.shape[1]} detectors, "
+                f"{observables.shape[1]} observables"
+            )
+
+            # Run each decoder
+            for dec_name in self.decoder_names:
+                t_start = time.perf_counter()
+

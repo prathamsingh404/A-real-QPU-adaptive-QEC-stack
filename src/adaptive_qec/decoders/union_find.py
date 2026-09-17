@@ -124,3 +124,17 @@ class UnionFindForest:
 
         self.parent[ry] = rx
         self.obs_to_parent[ry] = obs_ry_to_rx.copy()
+        self.size[rx] += self.size[ry]
+        self.parity[rx] += self.parity[ry]
+        self.boundary_connected[rx] |= self.boundary_connected[ry]
+
+        if self.rank[rx] == self.rank[ry]:
+            self.rank[rx] += 1
+
+        return rx
+
+    def is_even(self, x: int) -> bool:
+        """Check if the cluster containing x has even parity."""
+        root = self.find(x)
+        return (self.parity[root] % 2 == 0) or bool(self.boundary_connected[root])
+

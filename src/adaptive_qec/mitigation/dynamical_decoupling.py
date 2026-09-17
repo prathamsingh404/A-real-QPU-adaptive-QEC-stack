@@ -70,3 +70,12 @@ class DDSchedule:
 
 
 class AdaptiveDDPlanner:
+    """
+    Decides and schedules dynamical decoupling pulses selectively
+    based on digital twin hardware calibration.
+
+    Decision rule:
+        Apply sequence S on qubit q if:
+            p_dephase(q, t_idle) > error_cost(S, q)
+    """
+

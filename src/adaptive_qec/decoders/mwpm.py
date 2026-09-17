@@ -40,3 +40,17 @@ class MWPMDecoder(Decoder):
 
     @property
     def name(self) -> str:
+        return "mwpm"
+
+    def configure(self, **kwargs: Any) -> None:
+        """
+        Configure with a DetectorErrorModel or Stim Circuit.
+
+        Args:
+            dem: stim.DetectorErrorModel
+            circuit: stim.Circuit (will extract DEM automatically)
+        """
+        dem = kwargs.get("dem")
+        circuit = kwargs.get("circuit")
+
+        if dem is None and circuit is not None:

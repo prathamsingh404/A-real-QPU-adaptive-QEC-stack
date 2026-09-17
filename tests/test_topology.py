@@ -52,3 +52,9 @@ class TestHeavyHexTopology:
         assert topo.swap_distance(0, 3) == 2
 
 
+class TestEmbeddingFinder:
+    """Tests for SurfaceCode EmbeddingFinder."""
+
+    def test_find_embedding_d3(self):
+        # Synthetic heavy-hex with plenty of qubits
+        topo = HeavyHexTopology.synthetic(rows=7, cols=7)

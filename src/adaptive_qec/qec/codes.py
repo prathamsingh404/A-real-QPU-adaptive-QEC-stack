@@ -117,3 +117,20 @@ class RepetitionCode(QECCode):
 
         # Noise parameters
         p1 = noise.gate.single_qubit if noise else 0.0
+        p2 = noise.gate.two_qubit if noise else 0.0
+        p_ro = (noise.readout.p0_given_1 + noise.readout.p1_given_0) / 2 if noise else 0.0
+
+        # QEC rounds
+        for r in range(self.rounds):
+            # Reset ancillas
+            circuit.append("R", ancilla_qubits)
+
+            # Apply CNOT gates for ZZ stabilizer measurements
+            for i in range(num_ancilla):
+                circuit.append("CNOT", [data_qubits[i], ancilla_qubits[i]])
+                if p2 > 0:
+                    circuit.append("DEPOLARIZE2", [data_qubits[i], ancilla_qubits[i]], [p2])
+
+            for i in range(num_ancilla):
+                circuit.append("CNOT", [data_qubits[i + 1], ancilla_qubits[i]])
+                if p2 > 0:

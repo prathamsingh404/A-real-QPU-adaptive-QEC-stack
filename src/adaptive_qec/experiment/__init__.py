@@ -7,3 +7,7 @@ from adaptive_qec.experiment.distance_sweep import (
 )
 
 __all__ = [
+    "DistanceSweep",
+    "DistanceSweepResults",
+    "SweepResult",
+]

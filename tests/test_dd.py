@@ -82,3 +82,10 @@ class TestDynamicalDecoupling:
 
         assert isinstance(protected_circuit, stim.Circuit)
         assert protected_circuit.num_detectors == circuit.num_detectors
+
+
+class TestDigitalTwinDDCandidates:
+    """Tests for Digital Twin get_dd_candidates method."""
+
+    def test_get_dd_candidates(self):
+        twin = HardwareDigitalTwin(num_qubits=3)

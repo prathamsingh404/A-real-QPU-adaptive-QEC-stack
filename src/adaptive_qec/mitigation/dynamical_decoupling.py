@@ -187,3 +187,12 @@ class AdaptiveDDPlanner:
                     q = target.value
                     qubit_activity[q] = qubit_activity.get(q, 0) + 1
 
+        total_ticks = max(current_tick, 1)
+        idle_map = {}
+        for q, active_ops in qubit_activity.items():
+            idle_ticks = max(0, total_ticks - active_ops)
+            idle_map[q] = idle_ticks * gate_duration_us
+
+        return idle_map
+
+    def apply_dd_to_circuit(

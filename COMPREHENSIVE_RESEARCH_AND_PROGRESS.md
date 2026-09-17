@@ -28,3 +28,8 @@ The goal of this project transcends standard academic exercises or superficial t
 
 ### Problem 1: Heavy-Hex ↔ Surface Code Mismatch & Embedding
 * **Why it matters**: A planar/rotated surface code of distance $d$ requires $d^2$ data qubits and $d^2-1$ measurement ancillas connected in a 4-regular square lattice. The heavy-hex lattice of IBM Heron r2 has max degree 3 and consists of hexagonal tiles with couplers on the edges.
+* **The Physics & Overhead**: Direct routing necessitates SWAP networks. Every SWAP gate is composed of 3 CNOT/ECR operations, tripling two-qubit noise along routing channels and introducing significant idle intervals for stationary spectator qubits.
+* **Mathematical Lattice Formulation**:
+  A heavy-hex lattice consists of vertices $V$ and edges $E$ where nodes alternate in vertical connectivity:
+  $$\text{connect\_down}(r, c) = (r \equiv 0 \pmod 2 \land c \equiv 0 \pmod 4) \lor (r \equiv 1 \pmod 2 \land c \equiv 2 \pmod 4)$$
+  This guarantees $\max(\deg(v)) \le 3$, with over 50% of vertices having degree 2 (coupler/flag transmons).

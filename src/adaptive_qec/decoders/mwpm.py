@@ -124,3 +124,17 @@ class MWPMDecoder(Decoder):
 
         # Decode in mini-batches for latency measurement
         batch_size = min(1000, shots)
+        all_predictions = []
+
+        for start in range(0, shots, batch_size):
+            end = min(start + batch_size, shots)
+            batch = syndromes[start:end].astype(np.uint8)
+
+            t_batch_start = time.perf_counter()
+            predictions = self._matching.decode_batch(batch)
+            t_batch_end = time.perf_counter()
+
+            all_predictions.append(predictions)
+
+            # Approximate per-shot latency within batch
+            batch_time = (t_batch_end - t_batch_start)

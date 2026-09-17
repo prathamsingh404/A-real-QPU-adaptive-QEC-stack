@@ -68,3 +68,10 @@ class TestBurstDetector:
         assert len(analysis.bursts_detected) >= 1
         # Look for the detected burst
         qp_bursts = [b for b in analysis.bursts_detected if b.burst_type == BurstType.QP_POISONING]
+        assert len(qp_bursts) >= 1 or analysis.bursts_detected[0].severity > 1.5
+
+    def test_reshape_syndromes_to_tensor(self):
+        flat = np.zeros(24, dtype=np.uint8)
+        flat[5] = 1
+        tensor = reshape_syndromes_to_tensor(flat, num_rounds=6, num_detectors_per_round=4)
+        assert tensor.shape == (6, 4)

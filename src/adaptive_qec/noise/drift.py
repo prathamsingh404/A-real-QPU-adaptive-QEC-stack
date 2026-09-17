@@ -118,3 +118,18 @@ class EWMADriftDetector:
                 details={"message": "Initializing baseline"},
             )
 
+        # Update EWMA
+        self._ewma = self._alpha * detection_rates + (1 - self._alpha) * self._ewma
+
+        # Update baseline statistics (Welford's online algorithm)
+        if self._sample_count <= self._warmup:
+            delta = detection_rates - self._baseline_mean
+            self._baseline_mean += delta / self._sample_count
+            delta2 = detection_rates - self._baseline_mean
+            self._baseline_var += delta * delta2
+
+            return DriftReport(
+                status=DriftStatus.STABLE,
+                magnitude=0.0,
+                details={"message": f"Warmup: {self._sample_count}/{self._warmup}"},
+            )

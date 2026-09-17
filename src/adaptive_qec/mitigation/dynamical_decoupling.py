@@ -61,3 +61,12 @@ class DDSchedule:
             },
             "idle_windows_us": {
                 q: round(t, 3) for q, t in self.idle_windows_us.items()
+            },
+            "protected_qubits": self.protected_qubits,
+            "num_protected_qubits": len(self.protected_qubits),
+            "total_pulses_inserted": self.total_pulses_inserted,
+            "estimated_noise_reduction": round(self.estimated_noise_reduction, 4),
+        }
+
+
+class AdaptiveDDPlanner:

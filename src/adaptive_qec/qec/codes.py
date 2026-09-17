@@ -219,3 +219,20 @@ class SurfaceCode(QECCode):
     surface code circuit generation for correctness, with custom
     noise injection.
     """
+
+    def __init__(self, distance: int, rounds: int) -> None:
+        if distance < 3 or distance % 2 == 0:
+            raise ValueError(f"Distance must be odd and >= 3, got {distance}")
+        if rounds < 1:
+            raise ValueError(f"Rounds must be >= 1, got {rounds}")
+
+        self.distance = distance
+        self.rounds = rounds
+
+    def generate_circuit(
+        self,
+        noise: Optional[NoiseConfig] = None,
+        embedding: Optional[Any] = None,
+    ) -> stim.Circuit:
+        """
+        Generate rotated surface code circuit.

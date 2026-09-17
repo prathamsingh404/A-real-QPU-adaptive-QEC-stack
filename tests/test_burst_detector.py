@@ -82,3 +82,10 @@ class TestDriftIntegration:
     """Tests for CompositeDriftDetector with burst detection."""
 
     def test_composite_drift_catches_burst(self):
+        burst_detector = BurstDetector(window_size=4, significance=0.001)
+        composite = CompositeDriftDetector(
+            ewma_alpha=0.15,
+            cusum_threshold=4.5,
+            warmup_samples=3,
+            burst_detector=burst_detector,
+        )

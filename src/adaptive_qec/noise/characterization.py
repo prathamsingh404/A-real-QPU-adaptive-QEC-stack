@@ -190,3 +190,15 @@ class NoiseCharacterizer:
                 len(temporal_corr.persistence_detectors) /
                 max(1, temporal_corr.autocorrelation.shape[0])
             )
+            if persistence_fraction > 0.1:
+                profile.correlated_noise_detected = True
+                logger.warning(
+                    f"Correlated noise detected: {len(temporal_corr.persistence_detectors)} "
+                    f"persistent detectors ({persistence_fraction:.1%})"
+                )
+
+        # 7. Detect leakage signatures
+        if num_rounds >= 3 and detection_events.ndim == 2:
+            try:
+                from adaptive_qec.noise.leakage import LeakageDetector, reshape_syndromes_to_tensor
+                det_per_round = detection_events.shape[1] // num_rounds

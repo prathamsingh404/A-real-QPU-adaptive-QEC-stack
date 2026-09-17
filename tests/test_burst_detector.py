@@ -47,3 +47,10 @@ class TestBurstDetector:
         detector = BurstDetector(window_size=4, significance=0.001)
         analysis = detector.analyze(syndromes, num_detectors_per_round=16)
 
+        assert len(analysis.bursts_detected) >= 1
+        burst = analysis.bursts_detected[0]
+        assert burst.round_start <= 11 and burst.round_end >= 10
+        assert burst.burst_type == BurstType.COSMIC_RAY
+        assert burst.severity > 2.0
+        assert burst.p_value < 0.001
+

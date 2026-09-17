@@ -222,3 +222,17 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
 
         segments.append((cur_dets, cur_obs))
 
+        for dets, obs_mask in segments:
+            if len(dets) == 0:
+                continue
+            elif len(dets) == 1:
+                # Boundary edge: detector to virtual boundary node
+                add_edge_prob(dets[0], boundary_node, obs_mask, prob)
+            elif len(dets) == 2:
+                # Edge between two detectors
+                add_edge_prob(dets[0], dets[1], obs_mask, prob)
+            else:
+                # Fallback for multi-detector hyperedges: chain decomposition
+                for i in range(len(dets) - 1):
+                    add_edge_prob(dets[i], dets[i + 1], obs_mask if i == 0 else 0, prob)
+

@@ -148,3 +148,18 @@ class EWMADriftDetector:
         mean_z = float(z_scores.mean())
 
         severe_dets = list(np.where(z_scores > self._severe_sigma)[0])
+        alarm_dets = list(np.where(z_scores > self._alarm_sigma)[0])
+        warning_dets = list(np.where(z_scores > self._warning_sigma)[0])
+
+        if len(severe_dets) > 0:
+            status = DriftStatus.SEVERE
+        elif len(alarm_dets) > 0:
+            status = DriftStatus.DRIFT_DETECTED
+        elif len(warning_dets) > 0:
+            status = DriftStatus.WARNING
+        else:
+            status = DriftStatus.STABLE
+
+        # Determine affected parameters
+        affected_params = []
+        if len(alarm_dets) > 0:

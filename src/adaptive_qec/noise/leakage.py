@@ -31,3 +31,14 @@ from typing import Any
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class LeakedQubit:
+    """A detector suspected of being affected by leakage."""
+    detector_index: int
+    onset_round: int              # Estimated round when leakage started
+    persistence_length: int       # Number of consecutive rounds with defects
+    autocorrelation: float        # Temporal autocorrelation at lag 1
+    firing_rate: float            # Fraction of rounds this detector fired
+    confidence: float             # Leakage confidence [0, 1]

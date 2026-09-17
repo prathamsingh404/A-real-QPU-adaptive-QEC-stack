@@ -33,3 +33,10 @@ class TestDynamicalDecoupling:
             single_qubit_pulse_error=0.0003,
             default_sequence=DDSequenceType.XY4,
         )
+
+        # 30us idle window
+        idle_map = {0: 30.0, 1: 0.1}  # qubit 0 is idle for 30us, qubit 1 is idle for 0.1us
+
+        schedule = planner.plan_schedule(idle_map)
+        assert isinstance(schedule, DDSchedule)
+

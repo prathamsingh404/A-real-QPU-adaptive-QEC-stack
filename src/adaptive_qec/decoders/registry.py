@@ -19,3 +19,10 @@ _DECODERS: dict[str, Type[Decoder]] = {}
 
 def register_decoder(name: str, decoder_class: Type[Decoder]) -> None:
     """Register a decoder class."""
+    _DECODERS[name.lower()] = decoder_class
+    logger.debug(f"Registered decoder: {name} → {decoder_class.__name__}")
+
+
+def get_decoder(name: str) -> Decoder:
+    """
+    Instantiate a decoder by name.

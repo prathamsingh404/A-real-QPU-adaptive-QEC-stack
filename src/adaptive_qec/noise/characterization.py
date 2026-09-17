@@ -58,3 +58,15 @@ class NoiseProfile:
     leakage_detected: bool = False
 
     # Summary
+    summary: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-serializable summary."""
+        d: dict[str, Any] = {
+            "timestamp": self.timestamp,
+            "backend": self.backend,
+            "estimated_physical_error_rate": self.estimated_physical_error_rate,
+            "estimated_readout_error_rate": self.estimated_readout_error_rate,
+            "estimated_depolarizing_rate": self.estimated_depolarizing_rate,
+            "correlated_noise_detected": self.correlated_noise_detected,
+            "leakage_detected": self.leakage_detected,

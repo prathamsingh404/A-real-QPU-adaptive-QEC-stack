@@ -240,3 +240,14 @@ class EmbeddingFinder:
 
         # Compute SWAP overhead
         swap_count = 0
+        for (r, c), pq in embedding.data_map.items():
+            # Check connectivity to adjacent data qubits
+            for dr, dc in [(0, 1), (1, 0)]:
+                nr, nc = r + dr, c + dc
+                if (nr, nc) in embedding.data_map:
+                    npq = embedding.data_map[(nr, nc)]
+                    if npq not in self.topology.neighbors(pq):
+                        swap_count += self.topology.swap_distance(pq, npq)
+
+        embedding._swap_count = swap_count
+        embedding._depth_overhead = 1.0 + (swap_count * 3) / max(distance * 4, 1)

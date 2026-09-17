@@ -128,3 +128,13 @@ class HeavyHexTopology:
         topo = cls()
         edges = []
         qubit_id = 0
+
+        # Simple heavy-hex: alternating rows of degree-2 and degree-3 qubits
+        # Grid-based generation
+        grid = {}
+        for r in range(rows):
+            for c in range(cols):
+                grid[(r, c)] = qubit_id
+                qubit_id += 1
+
+        topo.num_qubits = qubit_id

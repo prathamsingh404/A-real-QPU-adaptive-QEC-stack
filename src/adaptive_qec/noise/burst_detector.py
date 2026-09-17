@@ -148,3 +148,13 @@ class BurstDetector:
         # Sliding window burst detection
         bursts: list[BurstEvent] = []
         w = self.window_size
+
+        round_idx = 0
+        while round_idx <= R - w:
+            window = syndrome_tensor[round_idx:round_idx + w]
+            total_defects = int(window.sum())
+
+            if total_defects < self.min_defects:
+                round_idx += 1
+                continue
+

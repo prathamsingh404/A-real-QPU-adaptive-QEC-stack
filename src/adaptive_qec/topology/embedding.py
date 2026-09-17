@@ -75,3 +75,14 @@ class EmbeddingScore:
 @dataclass
 class SurfaceCodeEmbedding:
     """
+    A specific embedding of a surface code on a hardware topology.
+
+    Maps logical surface code layout to physical qubit indices,
+    with computed routing overhead.
+    """
+    distance: int
+    data_map: dict[tuple[int, int], int] = field(default_factory=dict)
+    ancilla_map: dict[tuple[int, int], int] = field(default_factory=dict)
+    _swap_count: int = 0
+    _depth_overhead: float = 1.0
+    _idle_slots: int = 0

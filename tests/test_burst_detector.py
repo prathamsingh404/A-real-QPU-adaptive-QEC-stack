@@ -12,3 +12,10 @@ from adaptive_qec.config import NoiseConfig
 from adaptive_qec.decoders.mwpm import MWPMDecoder
 from adaptive_qec.noise.burst_detector import (
     BurstDetector,
+    BurstType,
+    reshape_syndromes_to_tensor,
+)
+from adaptive_qec.noise.drift import CompositeDriftDetector, DriftStatus
+from adaptive_qec.qec.codes import create_code
+
+

@@ -83,3 +83,20 @@ class RepetitionCode(QECCode):
         if distance < 3 or distance % 2 == 0:
             raise ValueError(f"Distance must be odd and >= 3, got {distance}")
         if rounds < 1:
+            raise ValueError(f"Rounds must be >= 1, got {rounds}")
+
+        self.distance = distance
+        self.rounds = rounds
+        self.num_data = distance
+        self.num_ancilla = distance - 1
+
+    def generate_circuit(
+        self,
+        noise: Optional[NoiseConfig] = None,
+        embedding: Optional[Any] = None,
+    ) -> stim.Circuit:
+        """Generate repetition code circuit with Stim."""
+        circuit = stim.Circuit()
+
+        d = self.distance
+        num_data = self.num_data

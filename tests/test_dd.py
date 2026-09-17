@@ -26,3 +26,10 @@ class TestDynamicalDecoupling:
         s0 = twin.get_qubit_state(0)
         s0.t2_us = 20.0
         s1 = twin.get_qubit_state(1)
+        s1.t2_us = 2000.0
+
+        planner = AdaptiveDDPlanner(
+            digital_twin=twin,
+            single_qubit_pulse_error=0.0003,
+            default_sequence=DDSequenceType.XY4,
+        )

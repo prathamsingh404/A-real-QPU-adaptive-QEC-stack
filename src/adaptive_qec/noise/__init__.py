@@ -16,3 +16,9 @@ from adaptive_qec.noise.leakage import (
 from adaptive_qec.noise.drift import (
     CompositeDriftDetector,
     CUSUMDriftDetector,
+    DriftReport,
+    DriftStatus,
+    EWMADriftDetector,
+)
+
+__all__ = [

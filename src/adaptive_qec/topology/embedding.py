@@ -64,3 +64,14 @@ class EmbeddingScore:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "swap_count": self.swap_count,
+            "circuit_depth_overhead": round(self.circuit_depth_overhead, 3),
+            "idle_time_slots": self.idle_time_slots,
+            "connectivity_deficit": round(self.connectivity_deficit, 4),
+            "total_score": round(self.total_score, 4),
+        }
+
+
+@dataclass
+class SurfaceCodeEmbedding:
+    """

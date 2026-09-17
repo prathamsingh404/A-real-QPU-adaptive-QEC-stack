@@ -313,3 +313,38 @@ async def run_qec_experiment(req: QECRunRequest) -> dict[str, Any]:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "defect_rate": round(mean_defect_rate, 4),
             "drift_status": _LATEST_DRIFT_REPORT.status.name if _LATEST_DRIFT_REPORT else "UNKNOWN",
+        })
+        # Keep last 50 entries
+        if len(_DRIFT_HISTORY) > 50:
+            _DRIFT_HISTORY[:] = _DRIFT_HISTORY[-50:]
+
+        # Store for other endpoints to reference
+        _CURRENT_EXPERIMENT.update({k: v for k, v in exp_data.items() if k != "detection_events"})
+        _CURRENT_EXPERIMENT["detectors_array"] = detectors
+
+        # Record in history
+        _EXPERIMENT_HISTORY.append({
+            "experiment_id": exp_data["experiment_id"],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "logical_error_rate": exp_data["logical_error_rate"],
+            "mean_defect_rate": exp_data["mean_defect_rate"],
+            "distance": req.distance,
+            "shots": req.shots,
+        })
+        if len(_EXPERIMENT_HISTORY) > 100:
+            _EXPERIMENT_HISTORY[:] = _EXPERIMENT_HISTORY[-100:]
+
+        return {k: v for k, v in exp_data.items() if k != "detection_events"}
+
+    except Exception as e:
+        logger.exception("Error executing QEC experiment")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/decoders/benchmark")
+async def benchmark_decoders(req: BenchmarkRequest) -> dict[str, Any]:
+    """
+    Compare decoders side-by-side on identical syndrome data.
+
+    MWPM (PyMatching) and Union-Find (Delfosse & Nickerson) run real execution.
+    Other decoders (ML, Adaptive Router) are projected using published ratios.

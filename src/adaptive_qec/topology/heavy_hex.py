@@ -138,3 +138,13 @@ class HeavyHexTopology:
                 qubit_id += 1
 
         topo.num_qubits = qubit_id
+
+        for r in range(rows):
+            for c in range(cols):
+                q = grid[(r, c)]
+                # Horizontal neighbors
+                if c + 1 < cols:
+                    edges.append((q, grid[(r, c + 1)]))
+                # Vertical neighbors (heavy-hex / brickwall alternating pattern:
+                # even rows connect down at c % 4 == 0, odd rows connect down at c % 4 == 2)
+                connect_down = (r % 2 == 0 and c % 4 == 0) or (r % 2 == 1 and c % 4 == 2)

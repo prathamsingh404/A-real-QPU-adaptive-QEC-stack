@@ -223,3 +223,18 @@ class CUSUMDriftDetector:
         # State
         self._s_plus: Optional[np.ndarray] = None   # upper CUSUM
         self._s_minus: Optional[np.ndarray] = None   # lower CUSUM
+        self._baseline_mean: Optional[np.ndarray] = None
+        self._baseline_std: Optional[np.ndarray] = None
+        self._sample_count = 0
+        self._history: list[np.ndarray] = []
+
+    def update(self, detection_rates: np.ndarray) -> DriftReport:
+        """
+        Update CUSUM detector with new detection rates.
+
+        Args:
+            detection_rates: P(D_i = 1) for each detector.
+
+        Returns:
+            DriftReport.
+        """

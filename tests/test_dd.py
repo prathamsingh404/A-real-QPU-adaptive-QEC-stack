@@ -68,3 +68,10 @@ class TestDynamicalDecoupling:
         sched_xy8 = planner.plan_schedule({0: 50.0}, preferred_sequence=DDSequenceType.XY8)
         assert sched_xy8.qubit_sequences[0] == DDSequenceType.XY8
         assert sched_xy8.total_pulses_inserted == 8
+
+    def test_estimate_idle_map_and_apply(self):
+        code = create_code("repetition", distance=3, rounds=3)
+        circuit = code.generate_circuit()
+
+        idle_map = AdaptiveDDPlanner.estimate_idle_map_from_circuit(circuit)
+        assert len(idle_map) > 0

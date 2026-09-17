@@ -152,3 +152,17 @@ class MWPMDecoder(Decoder):
 
         # Compute logical errors
         # A logical error occurs when the predicted correction, combined
+        # with the actual observable flip, results in a logical flip
+        logical_errors = np.any(all_preds != observable_flips, axis=1)
+        num_errors = int(logical_errors.sum())
+        error_rate = num_errors / shots
+
+        # Latency statistics (convert to microseconds)
+        latency_us = per_shot_times * 1e6
+
+        metrics = DecoderMetrics(
+            total_shots=shots,
+            num_logical_errors=num_errors,
+            logical_error_rate=error_rate,
+            decode_time_s=t_total,
+            per_shot_latency_us=latency_us,

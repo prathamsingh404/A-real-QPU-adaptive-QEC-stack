@@ -236,3 +236,17 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
                 for i in range(len(dets) - 1):
                     add_edge_prob(dets[i], dets[i + 1], obs_mask if i == 0 else 0, prob)
 
+    edges: list[DetectorEdge] = []
+    for (u, v), obs_probs in edge_dict.items():
+        best_obs = max(obs_probs.keys(), key=lambda o: obs_probs[o])
+        best_p = obs_probs[best_obs]
+        weight = -float(np.log(max(best_p, 1e-15)))
+        is_boundary = (v == boundary_node or u == boundary_node)
+        edges.append(DetectorEdge(
+            u=u, v=v,
+            weight=weight,
+            observables=best_obs,
+            is_boundary=is_boundary,
+        ))
+
+    graph = DetectorGraph(

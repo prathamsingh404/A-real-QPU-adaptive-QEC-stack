@@ -2,3 +2,5 @@
 
 from adaptive_qec.analysis.threshold import (
     ThresholdAnalyzer,
+    ThresholdFit,
+)

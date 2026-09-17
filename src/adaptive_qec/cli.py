@@ -50,3 +50,29 @@ def run(config: str, shots: int | None, distances: str | None, temporal: int | N
 
     logger = logging.getLogger("adaptive_qec.cli")
     logger.info("AdaptiveQEC — Real-QPU Adaptive QEC Platform")
+    logger.info(f"Config: {config}")
+
+    cfg = load_config(config)
+    logger.info(
+        f"Loaded config: code={cfg.qec.code.value}, "
+        f"d={cfg.qec.distance}, R={cfg.qec.rounds}, "
+        f"backend={cfg.hardware.backend}, channel={cfg.hardware.channel}"
+    )
+
+    manager = ExperimentManager(cfg)
+
+    logger.info("Connecting to QPU...")
+    manager.connect_qpu()
+
+    if distances:
+        distance_list = [int(d.strip()) for d in distances.split(",")]
+        logger.info(f"Running distance sweep: {distance_list}")
+        results = manager.run_distance_sweep(distance_list, shots=shots)
+
+        logger.info("\n=== DISTANCE SWEEP RESULTS ===")
+        for d, r in zip(distance_list, results):
+            logger.info(
+                f"  d={d}: LER={r.logical_error_rate:.6f} "
+                f"[{r.logical_error_rate_ci_low:.6f}, {r.logical_error_rate_ci_high:.6f}]"
+            )
+

@@ -174,3 +174,14 @@ class EmbeddingFinder:
             if score.total_score < best_score:
                 best_score = score.total_score
                 best_embedding = embedding
+
+        if best_embedding is None:
+            logger.warning(f"No valid embedding found for d={distance}")
+            return SurfaceCodeEmbedding(distance=distance)
+
+        logger.info(
+            f"Best embedding for d={distance}: "
+            f"{len(best_embedding.all_physical_qubits())} physical qubits, "
+            f"score={best_score:.2f}"
+        )
+        return best_embedding

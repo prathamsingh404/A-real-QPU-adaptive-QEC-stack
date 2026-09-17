@@ -86,3 +86,14 @@ class LeakageDetector:
     Usage:
         detector = LeakageDetector(min_persistence=3, autocorr_threshold=0.3)
         analysis = detector.analyze(syndrome_tensor)
+    """
+
+    def __init__(
+        self,
+        min_persistence: int = 3,
+        autocorr_threshold: float = 0.3,
+        firing_rate_threshold: float = 0.4,
+    ) -> None:
+        """
+        Args:
+            min_persistence: Min consecutive rounds for leakage suspicion.

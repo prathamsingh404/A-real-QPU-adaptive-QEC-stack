@@ -98,3 +98,13 @@ class BurstDetector:
     Usage:
         detector = BurstDetector(window_size=5, significance=0.001)
         analysis = detector.analyze(syndrome_tensor, num_detectors_per_round=8)
+    """
+
+    def __init__(
+        self,
+        window_size: int = 5,
+        significance: float = 0.001,
+        min_defects_for_burst: int = 3,
+    ) -> None:
+        """
+        Args:

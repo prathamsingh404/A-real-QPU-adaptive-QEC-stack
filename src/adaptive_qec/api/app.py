@@ -628,3 +628,38 @@ async def run_selective_calibration(req: RecalibrateRequest) -> dict[str, Any]:
     return {
         "source": "projected",
         "status": "CALIBRATION_PROJECTED",
+        "shots_consumed": req.budget_shots,
+        "old_logical_error_rate": current_ler,
+        "projected_logical_error_rate": projected_ler,
+        "projected_improvement_pct": round(projected_improvement * 100, 1),
+        "target_met": projected_ler <= req.target_error_rate,
+        "note": "Projected result. Actual recalibration requires QPU connection.",
+    }
+
+
+@app.get("/api/simulator/gap")
+async def get_simulator_gap() -> dict[str, Any]:
+    """
+    Hardware vs Simulation gap analyzer (Delta_sim-hw).
+
+    Compares the last experiment's logical error rate against
+    a Stim simulation at the same parameters.
+    """
+    last_exp = _CURRENT_EXPERIMENT
+    hw_ler = last_exp.get("logical_error_rate", 0.0)
+    has_data = bool(hw_ler > 0)
+
+    if not has_data:
+        return {
+            "source": "no_data",
+            "message": "Run a QEC experiment first to compute the sim-vs-hw gap.",
+        }
+
+    # The experiment already used Stim simulation, so we compare against
+    # an idealized noise-only Stim model (no readout asymmetry, no drift)
+    distance = last_exp.get("distance", 3)
+    rounds = last_exp.get("rounds", 3)
+
+    try:
+        code = create_code(code_type="surface", distance=distance, rounds=rounds)
+        ideal_noise = NoiseConfig()

@@ -33,3 +33,10 @@ def _mock_metrics(shots: int, errors: int, latency_us: float = 5.0) -> DecoderMe
 
 
 class TestThresholdAnalyzer:
+    """Tests for ThresholdAnalyzer class."""
+
+    def test_even_distance_raises(self):
+        analyzer = ThresholdAnalyzer()
+        with pytest.raises(ValueError, match="Code distance must be odd"):
+            analyzer.add_result(distance=4, metrics=_mock_metrics(100, 5), physical_error_rate=0.005)
+

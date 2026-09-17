@@ -68,3 +68,13 @@ class HeavyHexTopology:
     """
 
     def __init__(self) -> None:
+        self.num_qubits: int = 0
+        self.edges: list[tuple[int, int]] = []
+        self.adjacency: dict[int, set[int]] = {}
+        self._degree: dict[int, int] = {}
+
+    @classmethod
+    def from_coupling_map(cls, coupling_map: list[list[int]], num_qubits: int) -> HeavyHexTopology:
+        """Build from a coupling map (list of [q1, q2] pairs)."""
+        topo = cls()
+        topo.num_qubits = num_qubits

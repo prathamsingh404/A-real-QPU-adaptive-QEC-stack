@@ -418,3 +418,17 @@ class UnionFindDecoder(Decoder):
             ru = find(u)
             rv = find(v)
             if ru == rv:
+                continue
+
+            u_odd = (parity[ru] % 2 == 1) and not boundary_conn[ru]
+            v_odd = (parity[rv] % 2 == 1) and not boundary_conn[rv]
+            u_b = boundary_conn[ru]
+            v_b = boundary_conn[rv]
+
+            if not (u_odd or v_odd):
+                continue
+
+            union(u, v)
+
+            if u_odd and v_odd:
+                corr ^= o

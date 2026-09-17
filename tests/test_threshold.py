@@ -68,3 +68,10 @@ class TestThresholdAnalyzer:
         with pytest.raises(ValueError, match="Need results for both"):
             analyzer.compute_lambda(3, 7)
 
+    def test_fit_threshold_model(self):
+        analyzer = ThresholdAnalyzer()
+        analyzer.add_result(3, _mock_metrics(10000, 100), physical_error_rate=0.003)
+        analyzer.add_result(5, _mock_metrics(10000, 20), physical_error_rate=0.003)
+        analyzer.add_result(7, _mock_metrics(10000, 4), physical_error_rate=0.003)
+
+        fit = analyzer.fit_threshold_model()

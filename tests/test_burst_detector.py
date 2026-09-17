@@ -5,3 +5,10 @@ Validates sliding-window Poisson burst detection, burst heuristic classification
 burst-aware decoding.
 """
 
+import numpy as np
+import pytest
+
+from adaptive_qec.config import NoiseConfig
+from adaptive_qec.decoders.mwpm import MWPMDecoder
+from adaptive_qec.noise.burst_detector import (
+    BurstDetector,

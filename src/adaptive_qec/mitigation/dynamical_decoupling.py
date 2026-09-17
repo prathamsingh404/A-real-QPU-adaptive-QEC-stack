@@ -52,3 +52,12 @@ class DDSchedule:
     pulse_counts: dict[int, int] = field(default_factory=dict)
     protected_qubits: list[int] = field(default_factory=list)
     total_pulses_inserted: int = 0
+    estimated_noise_reduction: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "qubit_sequences": {
+                q: seq.value for q, seq in self.qubit_sequences.items()
+            },
+            "idle_windows_us": {
+                q: round(t, 3) for q, t in self.idle_windows_us.items()

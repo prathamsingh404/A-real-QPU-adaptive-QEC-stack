@@ -158,3 +158,13 @@ class BurstDetector:
                 round_idx += 1
                 continue
 
+            # Chi-squared test: is observed defect count significantly
+            # above expected under independent Bernoulli model?
+            # H0: defects ~ Binomial(N_d * w, baseline_rate)
+            # Use Poisson approximation for large N_d * w
+            if expected_per_window > 0:
+                # One-sided Poisson test
+                p_value = 1.0 - stats.poisson.cdf(
+                    total_defects - 1, expected_per_window
+                )
+            else:

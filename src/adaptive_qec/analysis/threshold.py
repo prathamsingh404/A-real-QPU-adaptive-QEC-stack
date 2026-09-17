@@ -278,3 +278,17 @@ class ThresholdAnalyzer:
             is_below_threshold=is_below,
         )
 
+        logger.info(
+            f"Threshold fit: p_th={p_th_fit:.6f}, A={A_fit:.4f}, "
+            f"below_threshold={is_below}, Λ={lambda_ratios}"
+        )
+        return fit
+
+    def get_results(self) -> dict[int, dict[str, Any]]:
+        """Get all collected results."""
+        return dict(self._results)
+
+    def scaling_table(self) -> list[dict[str, Any]]:
+        """
+        Generate a scaling table for display/export.
+

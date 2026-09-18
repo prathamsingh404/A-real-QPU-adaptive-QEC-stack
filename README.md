@@ -242,8 +242,8 @@ To execute adaptive QEC circuits directly on IBM Quantum hardware (`ibm_marrakes
    In `.env` (or via OS environment):
    ```bash
    IBM_QUANTUM_CHANNEL=ibm_cloud
-   IBM_QUANTUM_TOKEN=WHQiem5SJ0-iTLZBqPs10H1gNfTxFcE6lbobBRoLVVMI
-   IBM_QUANTUM_INSTANCE=crn:v1:bluemix:public:quantum-computing:us-east:a/8ae29ae2e0204424ab76bf7397315239:5031eafb-df34-4dd9-8912-1fb14dc9b74f::
+   IBM_QUANTUM_TOKEN=*********************************
+   IBM_QUANTUM_INSTANCE=*******************************************************************************:
    IBM_QUANTUM_BACKEND=ibm_marrakesh
    ```
 

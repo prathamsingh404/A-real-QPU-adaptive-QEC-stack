@@ -103,7 +103,8 @@ class TestQPUBase:
             qubit_calibrations=qubits,
         )
 
-        assert cal.get_qubit(0).t1_us == 100
+        q0 = cal.get_qubit(0)
+        assert q0 is not None and q0.t1_us == 100
         assert cal.t1_values().shape == (2,)
         assert cal.readout_errors().shape == (2,)
 
@@ -126,7 +127,8 @@ class TestMockBackend:
         cal = backend.get_calibration()
 
         assert len(cal.qubit_calibrations) == 10
-        assert cal.qubit_calibrations[0].t1_us > 0
+        t1_val = cal.qubit_calibrations[0].t1_us
+        assert t1_val is not None and t1_val > 0
 
     def test_mock_topology(self):
         config = HardwareConfig()

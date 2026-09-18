@@ -46,8 +46,8 @@ class IBMQuantumBackend(QPUBackend):
 
     def __init__(self, config: HardwareConfig) -> None:
         self._config = config
-        self._service = None
-        self._backend = None
+        self._service: Any = None
+        self._backend: Any = None
         self._backend_name = config.backend
 
     def connect(self) -> None:
@@ -96,10 +96,11 @@ class IBMQuantumBackend(QPUBackend):
                 f"Using actual count."
             )
 
+        status_str = self._backend.status().status_msg if hasattr(self._backend, "status") else "connected"
         logger.info(
             f"Connected to {self._backend_name} — "
             f"{actual_qubits} qubits, "
-            f"status: {self._backend.status().status_msg}"
+            f"status: {status_str}"
         )
 
     def run(
@@ -147,7 +148,7 @@ class IBMQuantumBackend(QPUBackend):
         import time
         t_start = time.perf_counter()
 
-        sampler = SamplerV2(backend=self._backend)
+        sampler = SamplerV2(mode=self._backend)
         job = sampler.run([transpiled], shots=shots)
         result = job.result()
 
@@ -208,7 +209,7 @@ class IBMQuantumBackend(QPUBackend):
         except (AttributeError, NotImplementedError, Exception) as e:
             logger.info(f"backend.properties() unavailable ({e}); using backend.target only")
 
-        target = self._backend.target
+        target: Any = getattr(self._backend, "target", None)
 
         # Extract per-qubit calibration
         qubit_calibrations = []
@@ -322,7 +323,7 @@ class IBMQuantumBackend(QPUBackend):
         if self._backend is None:
             raise RuntimeError("Backend not connected. Call connect() first.")
 
-        status = self._backend.status()
+        status = self._backend.status() if hasattr(self._backend, 'status') else None
         config = self._backend.configuration() if hasattr(self._backend, 'configuration') else None
 
         return BackendInfo(
@@ -342,8 +343,8 @@ class IBMQuantumBackend(QPUBackend):
         if self._backend is None:
             return False
         try:
-            status = self._backend.status()
-            return status.operational
+            status = self._backend.status() if hasattr(self._backend, 'status') else None
+            return bool(status.operational) if status and hasattr(status, 'operational') else True
         except Exception:
             return False
 

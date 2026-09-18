@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -117,6 +117,8 @@ class EWMADriftDetector:
                 magnitude=0.0,
                 details={"message": "Initializing baseline"},
             )
+
+        assert self._ewma is not None and self._baseline_mean is not None and self._baseline_var is not None
 
         # Update EWMA
         self._ewma = self._alpha * detection_rates + (1 - self._alpha) * self._ewma
@@ -256,6 +258,8 @@ class CUSUMDriftDetector:
                 details={"message": f"CUSUM warmup: 1/{self._warmup}"},
             )
 
+        assert self._baseline_mean is not None
+
         if self._sample_count <= self._warmup:
             delta = detection_rates - self._baseline_mean
             self._baseline_mean += delta / self._sample_count
@@ -263,8 +267,9 @@ class CUSUMDriftDetector:
             if self._sample_count == self._warmup:
                 # Compute baseline standard deviation
                 history_arr = np.array(self._history)
-                self._baseline_std = history_arr.std(axis=0)
-                self._baseline_std[self._baseline_std < 1e-8] = 1e-8
+                b_std = history_arr.std(axis=0)
+                b_std[b_std < 1e-8] = 1e-8
+                self._baseline_std = b_std
                 self._s_plus = np.zeros(num_detectors)
                 self._s_minus = np.zeros(num_detectors)
 
@@ -273,6 +278,8 @@ class CUSUMDriftDetector:
                 magnitude=0.0,
                 details={"message": f"CUSUM warmup: {self._sample_count}/{self._warmup}"},
             )
+
+        assert self._baseline_std is not None and self._s_plus is not None and self._s_minus is not None
 
         # Normalized deviation
         z = (detection_rates - self._baseline_mean) / self._baseline_std

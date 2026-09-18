@@ -233,7 +233,7 @@ class HeavyHexTopology:
         if start == end:
             return [start]
 
-        visited = {start: None}
+        visited: dict[int, Optional[int]] = {start: None}
         queue = deque([start])
 
         while queue:
@@ -244,10 +244,14 @@ class HeavyHexTopology:
                     if neighbor == end:
                         # Reconstruct path
                         path = [end]
-                        current = end
-                        while visited[current] is not None:
-                            current = visited[current]
-                            path.append(current)
+                        current: Optional[int] = end
+                        while current is not None:
+                            prev = visited.get(current)
+                            if prev is not None:
+                                current = prev
+                                path.append(current)
+                            else:
+                                break
                         return list(reversed(path))
                     queue.append(neighbor)
 

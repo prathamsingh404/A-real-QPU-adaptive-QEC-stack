@@ -51,6 +51,8 @@ class NoiseInjector:
 
         for instruction in circuit.flattened():
             noisy.append(instruction)
+            if not isinstance(instruction, stim.CircuitInstruction):
+                continue
 
             if instruction.name in ("H", "S", "S_DAG", "X", "Y", "Z"):
                 targets = instruction.targets_copy()
@@ -91,6 +93,9 @@ class NoiseInjector:
 
         noisy = stim.Circuit()
         for instruction in circuit.flattened():
+            if not isinstance(instruction, stim.CircuitInstruction):
+                noisy.append(instruction)
+                continue
             if instruction.name in ("M", "MR", "MX", "MY") and p_flip > 0:
                 targets = instruction.targets_copy()
                 qubit_targets = [t.value for t in targets]
@@ -115,6 +120,8 @@ class NoiseInjector:
         noisy = stim.Circuit()
         for instruction in circuit.flattened():
             noisy.append(instruction)
+            if not isinstance(instruction, stim.CircuitInstruction):
+                continue
 
             if instruction.name == "TICK" and p > 0:
                 for q1, q2 in correlation_pairs:
@@ -145,6 +152,8 @@ class NoiseInjector:
             drifted = stim.Circuit()
             for instruction in circuit.flattened():
                 drifted.append(instruction)
+                if not isinstance(instruction, stim.CircuitInstruction):
+                    continue
 
                 if instruction.name in ("CX", "CNOT", "CZ"):
                     targets = instruction.targets_copy()

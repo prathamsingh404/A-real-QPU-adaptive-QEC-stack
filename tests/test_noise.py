@@ -86,11 +86,13 @@ class TestEWMADriftDetector:
         detector = EWMADriftDetector(warmup_samples=5)
         rng = np.random.default_rng(42)
 
+        report = None
         for _ in range(20):
             rates = rng.normal(0.1, 0.005, size=10)
             rates = np.clip(rates, 0, 1)
             report = detector.update(rates)
 
+        assert report is not None
         assert report.status in (DriftStatus.STABLE, DriftStatus.WARNING)
 
     def test_drift_detection(self):
@@ -103,10 +105,12 @@ class TestEWMADriftDetector:
             detector.update(rates)
 
         # Apply a large shift
+        report = None
         for _ in range(10):
             rates = np.full(10, 0.30)  # 6x increase
             report = detector.update(rates)
 
+        assert report is not None
         assert report.status in (DriftStatus.DRIFT_DETECTED, DriftStatus.SEVERE)
         assert report.magnitude > 0
 
@@ -117,10 +121,12 @@ class TestCUSUMDriftDetector:
     def test_stable_no_alarm(self):
         detector = CUSUMDriftDetector(warmup_samples=10)
 
+        report = None
         for _ in range(30):
             rates = np.full(5, 0.1)
             report = detector.update(rates)
 
+        assert report is not None
         assert report.status == DriftStatus.STABLE
 
     def test_sudden_shift_alarm(self):
@@ -132,10 +138,12 @@ class TestCUSUMDriftDetector:
             detector.update(rates)
 
         # Sudden shift
+        report = None
         for _ in range(10):
             rates = np.full(5, 0.25)
             report = detector.update(rates)
 
+        assert report is not None
         assert report.status == DriftStatus.DRIFT_DETECTED
 
 
@@ -151,9 +159,11 @@ class TestCompositeDriftDetector:
             detector.update(rates)
 
         # Apply drift
+        report = None
         for _ in range(10):
             rates = np.full(5, 0.3)
             report = detector.update(rates)
 
         # Should catch drift via at least one method
+        assert report is not None
         assert report.status != DriftStatus.STABLE or report.magnitude > 0

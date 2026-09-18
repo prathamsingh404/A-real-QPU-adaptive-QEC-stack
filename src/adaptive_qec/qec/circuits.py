@@ -99,6 +99,8 @@ class CircuitGenerator:
         meas_idx = 0
 
         for instruction in stim_circuit.flattened():
+            if not isinstance(instruction, stim.CircuitInstruction):
+                continue
             name = instruction.name
 
             if name == "R":
@@ -207,6 +209,6 @@ class CircuitGenerator:
         # Extract detector coordinates
         coord_dict = stim_circuit.get_detector_coordinates()
         for det_id, coords in coord_dict.items():
-            mapping["detector_coords"][int(det_id)] = coords.tolist()
+            mapping["detector_coords"][int(det_id)] = list(coords)
 
         return mapping

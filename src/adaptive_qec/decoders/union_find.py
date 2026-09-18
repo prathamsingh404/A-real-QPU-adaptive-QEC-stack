@@ -198,7 +198,7 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
             edge_dict[pair][obs_mask] = prob
 
     for instruction in dem.flattened():
-        if instruction.type != "error":
+        if not isinstance(instruction, stim.DemInstruction) or instruction.type != "error":
             continue
 
         prob = instruction.args_copy()[0]
@@ -211,6 +211,8 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
         cur_obs = 0
 
         for target in instruction.targets_copy():
+            if not isinstance(target, stim.DemTarget):
+                continue
             if target.is_separator():
                 segments.append((cur_dets, cur_obs))
                 cur_dets = []
@@ -365,6 +367,9 @@ class UnionFindDecoder(Decoder):
         Returns:
             Observable corrections: shape (num_observables,), dtype uint8
         """
+        if self._graph is None or self._dist is None or self._path_obs is None:
+            raise RuntimeError("UnionFindDecoder not configured. Call configure() first.")
+
         defects = np.where(syndrome > 0)[0]
         if len(defects) == 0:
             return np.zeros(self._num_observables, dtype=np.uint8)

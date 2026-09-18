@@ -9,7 +9,7 @@ IQM, Quantinuum, and other providers.
 from __future__ import annotations
 
 import logging
-from typing import Type
+from typing import Any, Type
 
 from adaptive_qec.config import AdaptiveQECConfig, HardwareProvider
 from adaptive_qec.qpu.base import QPUBackend
@@ -17,10 +17,10 @@ from adaptive_qec.qpu.base import QPUBackend
 logger = logging.getLogger(__name__)
 
 # Global registry of backend classes
-_BACKENDS: dict[str, Type[QPUBackend]] = {}
+_BACKENDS: dict[str, Any] = {}
 
 
-def register_backend(provider: str, backend_class: Type[QPUBackend]) -> None:
+def register_backend(provider: str, backend_class: Any) -> None:
     """Register a QPU backend class for a given provider name."""
     _BACKENDS[provider.lower()] = backend_class
     logger.debug(f"Registered QPU backend: {provider} → {backend_class.__name__}")

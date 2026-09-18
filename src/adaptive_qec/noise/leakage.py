@@ -30,6 +30,8 @@ from typing import Any
 
 import numpy as np
 
+from adaptive_qec.noise.burst_detector import reshape_syndromes_to_tensor
+
 logger = logging.getLogger(__name__)
 
 

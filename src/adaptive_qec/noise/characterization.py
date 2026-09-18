@@ -200,7 +200,8 @@ class NoiseCharacterizer:
         # 7. Detect leakage signatures
         if num_rounds >= 3 and detection_events.ndim == 2:
             try:
-                from adaptive_qec.noise.leakage import LeakageDetector, reshape_syndromes_to_tensor
+                from adaptive_qec.noise.burst_detector import reshape_syndromes_to_tensor
+                from adaptive_qec.noise.leakage import LeakageDetector
                 det_per_round = detection_events.shape[1] // num_rounds
                 if det_per_round > 0:
                     # Average over first few shots to build a stable syndrome trace

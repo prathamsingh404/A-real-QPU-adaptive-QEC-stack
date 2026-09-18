@@ -178,6 +178,8 @@ class AdaptiveDDPlanner:
 
         current_tick = 0
         for instruction in circuit:
+            if not isinstance(instruction, stim.CircuitInstruction):
+                continue
             if instruction.name == "TICK":
                 current_tick += 1
                 continue

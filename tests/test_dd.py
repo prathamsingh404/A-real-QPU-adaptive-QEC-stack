@@ -24,8 +24,10 @@ class TestDynamicalDecoupling:
         twin = HardwareDigitalTwin(num_qubits=5)
         # Configure qubit 0 with poor T2 (20us) and qubit 1 with excellent T2 (2000us)
         s0 = twin.get_qubit_state(0)
+        assert s0 is not None
         s0.t2_us = 20.0
         s1 = twin.get_qubit_state(1)
+        assert s1 is not None
         s1.t2_us = 2000.0
 
         planner = AdaptiveDDPlanner(
@@ -55,6 +57,7 @@ class TestDynamicalDecoupling:
     def test_cpmg_and_xy8_sequences(self):
         twin = HardwareDigitalTwin(num_qubits=2)
         s0 = twin.get_qubit_state(0)
+        assert s0 is not None
         s0.t2_us = 30.0
 
         planner = AdaptiveDDPlanner(digital_twin=twin)
@@ -89,9 +92,13 @@ class TestDigitalTwinDDCandidates:
 
     def test_get_dd_candidates(self):
         twin = HardwareDigitalTwin(num_qubits=3)
-        twin.get_qubit_state(0).t2_us = 10.0   # very bad T2
-        twin.get_qubit_state(1).t2_us = 50.0   # moderate T2
-        twin.get_qubit_state(2).t2_us = 500.0  # very good T2
+        q0 = twin.get_qubit_state(0)
+        q1 = twin.get_qubit_state(1)
+        q2 = twin.get_qubit_state(2)
+        assert q0 is not None and q1 is not None and q2 is not None
+        q0.t2_us = 10.0   # very bad T2
+        q1.t2_us = 50.0   # moderate T2
+        q2.t2_us = 500.0  # very good T2
 
         # During a 5us idle period:
         # q0 dephasing: 1 - exp(-5/10) = 0.393 > 0.001 -> Candidate

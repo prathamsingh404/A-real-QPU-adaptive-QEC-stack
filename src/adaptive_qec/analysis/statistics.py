@@ -144,7 +144,7 @@ def compare_error_rates(
     else:
         raise ValueError(f"Unknown alternative: {alternative}")
 
-    significant = p_value < alpha
+    significant = bool(p_value < alpha)
     effect_size = p_a - p_b
 
     result = HypothesisTestResult(

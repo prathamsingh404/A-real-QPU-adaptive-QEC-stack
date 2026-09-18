@@ -77,6 +77,8 @@ class SyndromeExtractor:
         # Walk through the circuit to find DETECTOR instructions
         # and their record targets
         for instruction in self._circuit.flattened():
+            if not isinstance(instruction, stim.CircuitInstruction):
+                continue
             if instruction.name == "M" or instruction.name == "MR":
                 measurement_offset += len(instruction.targets_copy())
 
@@ -232,16 +234,20 @@ class SyndromeExtractor:
         boundary_edges = []
 
         for instruction in dem.flattened():
-            if instruction.type == "error":
-                prob = instruction.args_copy()[0]
-                detectors = []
-                has_observable = False
+            if not isinstance(instruction, stim.DemInstruction) or instruction.type != "error":
+                continue
 
-                for target in instruction.targets_copy():
-                    if target.is_relative_detector_id():
-                        detectors.append(target.val)
-                    elif target.is_logical_observable_id():
-                        has_observable = True
+            prob = instruction.args_copy()[0]
+            detectors = []
+            has_observable = False
+
+            for target in instruction.targets_copy():
+                if not isinstance(target, stim.DemTarget):
+                    continue
+                if target.is_relative_detector_id():
+                    detectors.append(target.val)
+                elif target.is_logical_observable_id():
+                    has_observable = True
 
                 if len(detectors) == 2:
                     edges.append((detectors[0], detectors[1], prob))

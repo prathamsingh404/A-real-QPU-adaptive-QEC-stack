@@ -223,9 +223,9 @@ def compute_spatial_correlation(
 
     # Pearson correlation matrix
     if num_detectors <= 500:
-        correlation_matrix = np.corrcoef(detection_float.T)
-        # Handle NaN from zero-variance detectors
-        correlation_matrix = np.nan_to_num(correlation_matrix, nan=0.0)
+        raw_corr = np.corrcoef(detection_float.T)
+        # Handle NaN from zero-variance detectors and ensure 2D array
+        correlation_matrix: np.ndarray = np.atleast_2d(np.nan_to_num(raw_corr, nan=0.0))
     else:
         # Approximate for large detector counts
         correlation_matrix = np.zeros((num_detectors, num_detectors))

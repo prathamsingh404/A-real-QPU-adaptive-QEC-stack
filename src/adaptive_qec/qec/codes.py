@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import stim
@@ -301,13 +301,6 @@ class SurfaceCode(QECCode):
         Returns coordinates from the circuit itself for accuracy.
         """
         circuit = self.generate_circuit()
-        dem = circuit.detector_error_model()
-        coords = []
-        for instruction in dem:
-            if instruction.type == "error":
-                for target in instruction.targets_copy():
-                    if target.is_relative_detector_id():
-                        pass  # coordinates come from circuit
         # Use Stim's built-in coordinate extraction
         coord_dict = circuit.get_detector_coordinates()
         result = np.zeros((len(coord_dict), 3))

@@ -157,3 +157,84 @@ def fig_4_distance_scaling(data: dict[str, Any], out_dir: Path) -> None:
 def fig_5_paired_deltas(data: dict[str, Any], out_dir: Path) -> None:
     """Figure 5: Forest Plot of Paired Delta LER across Scenarios from Suite Results."""
     fig, ax = plt.subplots(figsize=(8, 4.5))
+
+    scenarios_d3 = data["aggregates"]["d3"]
+    scenario_order = ["stationary_noise", "uniform_drift", "localized_hotspot", "structural_anisotropy"]
+    scenario_names = {
+        "stationary_noise": "Stationary Baseline",
+        "uniform_drift": "Uniform Global Drift",
+        "localized_hotspot": "Localized Hotspot",
+        "structural_anisotropy": "Structural Anisotropy",
+    }
+
+    labels = []
+    deltas = []
+    ci_lows = []
+    ci_highs = []
+
+    for sc in scenario_order:
+        if sc not in scenarios_d3:
+            continue
+        paired = scenarios_d3[sc]["w2000"]["paired_analysis"]["cg_vs_static"]
+        labels.append(scenario_names[sc])
+        deltas.append(paired["mean_delta_ler"])
+        ci_lows.append(paired["ci_95"][0])
+        ci_highs.append(paired["ci_95"][1])
+
+    y_pos = np.arange(len(labels))
+    deltas = np.array(deltas)
+    ci_lows = np.array(ci_lows)
+    ci_highs = np.array(ci_highs)
+
+    for i in range(len(labels)):
+        col = "#2ca02c" if deltas[i] < -0.001 else "#4a7bb0"
+        err_low = deltas[i] - ci_lows[i]
+        err_high = ci_highs[i] - deltas[i]
+        ax.errorbar(
+            deltas[i],
+            y_pos[i],
+            xerr=[[err_low], [err_high]],
+            fmt="o",
+            color="black",
+            ecolor=col,
+            elinewidth=2.5,
+            capsize=4,
+            markersize=6,
+        )
+
+    ax.axvline(0.0, color="red", linestyle="--", linewidth=1.5, label=r"Null Effect ($\Delta=0$)")
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels)
+    ax.set_xlabel(r"Paired Delta LER: $\Delta = \text{LER}_{\text{adaptive}} - \text{LER}_{\text{static}}$ (95% CI)")
+    ax.set_title("Confirmatory Paired Delta LER ($N=30$ Held-Out Seeds, $W=2{,}000$)")
+    ax.legend(loc="lower left")
+
+    plt.tight_layout()
+    fig.savefig(out_dir / "fig_5_paired_deltas.png", dpi=300)
+    fig.savefig(out_dir / "fig_5_paired_deltas.pdf")
+    plt.close(fig)
+    logger.info("Saved fig_5_paired_deltas")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate Paper Figures from Suite Results")
+    parser.add_argument("--results", type=Path, default=Path("data/suite_results.json"), help="Suite results JSON path")
+    parser.add_argument("--output-dir", type=Path, default=Path("papers/figures"), help="Output directory")
+    args = parser.parse_args()
+
+    if not args.results.exists():
+        raise FileNotFoundError(f"Missing results file {args.results}. Run experiments/run_suite.py first.")
+
+    with open(args.results, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    fig_1_window_variance_tradeoff(data, args.output_dir)
+    fig_2_architecture_diagram(args.output_dir)
+    fig_4_distance_scaling(data, args.output_dir)
+    fig_5_paired_deltas(data, args.output_dir)
+    logger.info("All paper figures generated successfully.")
+
+
+if __name__ == "__main__":
+    main()

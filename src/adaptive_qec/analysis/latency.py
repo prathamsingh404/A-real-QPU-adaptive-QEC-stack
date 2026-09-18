@@ -110,3 +110,61 @@ class LatencyProfiler:
 
         mean_total = float(np.mean(totals))
         throughput = 1e6 / max(mean_total, 1e-6)
+
+        # Classification
+        classification = (
+            "microsecond_feedforward"
+            if mean_total < 10.0
+            else "macro_orchestration"
+        )
+
+        return LatencyProfileResult(
+            p50_us=float(np.percentile(totals, 50)),
+            p90_us=float(np.percentile(totals, 90)),
+            p95_us=float(np.percentile(totals, 95)),
+            p99_us=float(np.percentile(totals, 99)),
+            mean_us=mean_total,
+            max_us=float(np.max(totals)),
+            throughput_shots_per_s=throughput,
+            breakdown_mean=LatencyBreakdown(mean_meas, mean_dec, mean_ctrl, mean_comm),
+            timescale_classification=classification,
+        )
+
+
+@dataclass
+class FeasibilityPoint:
+    tau_drift_s: float
+    tau_adapt_s: float
+    timescale_ratio_rho: float
+    is_feasible: bool
+    net_benefit_fraction: float
+    recommendation: str  # "ADAPT" or "STAY"
+
+
+def compute_adaptation_feasibility(
+    tau_drift_s: float,
+    tau_adapt_s: float,
+    base_benefit: float = 0.08,
+) -> FeasibilityPoint:
+    """
+    Computes timescale ratio rho = tau_adapt / tau_drift and net benefit.
+
+    When rho > 0.5, adaptation lag prevents capitalizing on drift before noise shifts.
+    """
+    rho = tau_adapt_s / max(tau_drift_s, 1e-6)
+
+    # Net benefit decays exponentially with timescale ratio
+    # When rho is very small, we capture 100% of base benefit minus tax
+    net_benefit = base_benefit * np.exp(-1.5 * rho) - (0.02 * rho)
+
+    is_feasible = rho < 0.3 and net_benefit > 0.005
+    recommendation = "ADAPT" if is_feasible else "STAY"
+
+    return FeasibilityPoint(
+        tau_drift_s=tau_drift_s,
+        tau_adapt_s=tau_adapt_s,
+        timescale_ratio_rho=float(rho),
+        is_feasible=is_feasible,
+        net_benefit_fraction=float(net_benefit),
+        recommendation=recommendation,
+    )

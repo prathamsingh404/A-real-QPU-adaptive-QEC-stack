@@ -11,7 +11,7 @@ AdaptiveQEC is a production-grade, hardware-aware, adaptive Quantum Error Correc
 
 ---
 
-## 1. Multi-Scale System Architecture (Obsidian Knowledge Graph)
+## 1. Multi-Scale System Architecture (Obsidian Knowledge Graph) 
 
 The following interactive graph maps the interdependencies across physical hardware, noise phenomenology, syndrome extraction, statistical inference, low-latency decoding, and closed-loop control:
 

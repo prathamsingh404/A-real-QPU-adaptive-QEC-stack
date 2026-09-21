@@ -157,11 +157,7 @@ All 113 unit and integration tests across all 10 test modules execute and pass w
 To run live experiments on physical IBM Quantum hardware (`ibm_marrakesh`, Heron r2):
 
 1. **Service Instance Details**:
-   - The user provided IBM Cloud CRN:
-     `crn:v1:bluemix:public:quantum-computing:us-east:a/8ae29ae2e0204424ab76bf7397315239:5031eafb-df34-4dd9-8912-1fb14dc9b74f::`
-   - The user provided API Key:
-     `WHQiem5SJ0-iTLZBqPs10H1gNfTxFcE6lbobBRoLVVMI`
-   - Channel: `ibm_cloud` (because the CRN indicates IBM Cloud Quantum Service, not IBM Quantum Platform `ibm_quantum`).
+    - Channel: `ibm_cloud` (because the CRN indicates IBM Cloud Quantum Service, not IBM Quantum Platform `ibm_quantum`).
 2. **Qiskit Runtime Setup**:
    Ensure `qiskit-ibm-runtime` is authenticated:
    ```python

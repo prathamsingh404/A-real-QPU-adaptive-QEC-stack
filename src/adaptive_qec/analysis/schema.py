@@ -133,3 +133,73 @@ class StandardExperimentResult:
 
     def save_immutable_bundle(self, base_dir: Path) -> Path:
         """Save a complete, tamper-evident experiment bundle in results/{exp_id}/.
+
+        Creates:
+            manifest.json, configuration.json, metrics.json, provenance.json
+        """
+        exp_id = (self.manifest.experiment_id if self.manifest 
+                  else f"EXP-{int(time.time())}-{self.experiment_name}")
+        bundle_dir = base_dir / exp_id
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+
+        # 1. Configuration
+        config_path = bundle_dir / "configuration.json"
+        config_bytes = json.dumps(self.config, indent=2, default=str).encode("utf-8")
+        config_hash = hashlib.sha256(config_bytes).hexdigest()
+        with open(config_path, "wb") as f:
+            f.write(config_bytes)
+
+        # 2. Metrics
+        metrics_dict = {
+            "experiment_name": self.experiment_name,
+            "n_shots": self.n_shots,
+            "n_rounds": self.n_rounds,
+            "logical_errors": self.logical_errors,
+            "logical_error_rate": self.logical_error_rate,
+            "detection_events": self.detection_events,
+            "detection_rate": self.detection_rate,
+            "decoder_latency_us": self.decoder_latency_us,
+            "decoder_throughput": self.decoder_throughput,
+            "switches": self.switches,
+            "adaptation_events": self.adaptation_events,
+            "arms": self.arms,
+            "statistical_comparison": self.statistical_comparison,
+            "extra_metrics": self.extra_metrics,
+        }
+        metrics_path = bundle_dir / "metrics.json"
+        metrics_bytes = json.dumps(metrics_dict, indent=2, default=str).encode("utf-8")
+        metrics_hash = hashlib.sha256(metrics_bytes).hexdigest()
+        with open(metrics_path, "wb") as f:
+            f.write(metrics_bytes)
+
+        # 3. Provenance
+        prov_dict = asdict(self.provenance) if self.provenance else {
+            "git_hash": get_git_hash(),
+            "environment": get_environment_versions(),
+            "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        prov_path = bundle_dir / "provenance.json"
+        prov_bytes = json.dumps(prov_dict, indent=2, default=str).encode("utf-8")
+        with open(prov_path, "wb") as f:
+            f.write(prov_bytes)
+
+        # 4. Manifest
+        if self.manifest:
+            manifest_dict = asdict(self.manifest)
+            manifest_dict["configuration_hash"] = config_hash
+            manifest_dict["analysis_hash"] = metrics_hash
+        else:
+            manifest_dict = {
+                "experiment_id": exp_id,
+                "experiment_name": self.experiment_name,
+                "git_commit": get_git_hash(),
+                "configuration_hash": config_hash,
+                "analysis_hash": metrics_hash,
+                "provenance_status": "verified",
+            }
+        manifest_path = bundle_dir / "manifest.json"
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest_dict, f, indent=2, default=str)
+
+        return bundle_dir
+

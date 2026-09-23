@@ -1,0 +1,1 @@
+"""Detector / syndrome extraction pipeline."""

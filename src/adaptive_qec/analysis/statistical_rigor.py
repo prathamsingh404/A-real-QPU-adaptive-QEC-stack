@@ -201,3 +201,106 @@ class PairedTrajectoryAnalysis:
             direction = "STATIC_SUPERIOR"
         else:
             direction = "INCONCLUSIVE"
+
+        return PairedTrajectorySummary(
+            scenario_name=scenario_name,
+            num_trajectories=n,
+            mean_static_ler=float(np.mean(static_lers)),
+            mean_adaptive_ler=float(np.mean(adaptive_lers)),
+            mean_delta_ler=mean_delta,
+            std_delta_ler=std_delta,
+            sem_delta_ler=sem_delta,
+            ci_95_t=ci_t,
+            ci_95_bootstrap=ci_boot,
+            t_statistic=float(t_stat),
+            t_p_value=t_pval,
+            wilcoxon_stat=wilcoxon_stat,
+            wilcoxon_p_value=wilcoxon_pval,
+            cohens_d=float(cohens_d),
+            statistically_significant=significant,
+            direction=direction,
+            raw_deltas=deltas.tolist(),
+        )
+
+
+class ConfirmatoryProtocol:
+    """Pre-registered scientific endpoints and protocol boundaries."""
+
+    # Primary endpoint: Trajectory-paired delta LER (Delta = LER_adapt - LER_static)
+    PRIMARY_ENDPOINT = "trajectory_paired_delta_ler"
+
+    # Confirmatory regimes: Pre-registered hypotheses tested strictly on held-out test seeds (20–49)
+    CONFIRMATORY_REGIMES = [
+        "stationary_baseline",      # H0: Delta = 0 (Controller abstains, no degradation)
+        "slow_drift",              # H1: Delta < 0 (Adaptation outperforms static)
+        "obvious_adaptation",       # H1: Delta < 0 (Strong anisotropic noise, prompt adaptation)
+    ]
+
+    # Exploratory regimes: Boundary investigations, stress-tests, and failure characterization
+    EXPLORATORY_REGIMES = [
+        "high_freq_jitter",         # "Too Fast to Adapt" boundary
+        "switching_trap",           # Rapid alternating noise testing thrashing penalties
+        "hidden_transition",        # Delayed observable evidence testing accumulation delay
+        "recovery",                 # Post-burst restoration testing safe baseline return
+        "persistent_leakage",       # Spatial propagation of leakage errors
+        "localized_hotspot",        # Spatial clustering without global rate shift
+        "rate_shift_no_ler",        # Syndrome rate shift without logical error shift
+        "deceptive_noise",          # Transient correlation misleading naive estimators
+    ]
+
+    @classmethod
+    def is_confirmatory(cls, scenario_name: str) -> bool:
+        return any(c in scenario_name.lower() for c in cls.CONFIRMATORY_REGIMES)
+
+
+class PowerAnalysis:
+    """Statistical power analysis for paired trajectory experimental designs."""
+
+    @staticmethod
+    def compute_power(
+        effect_size_d: float,
+        n_samples: int,
+        alpha: float = 0.05,
+        alternative: str = "two-sided",
+    ) -> float:
+        """
+        Compute statistical power (1 - beta) of a paired t-test.
+
+        Args:
+            effect_size_d: Cohen's d_z = |mu_delta| / sigma_delta
+            n_samples: Number of independent paired trajectories N
+            alpha: Significance level (default 0.05)
+            alternative: "two-sided" or "one-sided"
+
+        Returns:
+            Statistical power between 0.0 and 1.0
+        """
+        if n_samples <= 1 or effect_size_d <= 0.0:
+            return 0.0
+
+        df = n_samples - 1
+        ncp = effect_size_d * np.sqrt(n_samples)  # Non-centrality parameter
+
+        if alternative == "two-sided":
+            crit = stats.t.ppf(1.0 - alpha / 2.0, df=df)
+            power = float(stats.nct.sf(crit, df=df, nc=ncp) + stats.nct.cdf(-crit, df=df, nc=ncp))
+        else:
+            crit = stats.t.ppf(1.0 - alpha, df=df)
+            power = float(stats.nct.sf(crit, df=df, nc=ncp))
+
+        return min(max(power, 0.0), 1.0)
+
+    @staticmethod
+    def sample_size_for_power(
+        effect_size_d: float,
+        target_power: float = 0.80,
+        alpha: float = 0.05,
+        alternative: str = "two-sided",
+        max_n: int = 200,
+    ) -> int:
+        """Find minimum sample size N yielding at least target_power."""
+        for n in range(3, max_n + 1):
+            p = PowerAnalysis.compute_power(effect_size_d, n, alpha, alternative)
+            if p >= target_power:
+                return n
+        return max_n

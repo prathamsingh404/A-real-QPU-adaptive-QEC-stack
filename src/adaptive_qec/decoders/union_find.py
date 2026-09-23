@@ -8,9 +8,10 @@ Implements the weighted Union-Find decoder from:
 Algorithmic complexity: O(N · α(N)) per shot, where N = number of detectors
 and α is the inverse Ackermann function (effectively constant ≤ 4).
 
-This is fundamentally faster than MWPM's O(N³) but typically ~8-15% higher
-logical error rate. The tradeoff matters at d ≥ 7 where MWPM becomes
-latency-prohibitive for real-time feedback.
+Compared to the PyMatching v2 MWPM decoder (which uses sparse blossom and
+achieves roughly linear practical scaling), Union-Find trades a small
+accuracy penalty (~8-15% higher logical error rate at d=3-7) for
+predictable worst-case latency and simpler implementation.
 
 Algorithm:
     1. Build a detector graph from the Stim DetectorErrorModel
@@ -28,6 +29,8 @@ Key data structures:
     - Union-Find forest with path compression, union by rank, and
       per-node observable-XOR-to-parent tracking
     - Pre-sorted edge list by weight for growth phase
+    - On-demand Dijkstra for shortest-path distance and observable tracking
+      between defect pairs (avoids O(N^2) APSP precomputation)
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ import heapq
 import logging
 import time
 import tracemalloc
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -60,8 +64,8 @@ class UnionFindForest:
     invariant by accumulating XORs during find().
 
     Supports:
-        - find(x): root + obs_to_root, amortized O(α(N))
-        - union(x, y, edge_obs): amortized O(α(N))
+        - find(x): root + obs_to_root, amortized O(alpha(N))
+        - union(x, y, edge_obs): amortized O(alpha(N))
         - cluster parity and boundary tracking
     """
 
@@ -107,7 +111,7 @@ class UnionFindForest:
         if rx == ry:
             return rx
 
-        # Compute obs from ry to rx via the path: ry←y—edge—x→rx
+        # Compute obs from ry to rx via the path: ry<-y--edge--x->rx
         obs_y_to_ry = self.obs_to_parent[y]
         obs_x_to_rx = self.obs_to_parent[x]
 
@@ -162,11 +166,17 @@ class DetectorGraph:
     boundary_node: int
     adjacency: dict[int, list[int]] = field(default_factory=dict)
 
+    # Sparse adjacency for on-demand BFS: node -> [(neighbor, weight, obs_mask)]
+    sparse_adj: dict[int, list[tuple[int, float, int]]] = field(default_factory=dict)
+
     def build_adjacency(self) -> None:
         self.adjacency = {}
+        self.sparse_adj = defaultdict(list)
         for i, edge in enumerate(self.edges):
             self.adjacency.setdefault(edge.u, []).append(i)
             self.adjacency.setdefault(edge.v, []).append(i)
+            self.sparse_adj[edge.u].append((edge.v, edge.weight, edge.observables))
+            self.sparse_adj[edge.v].append((edge.u, edge.weight, edge.observables))
 
 
 def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
@@ -175,6 +185,15 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
     Properly decomposes DEM error instructions containing separators (^),
     combines independent error mechanisms on parallel edges, and selects
     the maximum-likelihood observable mask for each edge.
+
+    WARNING -- Hyperedge chain decomposition:
+        When a DEM error instruction contains >2 detectors (a hyperedge),
+        this function decomposes it into a chain of pairwise edges with the
+        same probability. This is an approximation that can change the
+        probability distribution of the resulting decoder graph. For most
+        surface code circuits with decompose_errors=True, Stim already
+        produces pairwise edges, so this fallback rarely triggers. When it
+        does, a warning is logged.
     """
     num_detectors = dem.num_detectors
     num_observables = dem.num_observables
@@ -182,6 +201,7 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
 
     # Map (u, v) -> dict[obs_mask, probability] where u <= v
     edge_dict: dict[tuple[int, int], dict[int, float]] = {}
+    hyperedge_count = 0
 
     def add_edge_prob(u: int, v: int, obs_mask: int, prob: float) -> None:
         if prob <= 0 or u == v:
@@ -235,8 +255,17 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
                 add_edge_prob(dets[0], dets[1], obs_mask, prob)
             else:
                 # Fallback for multi-detector hyperedges: chain decomposition
+                # WARNING: This approximation changes the probability model.
+                hyperedge_count += 1
                 for i in range(len(dets) - 1):
                     add_edge_prob(dets[i], dets[i + 1], obs_mask if i == 0 else 0, prob)
+
+    if hyperedge_count > 0:
+        logger.warning(
+            f"Decomposed {hyperedge_count} hyperedge(s) into pairwise chains. "
+            f"This is an approximation that may affect decoder accuracy. "
+            f"Consider using decompose_errors=True when generating the DEM."
+        )
 
     edges: list[DetectorEdge] = []
     for (u, v), obs_probs in edge_dict.items():
@@ -262,6 +291,56 @@ def build_detector_graph(dem: stim.DetectorErrorModel) -> DetectorGraph:
 
 
 # ---------------------------------------------------------------------------
+# On-demand shortest path (replaces dense APSP)
+# ---------------------------------------------------------------------------
+
+def _dijkstra_to_targets(
+    graph: DetectorGraph,
+    source: int,
+    targets: set[int],
+) -> dict[int, tuple[float, int]]:
+    """Compute shortest-path distance and observable XOR from source to targets.
+
+    Uses Dijkstra's algorithm on the sparse adjacency list. Only explores
+    nodes reachable from source, so cost is O(E log V) where E and V are
+    the edges and vertices actually traversed -- NOT the full graph.
+
+    Args:
+        graph: The detector graph with sparse adjacency.
+        source: Source node.
+        targets: Set of target nodes to find distances to.
+
+    Returns:
+        Dict mapping target -> (distance, obs_xor_bitmask).
+        Missing targets are unreachable.
+    """
+    dist: dict[int, float] = {source: 0.0}
+    obs: dict[int, int] = {source: 0}
+    # Priority queue: (distance, node)
+    pq: list[tuple[float, int]] = [(0.0, source)]
+    found: dict[int, tuple[float, int]] = {}
+    remaining = targets.copy()
+
+    while pq and remaining:
+        d, u = heapq.heappop(pq)
+        if d > dist.get(u, float('inf')):
+            continue
+
+        if u in remaining:
+            found[u] = (d, obs[u])
+            remaining.discard(u)
+
+        for v, w, e_obs in graph.sparse_adj.get(u, []):
+            nd = d + w
+            if nd < dist.get(v, float('inf')):
+                dist[v] = nd
+                obs[v] = obs[u] ^ e_obs
+                heapq.heappush(pq, (nd, v))
+
+    return found
+
+
+# ---------------------------------------------------------------------------
 # Union-Find decoder
 # ---------------------------------------------------------------------------
 
@@ -276,10 +355,10 @@ class UnionFindDecoder(Decoder):
     merge, the correction is computed from the representative defects'
     accumulated observable XOR to root.
 
-    Compared to MWPM:
-        - Speed: O(N·α(N)) vs O(N³)
-        - Accuracy: ~8-15% higher logical error rate (typical)
-        - Memory: ~60% of MWPM
+    Compared to PyMatching MWPM (sparse blossom, roughly linear in practice):
+        - Worst-case: O(N * alpha(N)) vs O(N * polylog(N)) amortized
+        - Accuracy: ~8-15% higher logical error rate (typical at d=3-7)
+        - Memory: Lower; no dense matrix precomputation
     """
 
     def __init__(self) -> None:
@@ -295,6 +374,10 @@ class UnionFindDecoder(Decoder):
     def configure(self, **kwargs: Any) -> None:
         """
         Configure with a DetectorErrorModel or Stim Circuit.
+
+        Builds a sparse detector graph for on-demand Dijkstra during decoding.
+        No dense APSP precomputation -- distances between defect pairs are
+        computed lazily per shot using Dijkstra on the sparse adjacency.
 
         Args:
             dem: stim.DetectorErrorModel
@@ -313,43 +396,10 @@ class UnionFindDecoder(Decoder):
         self._num_detectors = dem.num_detectors
         self._num_observables = dem.num_observables
 
-        # Precompute all-pairs shortest paths and path observables
-        n_total = self._num_detectors + 1
-        adj = np.full((n_total, n_total), np.inf)
-        obs_mat = np.zeros((n_total, n_total), dtype=np.uint8)
-        np.fill_diagonal(adj, 0)
-
-        for e in self._graph.edges:
-            if e.weight < adj[e.u, e.v]:
-                adj[e.u, e.v] = e.weight
-                adj[e.v, e.u] = e.weight
-                obs_mat[e.u, e.v] = e.observables
-                obs_mat[e.v, e.u] = e.observables
-
-        import scipy.sparse.csgraph as csgraph
-        dist, predecessors = csgraph.dijkstra(adj, directed=False, return_predecessors=True)
-        self._dist = dist
-
-        path_obs = np.zeros((n_total, n_total), dtype=np.uint8)
-        for i in range(n_total):
-            for j in range(i + 1, n_total):
-                cur = j
-                o = 0
-                while cur != i and cur >= 0:
-                    p = predecessors[i, cur]
-                    if p < 0:
-                        break
-                    o ^= obs_mat[p, cur]
-                    cur = p
-                path_obs[i, j] = o
-                path_obs[j, i] = o
-
-        self._path_obs = path_obs
-
         logger.info(
             f"UF decoder configured: {self._num_detectors} detectors, "
             f"{self._num_observables} observables, "
-            f"{len(self._graph.edges)} edges"
+            f"{len(self._graph.edges)} edges (sparse adjacency, no dense APSP)"
         )
 
     def _decode_single(self, syndrome: np.ndarray) -> np.ndarray:
@@ -361,13 +411,16 @@ class UnionFindDecoder(Decoder):
         Defects grow towards the static boundary at radius r = dist(di, boundary).
         Merging in radius order preserves maximum-likelihood cluster boundaries.
 
+        Distances are computed on-demand via Dijkstra from each defect, not
+        from a precomputed dense matrix.
+
         Args:
             syndrome: shape (num_detectors,), dtype uint8
 
         Returns:
             Observable corrections: shape (num_observables,), dtype uint8
         """
-        if self._graph is None or self._dist is None or self._path_obs is None:
+        if self._graph is None:
             raise RuntimeError("UnionFindDecoder not configured. Call configure() first.")
 
         defects = np.where(syndrome > 0)[0]
@@ -375,28 +428,34 @@ class UnionFindDecoder(Decoder):
             return np.zeros(self._num_observables, dtype=np.uint8)
 
         boundary = self._graph.boundary_node
-        dist = self._dist
-        path_obs = self._path_obs
 
+        # Compute on-demand shortest paths from each defect
         events = []
-        for i in range(len(defects)):
-            di = int(defects[i])
-            wb = dist[di, boundary]
-            ob = path_obs[di, boundary]
-            events.append((wb, di, boundary, ob, True))
-            for j in range(i + 1, len(defects)):
-                dj = int(defects[j])
-                w = dist[di, dj] / 2.0
-                o = path_obs[di, dj]
-                events.append((w, di, dj, o, False))
+        defects_int = [int(d) for d in defects]
+
+        for i, di in enumerate(defects_int):
+            targets_for_di = set(defects_int[i + 1:]) | {boundary}
+            paths = _dijkstra_to_targets(self._graph, di, targets_for_di)
+
+            # Boundary event
+            if boundary in paths:
+                wb, ob = paths[boundary]
+                events.append((wb, di, boundary, ob, True))
+
+            # Defect-defect events
+            for j in range(i + 1, len(defects_int)):
+                dj = defects_int[j]
+                if dj in paths:
+                    w, o = paths[dj]
+                    events.append((w / 2.0, di, dj, o, False))
 
         events.sort(key=lambda x: x[0])
 
-        parent = {d: d for d in defects}
+        parent = {d: d for d in defects_int}
         parent[boundary] = boundary
-        parity = {d: 1 for d in defects}
+        parity = {d: 1 for d in defects_int}
         parity[boundary] = 0
-        boundary_conn = {d: False for d in defects}
+        boundary_conn = {d: False for d in defects_int}
         boundary_conn[boundary] = True
 
         def find(x: int) -> int:
@@ -415,7 +474,7 @@ class UnionFindDecoder(Decoder):
             return rx
 
         corr = 0
-        active_odd = len(defects)
+        active_odd = len(defects_int)
 
         for w, u, v, o, is_b in events:
             if active_odd <= 0:
@@ -542,6 +601,6 @@ class UnionFindDecoder(Decoder):
             f"LER={error_rate:.6f} ({num_errors}/{shots}), "
             f"time={t_total:.3f}s, "
             f"throughput={metrics.throughput_shots_per_s:.0f} shots/s, "
-            f"P99={metrics.latency_p99_us:.1f}μs"
+            f"P99={metrics.latency_p99_us:.1f}us"
         )
         return metrics

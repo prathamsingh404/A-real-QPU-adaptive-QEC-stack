@@ -36,10 +36,19 @@ logger = logging.getLogger(__name__)
 
 
 class BurstType(str, Enum):
-    """Classification of detected error bursts."""
-    COSMIC_RAY = "cosmic_ray"       # Wide spatial, sharp temporal
-    QP_POISONING = "qp_poisoning"   # Localized, lingering
-    CROSSTALK = "crosstalk"         # Patterned, gate-correlated
+    """Heuristic classification of detected error burst signatures.
+
+    IMPORTANT: These labels describe the *syndrome morphology* of the burst,
+    NOT the physical cause. Definitive causal identification (e.g., confirming
+    a cosmic ray vs. a TLS fluctuation) requires corroborating evidence from
+    independent sensors (e.g., phonon detectors, charge-sensitive amplifiers).
+
+    Use these labels as 'signature types' in analysis, never as confirmed
+    physical diagnoses.
+    """
+    COSMIC_RAY_LIKE = "cosmic_ray_like"         # Wide spatial, sharp temporal
+    QP_POISONING_LIKE = "qp_poisoning_like"     # Localized, lingering
+    CROSSTALK_LIKE = "crosstalk_like"           # Patterned, gate-correlated
     UNKNOWN = "unknown"
 
 
@@ -142,12 +151,12 @@ class BurstDetector:
         median_rate = float(np.median(round_rates))
         baseline_rate = max(median_rate, 1e-6)
 
-        # Expected defects per window under null hypothesis
-        expected_per_window = baseline_rate * N_d * self.window_size
-
         # Sliding window burst detection
         bursts: list[BurstEvent] = []
-        w = self.window_size
+        w = min(self.window_size, max(R, 1))
+
+        # Expected defects per window under null hypothesis
+        expected_per_window = baseline_rate * N_d * w
 
         round_idx = 0
         while round_idx <= R - w:
@@ -239,14 +248,18 @@ class BurstDetector:
         window: np.ndarray,
     ) -> tuple[BurstType, float]:
         """
-        Heuristically classify a burst event.
+        Heuristically classify a burst event by syndrome morphology.
 
-        Classification rules (from literature):
-            - Cosmic ray: wide spatial extent (>30% of detectors),
+        IMPORTANT: This classifies the *syndrome signature*, not the
+        physical cause. Confirming the actual mechanism requires
+        corroborating data from independent sensors.
+
+        Classification rules (morphology-based, inspired by literature):
+            - Cosmic-ray-like: wide spatial extent (>30% of detectors),
               short duration (1-2 rounds), high severity
-            - QP poisoning: narrow spatial extent (<20%), long duration
+            - QP-poisoning-like: narrow spatial extent (<20%), long duration
               (>3 rounds), moderate severity
-            - Crosstalk: moderate spatial extent, specific geometric pattern
+            - Crosstalk-like: moderate spatial extent, specific geometric pattern
 
         Returns:
             (burst_type, confidence)
@@ -254,16 +267,16 @@ class BurstDetector:
         confidence = 0.5  # Default moderate confidence
 
         if spatial_radius > 0.3 and duration <= 2:
-            # Wide spatial, sharp temporal → cosmic ray
+            # Wide spatial, sharp temporal -> cosmic-ray-like signature
             confidence = min(0.9, 0.5 + 0.2 * severity)
-            return BurstType.COSMIC_RAY, confidence
+            return BurstType.COSMIC_RAY_LIKE, confidence
 
         elif spatial_radius < 0.2 and duration > 3:
-            # Narrow spatial, long temporal → quasiparticle poisoning
+            # Narrow spatial, long temporal -> QP-poisoning-like signature
             confidence = min(0.8, 0.4 + 0.1 * duration)
-            return BurstType.QP_POISONING, confidence
+            return BurstType.QP_POISONING_LIKE, confidence
 
-        elif 0.1 < spatial_radius < 0.4 and duration <= 3:
+        elif 0.1 < spatial_radius < 0.4 and duration <= 3:  # noqa: PLR2004
             # Moderate spatial, short temporal → could be crosstalk
             # Check for geometric pattern (even/odd detector alternation)
             col_sums = window.sum(axis=0)
@@ -273,10 +286,10 @@ class BurstDetector:
                 if np.all(diffs == diffs[0]):
                     # Regular spacing pattern
                     confidence = 0.7
-                    return BurstType.CROSSTALK, confidence
+                    return BurstType.CROSSTALK_LIKE, confidence
 
             confidence = 0.4
-            return BurstType.CROSSTALK, confidence
+            return BurstType.CROSSTALK_LIKE, confidence
 
         return BurstType.UNKNOWN, 0.3
 

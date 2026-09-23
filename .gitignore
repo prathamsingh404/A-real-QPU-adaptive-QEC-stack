@@ -30,3 +30,9 @@ Thumbs.db
 # Logs and scratch files
 *.log
 scratch/
+
+# Credentials — NEVER commit
+.env
+
+# Experiment data and outputs (root level only)
+/experiments/

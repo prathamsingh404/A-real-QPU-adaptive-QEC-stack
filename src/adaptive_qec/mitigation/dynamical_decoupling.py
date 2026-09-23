@@ -86,12 +86,20 @@ class AdaptiveDDPlanner:
         DDSequenceType.XY8: 8,
     }
 
-    # Noise suppression factors (empirical from IBM Heron DD studies)
+    # Noise suppression factors.
+    # PROVENANCE: ASSUMED — these are order-of-magnitude estimates derived
+    # from IBM dynamical decoupling studies on Heron-class hardware. They
+    # are NOT measured values from our specific experiments. Actual
+    # suppression depends on T2, idle duration, pulse fidelity, and noise
+    # spectrum. These should be replaced with measured values from
+    # controlled injection experiments (see experiments/dd_comparison.py).
+    #
+    # Source: Pokharel et al. (2023), IBM Orbit DD framework documentation.
     SUPPRESSION_FACTORS = {
         DDSequenceType.NONE: 1.0,
-        DDSequenceType.CPMG: 0.45,
-        DDSequenceType.XY4: 0.22,
-        DDSequenceType.XY8: 0.12,
+        DDSequenceType.CPMG: 0.45,   # ASSUMED: ~2x suppression for CPMG echo
+        DDSequenceType.XY4: 0.22,    # ASSUMED: ~4.5x suppression for XY4
+        DDSequenceType.XY8: 0.12,    # ASSUMED: ~8x suppression for XY8
     }
 
     def __init__(
@@ -203,19 +211,86 @@ class AdaptiveDDPlanner:
         schedule: DDSchedule,
     ) -> stim.Circuit:
         """
-        Return a modified Stim circuit reflecting DD protection.
+        Return a modified Stim circuit with DD gate sequences inserted.
 
-        For protected qubits, dephasing noise during idle windows is suppressed
-        by the factor corresponding to the selected sequence, while inserting
-        small pulse errors representing the DD sequences.
+        For each protected qubit, inserts the appropriate DD pulse sequence
+        (X/Y gates) during idle tick windows. Replaces the idle dephasing
+        noise with:
+            1. The actual DD gate operations (X, Y) at appropriate positions
+            2. A per-pulse DEPOLARIZE1 error on each DD gate
+            3. Suppressed dephasing noise on the protected qubit
+
+        For Stim circuit semantics, DD gates are inserted before each TICK
+        on qubits that have no other gates in that tick layer.
         """
-        # Create an equivalent protected circuit
-        new_circuit = circuit.copy()
-        if schedule.protected_qubits:
-            # Add annotation comments or equivalent noise adjustment
-            new_circuit.append(
-                "DEPOLARIZE1",
-                schedule.protected_qubits,
-                [self.pulse_error * 2],
-            )
+        protected_set = set(schedule.protected_qubits)
+        if not protected_set:
+            return circuit.copy()
+
+        # DD pulse gate sequences
+        DD_GATE_SEQUENCES = {
+            DDSequenceType.CPMG: ["X", "X"],
+            DDSequenceType.XY4: ["X", "Y", "X", "Y"],
+            DDSequenceType.XY8: ["X", "Y", "X", "Y", "Y", "X", "Y", "X"],
+        }
+
+        # Parse circuit into tick layers to find idle windows
+        layers: list[list[stim.CircuitInstruction]] = []
+        current_layer: list[stim.CircuitInstruction] = []
+
+        for instruction in circuit.flattened():
+            if not isinstance(instruction, stim.CircuitInstruction):
+                continue
+            if instruction.name == "TICK":
+                layers.append(current_layer)
+                current_layer = []
+            else:
+                current_layer.append(instruction)
+        layers.append(current_layer)
+
+        # Build the new circuit
+        new_circuit = stim.Circuit()
+
+        for layer_idx, layer in enumerate(layers):
+            # Find which qubits are active in this layer
+            active_qubits: set[int] = set()
+            for inst in layer:
+                for target in inst.targets_copy():
+                    if target.is_qubit_target:
+                        active_qubits.add(target.value)
+
+            # Add original layer instructions
+            for inst in layer:
+                new_circuit.append(inst)
+
+            # For idle protected qubits, insert DD pulses
+            idle_protected = protected_set - active_qubits
+            if idle_protected and layer_idx > 0:
+                for qubit in sorted(idle_protected):
+                    seq_type = schedule.qubit_sequences.get(qubit, DDSequenceType.NONE)
+                    if seq_type == DDSequenceType.NONE:
+                        continue
+
+                    gates = DD_GATE_SEQUENCES.get(seq_type, [])
+                    n_pulses = len(gates)
+
+                    if n_pulses > 0:
+                        # Insert the DD gate sequence for this qubit
+                        # In Stim, we model this as the sequence of 1Q gates
+                        # with per-pulse error
+                        for gate in gates:
+                            new_circuit.append(gate, [qubit])
+                            new_circuit.append(
+                                "DEPOLARIZE1", [qubit], [self.pulse_error]
+                            )
+
+            # Add TICK separator (except after the last layer)
+            if layer_idx < len(layers) - 1:
+                new_circuit.append("TICK")
+
+        logger.info(
+            f"Applied DD to circuit: {len(schedule.protected_qubits)} qubits "
+            f"protected, {schedule.total_pulses_inserted} pulses inserted"
+        )
         return new_circuit
+

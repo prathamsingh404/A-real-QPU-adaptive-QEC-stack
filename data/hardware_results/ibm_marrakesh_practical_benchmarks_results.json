@@ -78,3 +78,44 @@
       },
       "post_selected": {
         "target_state": "|+>",
+        "regime": "post_selected",
+        "measured_bloch_vector": [
+          0.8612244897959184,
+          -0.04680851063829787,
+          -0.056768558951965066
+        ],
+        "ideal_bloch_vector": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "state_fidelity": 0.9306122448979592,
+        "classical_bound": 0.6666666666666666,
+        "surpasses_classical_limit": true,
+        "deterministic_yield_rate": 0.23633333333333334,
+        "valid_shots": 709,
+        "total_submitted_shots": 3000
+      },
+      "swap_network": {
+        "target_state": "|+>",
+        "regime": "swap_network",
+        "measured_bloch_vector": [
+          0.958,
+          0.038,
+          -0.01
+        ],
+        "ideal_bloch_vector": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "state_fidelity": 0.979,
+        "classical_bound": 0.6666666666666666,
+        "surpasses_classical_limit": true,
+        "deterministic_yield_rate": 1.0,
+        "valid_shots": 3000,
+        "total_submitted_shots": 3000
+      }
+    }
+  }
+}

@@ -866,3 +866,437 @@
     },
     {
       "qubit": 120,
+      "t1_us": 194.33,
+      "t2_us": 75.61,
+      "frequency_ghz": null,
+      "readout_error": 0.004639
+    },
+    {
+      "qubit": 121,
+      "t1_us": 118.73,
+      "t2_us": 192.01,
+      "frequency_ghz": null,
+      "readout_error": 0.040405
+    },
+    {
+      "qubit": 122,
+      "t1_us": 178.44,
+      "t2_us": 28.93,
+      "frequency_ghz": null,
+      "readout_error": 0.011963
+    },
+    {
+      "qubit": 123,
+      "t1_us": 190.0,
+      "t2_us": 96.35,
+      "frequency_ghz": null,
+      "readout_error": 0.039551
+    },
+    {
+      "qubit": 124,
+      "t1_us": 104.15,
+      "t2_us": 89.25,
+      "frequency_ghz": null,
+      "readout_error": 0.009766
+    },
+    {
+      "qubit": 125,
+      "t1_us": 135.38,
+      "t2_us": 52.96,
+      "frequency_ghz": null,
+      "readout_error": 0.010376
+    },
+    {
+      "qubit": 126,
+      "t1_us": 105.1,
+      "t2_us": 14.09,
+      "frequency_ghz": null,
+      "readout_error": 0.12793
+    },
+    {
+      "qubit": 127,
+      "t1_us": 296.09,
+      "t2_us": 24.97,
+      "frequency_ghz": null,
+      "readout_error": 0.119507
+    },
+    {
+      "qubit": 128,
+      "t1_us": 241.08,
+      "t2_us": 170.03,
+      "frequency_ghz": null,
+      "readout_error": 0.007568
+    },
+    {
+      "qubit": 129,
+      "t1_us": 225.34,
+      "t2_us": 219.69,
+      "frequency_ghz": null,
+      "readout_error": 0.010254
+    },
+    {
+      "qubit": 130,
+      "t1_us": null,
+      "t2_us": null,
+      "frequency_ghz": null,
+      "readout_error": 0.486816
+    },
+    {
+      "qubit": 131,
+      "t1_us": 230.55,
+      "t2_us": 121.02,
+      "frequency_ghz": null,
+      "readout_error": 0.006592
+    },
+    {
+      "qubit": 132,
+      "t1_us": 347.94,
+      "t2_us": 92.64,
+      "frequency_ghz": null,
+      "readout_error": 0.00708
+    },
+    {
+      "qubit": 133,
+      "t1_us": 255.15,
+      "t2_us": 221.56,
+      "frequency_ghz": null,
+      "readout_error": 0.011475
+    },
+    {
+      "qubit": 134,
+      "t1_us": 282.4,
+      "t2_us": 116.1,
+      "frequency_ghz": null,
+      "readout_error": 0.004761
+    },
+    {
+      "qubit": 135,
+      "t1_us": 314.35,
+      "t2_us": 89.85,
+      "frequency_ghz": null,
+      "readout_error": 0.086914
+    },
+    {
+      "qubit": 136,
+      "t1_us": 290.31,
+      "t2_us": 25.73,
+      "frequency_ghz": null,
+      "readout_error": 0.003052
+    },
+    {
+      "qubit": 137,
+      "t1_us": 142.98,
+      "t2_us": 21.11,
+      "frequency_ghz": null,
+      "readout_error": 0.055542
+    },
+    {
+      "qubit": 138,
+      "t1_us": 241.15,
+      "t2_us": 119.42,
+      "frequency_ghz": null,
+      "readout_error": 0.013672
+    },
+    {
+      "qubit": 139,
+      "t1_us": 124.75,
+      "t2_us": 141.21,
+      "frequency_ghz": null,
+      "readout_error": 0.004028
+    },
+    {
+      "qubit": 140,
+      "t1_us": 297.64,
+      "t2_us": 63.34,
+      "frequency_ghz": null,
+      "readout_error": 0.004639
+    },
+    {
+      "qubit": 141,
+      "t1_us": 211.71,
+      "t2_us": 160.85,
+      "frequency_ghz": null,
+      "readout_error": 0.005371
+    },
+    {
+      "qubit": 142,
+      "t1_us": 107.33,
+      "t2_us": 45.74,
+      "frequency_ghz": null,
+      "readout_error": 0.020508
+    },
+    {
+      "qubit": 143,
+      "t1_us": 126.97,
+      "t2_us": 35.88,
+      "frequency_ghz": null,
+      "readout_error": 0.021484
+    },
+    {
+      "qubit": 144,
+      "t1_us": 88.7,
+      "t2_us": 21.52,
+      "frequency_ghz": null,
+      "readout_error": 0.014038
+    },
+    {
+      "qubit": 145,
+      "t1_us": 127.96,
+      "t2_us": 103.57,
+      "frequency_ghz": null,
+      "readout_error": 0.030762
+    },
+    {
+      "qubit": 146,
+      "t1_us": 133.36,
+      "t2_us": 48.02,
+      "frequency_ghz": null,
+      "readout_error": 0.00708
+    },
+    {
+      "qubit": 147,
+      "t1_us": 353.3,
+      "t2_us": 109.22,
+      "frequency_ghz": null,
+      "readout_error": 0.003662
+    },
+    {
+      "qubit": 148,
+      "t1_us": 337.92,
+      "t2_us": 16.17,
+      "frequency_ghz": null,
+      "readout_error": 0.002441
+    },
+    {
+      "qubit": 149,
+      "t1_us": 171.17,
+      "t2_us": 100.4,
+      "frequency_ghz": null,
+      "readout_error": 0.006348
+    },
+    {
+      "qubit": 150,
+      "t1_us": 109.32,
+      "t2_us": 70.06,
+      "frequency_ghz": null,
+      "readout_error": 0.022095
+    },
+    {
+      "qubit": 151,
+      "t1_us": 227.03,
+      "t2_us": 61.08,
+      "frequency_ghz": null,
+      "readout_error": 0.007935
+    },
+    {
+      "qubit": 152,
+      "t1_us": 213.75,
+      "t2_us": 141.92,
+      "frequency_ghz": null,
+      "readout_error": 0.009033
+    },
+    {
+      "qubit": 153,
+      "t1_us": 215.79,
+      "t2_us": 189.5,
+      "frequency_ghz": null,
+      "readout_error": 0.003906
+    },
+    {
+      "qubit": 154,
+      "t1_us": 299.63,
+      "t2_us": 32.1,
+      "frequency_ghz": null,
+      "readout_error": 0.006104
+    },
+    {
+      "qubit": 155,
+      "t1_us": 228.84,
+      "t2_us": 115.72,
+      "frequency_ghz": null,
+      "readout_error": 0.017212
+    }
+  ],
+  "gates_2q_sample": [
+    {
+      "gate": "cz",
+      "qubits": [
+        0,
+        1
+      ],
+      "error": 0.0036941341140788453,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        1,
+        0
+      ],
+      "error": 0.0036941341140788453,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        1,
+        2
+      ],
+      "error": 0.0014445861091602064,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        2,
+        1
+      ],
+      "error": 0.0014445861091602064,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        2,
+        3
+      ],
+      "error": 0.0017408930360162111,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        3,
+        2
+      ],
+      "error": 0.0017408930360162111,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        3,
+        4
+      ],
+      "error": 0.0020855674380224065,
+      "duration_ns": 80.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        3,
+        16
+      ],
+      "error": 0.002469885292441243,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        4,
+        3
+      ],
+      "error": 0.0020855674380224065,
+      "duration_ns": 80.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        4,
+        5
+      ],
+      "error": 0.002109212208277228,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        5,
+        4
+      ],
+      "error": 0.002109212208277228,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        5,
+        6
+      ],
+      "error": 0.001769695071908578,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        6,
+        5
+      ],
+      "error": 0.001769695071908578,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        6,
+        7
+      ],
+      "error": 0.0017746640246135426,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        7,
+        6
+      ],
+      "error": 0.0017746640246135426,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        7,
+        8
+      ],
+      "error": 0.002163855002565912,
+      "duration_ns": 80.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        7,
+        17
+      ],
+      "error": 0.0016761914608516282,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        8,
+        7
+      ],
+      "error": 0.002163855002565912,
+      "duration_ns": 80.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        8,
+        9
+      ],
+      "error": 0.0016649861988642656,
+      "duration_ns": 68.0
+    },
+    {
+      "gate": "cz",
+      "qubits": [
+        9,
+        8
+      ],
+      "error": 0.0016649861988642656,
+      "duration_ns": 68.0
+    }
+  ]
+}

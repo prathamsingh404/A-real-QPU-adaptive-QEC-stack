@@ -69,3 +69,39 @@
       "ler_wilson_ci": [
         0.000353127309584542,
         0.011240992747195207
+      ],
+      "mean_delta_ler": 0.0,
+      "delta_std_err": 0.0,
+      "p_value_paired_t": 1.0,
+      "p_value_wilcoxon": 1.0,
+      "decode_time_s": 0.0562802999993437,
+      "latency_mean_us": 112.5605999986874
+    }
+  },
+  "disagreement_matrix": {
+    "b0_factory_mwpm": {
+      "b0_factory_mwpm": 0.0,
+      "b1_optimized_mwpm": 0.0,
+      "b2_true_union_find": 0.002,
+      "b3_online_reweighted_mwpm": 0.0
+    },
+    "b1_optimized_mwpm": {
+      "b0_factory_mwpm": 0.0,
+      "b1_optimized_mwpm": 0.0,
+      "b2_true_union_find": 0.002,
+      "b3_online_reweighted_mwpm": 0.0
+    },
+    "b2_true_union_find": {
+      "b0_factory_mwpm": 0.002,
+      "b1_optimized_mwpm": 0.002,
+      "b2_true_union_find": 0.0,
+      "b3_online_reweighted_mwpm": 0.002
+    },
+    "b3_online_reweighted_mwpm": {
+      "b0_factory_mwpm": 0.0,
+      "b1_optimized_mwpm": 0.0,
+      "b2_true_union_find": 0.002,
+      "b3_online_reweighted_mwpm": 0.0
+    }
+  }
+}

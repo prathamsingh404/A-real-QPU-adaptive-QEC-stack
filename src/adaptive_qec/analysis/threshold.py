@@ -206,3 +206,117 @@ class ThresholdAnalyzer:
         distances = sorted(self._results.keys())
         error_rates = [self._results[d]["logical_error_rate"] for d in distances]
         p_phys = self._results[distances[0]]["physical_error_rate"]
+
+        # Filter out zero error rates (can't fit log)
+        valid = [(d, e) for d, e in zip(distances, error_rates) if e > 0]
+        if len(valid) < 2:
+            logger.warning("Too few non-zero error rates for threshold fit")
+            return ThresholdFit(
+                p_threshold=0.0,
+                A=0.0,
+                fit_residual=float("inf"),
+                distances=distances,
+                logical_error_rates=error_rates,
+                physical_error_rate=p_phys,
+                is_below_threshold=False,
+            )
+
+        d_valid = [v[0] for v in valid]
+        e_valid = [v[1] for v in valid]
+
+        # Fit: log(p_L) = log(A) + ((d+1)/2) · log(p/p_th)
+        # Parameters: A, p_th
+        def model(d, A, p_th):
+            if p_th <= 0:
+                return np.full_like(d, 1.0)
+            ratio = p_phys / p_th
+            if ratio <= 0:
+                return np.full_like(d, 1.0)
+            return A * np.power(ratio, (d + 1) / 2)
+
+        try:
+            popt, _ = optimize.curve_fit(
+                model,
+                np.array(d_valid, dtype=float),
+                np.array(e_valid, dtype=float),
+                p0=[0.1, 0.01],
+                bounds=([1e-10, 1e-6], [10.0, 0.5]),
+                maxfev=5000,
+            )
+            A_fit, p_th_fit = popt
+
+            # Compute residual
+            predicted = model(np.array(d_valid, dtype=float), A_fit, p_th_fit)
+            residual = float(np.sum((np.array(e_valid) - predicted) ** 2))
+
+        except (RuntimeError, ValueError) as e:
+            logger.warning(f"Threshold model fit failed: {e}")
+            A_fit = 0.0
+            p_th_fit = 0.0
+            residual = float("inf")
+
+        # Compute all lambda ratios
+        lambda_ratios = {}
+        for i in range(len(distances) - 1):
+            d_lo, d_hi = distances[i], distances[i + 1]
+            try:
+                lam = self.compute_lambda(d_lo, d_hi)
+                lambda_ratios[f"d{d_lo}_to_d{d_hi}"] = lam
+            except ValueError:
+                pass
+
+        is_below = all(v > 1.0 for v in lambda_ratios.values()) if lambda_ratios else False
+
+        fit = ThresholdFit(
+            p_threshold=float(p_th_fit),
+            A=float(A_fit),
+            fit_residual=residual,
+            distances=distances,
+            logical_error_rates=error_rates,
+            physical_error_rate=p_phys,
+            lambda_ratios=lambda_ratios,
+            is_below_threshold=is_below,
+        )
+
+        logger.info(
+            f"Threshold fit: p_th={p_th_fit:.6f}, A={A_fit:.4f}, "
+            f"below_threshold={is_below}, Λ={lambda_ratios}"
+        )
+        return fit
+
+    def get_results(self) -> dict[int, dict[str, Any]]:
+        """Get all collected results."""
+        return dict(self._results)
+
+    def scaling_table(self) -> list[dict[str, Any]]:
+        """
+        Generate a scaling table for display/export.
+
+        Returns list of dicts with distance, error rate, CI, and Λ.
+        """
+        distances = sorted(self._results.keys())
+        table = []
+
+        for i, d in enumerate(distances):
+            r = self._results[d]
+            row = {
+                "distance": d,
+                "logical_error_rate": r["logical_error_rate"],
+                "ci_lower": r["ci_lower"],
+                "ci_upper": r["ci_upper"],
+                "num_errors": r["num_logical_errors"],
+                "total_shots": r["total_shots"],
+            }
+
+            # Lambda to previous distance
+            if i > 0:
+                d_prev = distances[i - 1]
+                p_prev = self._results[d_prev]["logical_error_rate"]
+                p_curr = r["logical_error_rate"]
+                row["lambda_vs_prev"] = p_prev / p_curr if p_curr > 0 else float("inf")
+            else:
+                row["lambda_vs_prev"] = None
+
+            table.append(row)
+
+        return table

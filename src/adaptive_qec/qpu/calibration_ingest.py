@@ -181,3 +181,48 @@ class CalibrationIngest:
             timestamp=timestamp,
             backend_name=self._backend_name,
             qubit_calibrations=qubit_cals,
+            gate_calibrations=gate_cals,
+            coupling_map=coupling_map,
+        )
+
+        logger.info(
+            f"Calibration fetched: {len(qubit_cals)} qubits, "
+            f"{len(gate_cals)} gates, {len(coupling_map)} edges"
+        )
+
+        return snapshot
+
+    def fetch_summary(self) -> dict[str, float]:
+        """Fetch a summary dict suitable for the experiment harness.
+
+        Returns mean T1, T2, gate errors, readout errors.
+        """
+        snapshot = self.fetch()
+
+        t1_values = [q.t1_us for q in snapshot.qubit_calibrations if q.t1_us is not None]
+        t2_values = [q.t2_us for q in snapshot.qubit_calibrations if q.t2_us is not None]
+        ro_errors = [q.readout_error for q in snapshot.qubit_calibrations if q.readout_error is not None]
+        sq_errors = [q.single_qubit_gate_error for q in snapshot.qubit_calibrations if q.single_qubit_gate_error is not None]
+
+        # Two-qubit gate errors from gate calibrations
+        tq_errors = [
+            g.error for g in snapshot.gate_calibrations
+            if g.error is not None and len(g.qubits) == 2
+        ]
+
+        return {
+            "t1_mean_us": float(np.mean(t1_values)) if t1_values else 180.0,
+            "t2_mean_us": float(np.mean(t2_values)) if t2_values else 120.0,
+            "p_ro": float(np.mean(ro_errors)) if ro_errors else 0.012,
+            "p_1q": float(np.mean(sq_errors)) if sq_errors else 0.0005,
+            "p_2q": float(np.mean(tq_errors)) if tq_errors else 0.003,
+            "t1_std_us": float(np.std(t1_values)) if len(t1_values) > 1 else 0.0,
+            "t2_std_us": float(np.std(t2_values)) if len(t2_values) > 1 else 0.0,
+            "p_ro_std": float(np.std(ro_errors)) if len(ro_errors) > 1 else 0.0,
+            "p_2q_std": float(np.std(tq_errors)) if len(tq_errors) > 1 else 0.0,
+            "num_qubits": len(snapshot.qubit_calibrations),
+            "timestamp": snapshot.timestamp,
+        }
+
+    @staticmethod
+    def _get_qubit_property(

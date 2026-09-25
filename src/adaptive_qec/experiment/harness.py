@@ -247,3 +247,65 @@ class ExperimentHarness:
             alpha=0.1,
             z_warning=2.0,
             z_drift=3.0,
+            z_severe=5.0,
+        )
+
+        # Register provenance
+        self._provenance.register("code_distance", ProvenanceTag(
+            value=float(config.qec.distance),
+            provenance=DataProvenance.MEASURED,
+            source="config file",
+        ))
+        self._provenance.register("qec_rounds", ProvenanceTag(
+            value=float(config.qec.rounds),
+            provenance=DataProvenance.MEASURED,
+            source="config file",
+        ))
+
+    @classmethod
+    def from_config(cls, config_path: str, controllers: list[BaseController]) -> ExperimentHarness:
+        """Create harness from a YAML config file."""
+        config = load_config(config_path)
+        return cls(controllers=controllers, config=config)
+
+    def _setup_circuit(self, calibration: dict[str, float]) -> None:
+        """Build the Stim circuit using real calibration data."""
+        p_1q = calibration.get("p_1q", self._config.noise.gate.single_qubit)
+        p_2q = calibration.get("p_2q", self._config.noise.gate.two_qubit)
+        p_ro = calibration.get("p_ro", self._config.noise.readout.p0_given_1)
+
+        self._circuit = build_surface_code_circuit(
+            distance=self._config.qec.distance,
+            rounds=self._config.qec.rounds,
+            p_1q=p_1q,
+            p_2q=p_2q,
+            p_ro=p_ro,
+        )
+
+        self._extractor = SyndromeExtractor(self._circuit)
+
+        # Reinitialize drift detector with correct detector count
+        num_det = self._circuit.num_detectors
+        self._drift_detector = EWMADriftDetector(
+            num_detectors=num_det,
+            alpha=0.1,
+            z_warning=2.0,
+            z_drift=3.0,
+            z_severe=5.0,
+        )
+
+        # Setup decoder
+        mwpm = MWPMDecoder()
+        dem = self._circuit.detector_error_model(decompose_errors=True)
+        mwpm.configure(dem=dem)
+        self._decoders["mwpm"] = mwpm
+
+        self._provenance.register("p_1q", ProvenanceTag(
+            value=p_1q,
+            provenance=DataProvenance.MEASURED,
+            source="IBM QPU calibration",
+        ))
+        self._provenance.register("p_2q", ProvenanceTag(
+            value=p_2q,
+            provenance=DataProvenance.MEASURED,
+            source="IBM QPU calibration",

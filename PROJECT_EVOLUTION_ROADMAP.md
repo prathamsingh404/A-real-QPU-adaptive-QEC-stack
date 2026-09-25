@@ -197,3 +197,36 @@ This guarantees a false-switching rate strictly bounded by $\alpha \le 0.05$ (or
 
 ---
 
+### 3.3 Claim 3: Fault-Tolerance of Dynamic Anisotropic Stabilizer Scheduling (DA-SE)
+
+On superconducting transmon processors (such as IBM Heron), thermal relaxation ($T_1$) and pure dephasing ($T_\phi$) fluctuate independently:
+- When $T_1 \ll T_\phi$, bit-flip errors ($X$) dominate, which are detected by **$Z$-basis stabilizer checks**.
+- When low-frequency flux noise increases, dephasing errors ($Z$) dominate, which are detected by **$X$-basis stabilizer checks**.
+
+#### Mathematical Formulation: Syndrome Imbalance Metric
+We define the real-time empirical syndrome imbalance $\Delta_{XZ}(t)$ over a sliding temporal window of $W$ extraction cycles:
+
+$$\Delta_{XZ}(t) = \frac{\bar{s}_Z(t) - \bar{s}_X(t)}{\bar{s}_Z(t) + \bar{s}_X(t)} \in [-1, 1]$$
+
+where $\bar{s}_X(t)$ and $\bar{s}_Z(t)$ are the normalized defect densities (detection event fractions) for $X$ and $Z$ stabilizers respectively.
+
+#### Dynamic Scheduling Rule
+- If $\Delta_{XZ}(t) > +\theta_{\text{bias}}$ ($Z$-defects dominate $\implies$ excessive phase flips): Transpile circuit with **$X$-heavy schedule** ($[X, X, Z]$ per cycle).
+- If $\Delta_{XZ}(t) < -\theta_{\text{bias}}$ ($X$-defects dominate $\implies$ excessive bit flips): Transpile circuit with **$Z$-heavy schedule** ($[Z, Z, X]$ per cycle).
+- Otherwise: Maintain **Balanced schedule** ($[X, Z]$).
+
+#### Spacetime Decoding Graph Distance Preservation
+We prove that under an anisotropic schedule with pattern $[X^k, Z^m]$, the effective code distance $d_{\text{eff}} = \min(d_X, d_Z)$ is strictly preserved provided that no stabilizer basis is omitted for more than $k_{\max} = \lfloor (d-1)/2 \rfloor$ consecutive cycles. This guarantees that fault tolerance is preserved without introducing uncorrectable spacetime error chains.
+
+---
+
+### 3.4 Claim 4: Sub-Microsecond Incremental DEM Graph Reweighting
+
+Standard Stim/PyMatching pipelines compile a Detector Error Model (DEM) graph offline:
+
+$$w_e = \ln \left(\frac{1 - p_e}{p_e}\right)$$
+
+where $p_e$ is the independent error probability of fault mechanism $e$. When hardware error rates drift, standard practice requires re-compiling the entire circuit and regenerating the DEM graph from scratch—an operation requiring $O(|V| \cdot |E|^2)$ time, which takes tens of milliseconds and halts the execution pipeline.
+
+#### Closed-Form Incremental Update Engine
+We introduce an analytical incremental reweighting formula that maps directly to the underlying `pymatching.Matching` graph without topological reconstruction:

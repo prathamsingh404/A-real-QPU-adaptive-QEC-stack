@@ -191,3 +191,27 @@ while running experiment:
 - **Reward:** Can use binary success or a utility combining error and latency (e.g. reward=1 for success, minus a small penalty proportional to decode time). For simplicity, start with binary success.  
 - **Bandit Policy:** The pseudocode above is classic UCB1. Thompson Sampling or ε-greedy could also be used. UCB is chosen for its deterministic fairness and interpretability.
 
+### Complexity & Latency
+
+- **Decoding:** Using PyMatching v2, decoding is *roughly linear* in number of detectors. For a distance-5 surface code, one round has a few hundred detectors; decoding takes ~0.01–0.1 ms on a laptop. Even including a network round-trip, the control decision can easily be done within milliseconds, negligible compared to QPU reset times (~10 μs) and shot collection (hundreds of ms).  
+- **Bandit Overhead:** The UCB update is O(#actions) per step, trivial for ~5–10 actions.  
+- **Memory:** Store a handful of counters and values. Overall, the algorithm is light-weight and real-time feasible.
+
+### Calibration and Parameter Estimation
+
+- **Initial Q-values:** We may initialize using pre-known performance (e.g. simulate each action offline to set a prior Q). Alternatively, start from 0 (UCB forces initial exploration).  
+- **Action Costs:** If including latency, estimate each action’s cost (decode time + extra pulses). These can be measured once or periodically by timing code.  
+- **Noise Context (optional):** If using a contextual bandit, define context features (e.g. latest drift statistic, burst flag). A simple context vector could be fed into a linear model (LinearUCB). Calibration for this is just observation.
+
+### End-to-End Experimental Protocol
+
+1. **Simulation Tuning (2–3 weeks):** Generate synthetic drift/burst scenarios. Run the UCB bandit in simulation to tune hyperparameters (e.g. confidence factor in sqrt term, or exploration ε). Verify that it converges to the best strategy in each regime. Use fixed random seeds for reproducibility. Example config: 50k total rounds, check convergence plots.
+
+2. **Baseline Data Collection (1 week):** On hardware, measure baseline performance (LER) of each action in the absence of adaptation. Use a standard noise environment (idle for qubits, average calibrations). Collect ~10k shots per action to get Wilson CI. 
+
+3. **Controlled Environment Testing (2 weeks):** Optionally, simulate drift by periodically recalibrating or idling certain qubits to artificially vary T1. Run the bandit controller on hardware under these conditions. Monitor estimated Q-values vs actual LER.
+
+4. **Live Adaptive Run (4 weeks):** Run the full adaptive protocol for each candidate code distance (d=3,5). For each run:
+    - Use the bandit UCB policy. 
+    - After each block of, say, 500–1000 rounds, optionally apply a hypothesis test to confirm a switch. 
+    - Continue for a fixed number of total rounds (e.g. 20k). 

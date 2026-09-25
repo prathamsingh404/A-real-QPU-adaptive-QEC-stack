@@ -119,3 +119,27 @@ This contribution bridges simulation and hardware by ensuring the decoder “kno
 
 **Resources.** IBM Qiskit Runtime access with ample credits. Qiskit Pulse (if needed for tailored pulses, though not mandatory). The existing AdaptiveQEC code and Stim can be ported or interfaced with Qiskit jobs. 
 
+**Experiments.** 
+- First, verify the QEC circuits (distance-3 or -5) run correctly on IBM hardware with fixed strategies. Then implement the simplest adaptive logic (e.g. binary switch between MWPM and UF after N rounds) and run a test job that sequences two circuit types back-to-back. Finally, integrate full bandit or schedule logic in a loop. 
+- Use hardware conditions both nominal and intentionally stressed (e.g. scheduling sequences of idling to induce drift) to test response. 
+
+**Data Collected:** 
+This overlaps with above: full syndrome results for each round, time stamps for each job/circuit run, strategy choices, hardware calibration logs. Additionally, record Qiskit job IDs for reproducibility and any runtime metrics (e.g. job submission timestamps, queue wait times). 
+
+**Metrics:** 
+The same as above (logical error, latency), but also verify the end-to-end *correctness* of the runtime integration (no dropped shots, matching syndrome patterns, etc). Measure the total wall-clock time for each adaptive run to ensure feasibility (ideally under tens of minutes for a full experiment). 
+
+**Failure/Risks:** 
+- *API limitations:* Qiskit Runtime has quotas on iterations. We will plan experiments within these limits (e.g. updating strategy every few thousand shots, not every shot). 
+- *Classical latency:* Ensure that the controller code (bandit UCB updates, etc.) runs faster than the quantum job dispatch; since decoding is ~μs level and bandit logic is trivial, this should be fine. 
+- *Stochastic job failures:* Retries or larger shot totals can mitigate rare hardware glitches. 
+
+This contribution does not directly propose a new QEC idea, but it is indispensable to validate any of the above contributions on **real** QPUs.
+
+## 5. Statistical Decision Framework
+
+**Description.** Instead of switching strategies on any minor observed difference, we propose formal statistical tests. For example, after accumulating sufficient shots, perform a two-proportion Z-test between the LERs of two candidate strategies. Only switch if the p-value indicates a statistically significant improvement (say p<0.05) and if the new strategy maintains improvement over a hysteresis buffer of rounds. This approach guards against chasing random noise and provides a clear criterion for decision. 
+
+**Novelty vs Prior Work.** Hysteresis was already included in AdaptiveQEC, but we tighten it by using explicit confidence intervals (Wilson intervals) or hypothesis tests to trigger mode changes. This idea is standard in other adaptive systems but not yet applied in QEC control (as far as we know). Its novelty lies in formalizing the controller’s “trigger rules” using hypothesis testing rather than ad-hoc thresholds. 
+
+**Hardware/Software Resources.** No extra hardware. Use Python stats libraries. Requires collecting enough shots to perform valid tests (≥1000 typically for normal approximation). 

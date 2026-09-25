@@ -122,3 +122,66 @@ def build_surface_code_circuit(
 
     Parameters
     ----------
+    distance : int
+        Code distance (must be odd, ≥ 3).
+    rounds : int
+        Number of QEC rounds.
+    p_1q : float
+        Single-qubit depolarizing error rate (from calibration).
+    p_2q : float
+        Two-qubit depolarizing error rate (from calibration).
+    p_ro : float
+        Readout (measurement) error rate (from calibration).
+
+    Returns
+    -------
+    stim.Circuit
+        The Stim circuit with noise and detectors.
+    """
+    circuit = stim.Circuit.generated(
+        "surface_code:rotated_memory_z",
+        distance=distance,
+        rounds=rounds,
+        after_clifford_depolarization=p_2q,
+        after_reset_flip_probability=p_1q,
+        before_measure_flip_probability=p_ro,
+        before_round_data_depolarization=p_1q,
+    )
+    return circuit
+
+
+# ---------------------------------------------------------------------------
+# Hardware state builder (from real calibration + syndrome data)
+# ---------------------------------------------------------------------------
+
+def build_hardware_state(
+    defect_rates: np.ndarray,
+    drift_detector: EWMADriftDetector,
+    calibration_data: dict[str, float],
+    code_distance: int,
+    burst_threshold: float = 0.3,
+    leakage_estimate: float = 0.0,
+) -> HardwareState:
+    """Construct a HardwareState from real observations.
+
+    Parameters
+    ----------
+    defect_rates : np.ndarray
+        Per-detector firing rates from the most recent window.
+    drift_detector : EWMADriftDetector
+        The drift detector (already fed previous windows).
+    calibration_data : dict
+        Must contain: t1_mean_us, t2_mean_us, p_1q, p_2q, p_ro.
+    code_distance : int
+        Current code distance.
+    burst_threshold : float
+        Defect-rate threshold above which a burst is flagged.
+    leakage_estimate : float
+        Estimated leakage fraction (from syndrome autocorrelation).
+    """
+    mean_defect = float(np.mean(defect_rates))
+    max_defect = float(np.max(defect_rates))
+
+    # Feed the drift detector
+    drift_report = drift_detector.analyze(defect_rates)
+

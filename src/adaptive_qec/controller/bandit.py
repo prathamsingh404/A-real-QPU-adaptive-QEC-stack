@@ -127,3 +127,46 @@ class Exp3Controller(BaseController):
         shifted = self._log_weights - self._log_weights.max()
         exp_w = np.exp(shifted)
         raw = exp_w / exp_w.sum()
+        # mix with uniform
+        p = (1.0 - self._gamma) * raw + self._gamma / self._K
+        p = np.clip(p, 1e-12, None)
+        p /= p.sum()
+        return p
+
+    def observe(self, state: HardwareState) -> None:
+        self._current_state = state
+
+    def decide(self) -> ControlAction:
+        p = self._compute_probs()
+        self._last_arm_idx = int(self._rng.choice(self._K, p=p))
+        arm = self._arms[self._last_arm_idx]
+
+        # Burst mitigation: always enable if burst detected
+        burst_mit = (
+            self._current_state is not None
+            and self._current_state.burst_active
+        )
+
+        return ControlAction(
+            decoder=arm.decoder,
+            dd_policy=arm.dd_policy,
+            burst_mitigation=burst_mit,
+            request_recalibration=False,
+            notes=f"Exp3 arm={arm.label} p={p[self._last_arm_idx]:.4f}",
+        )
+
+    def update(self, reward: float) -> None:
+        """Update weights with importance-weighted reward estimate.
+
+        reward ∈ [0, 1] is the survival probability (1 - logical_error_rate).
+        """
+        p = self._compute_probs()
+        p_i = p[self._last_arm_idx]
+
+        # Importance-weighted reward estimate
+        r_hat = reward / p_i
+
+        # Update log-weight
+        eta = self._gamma / self._K
+        self._log_weights[self._last_arm_idx] += eta * r_hat
+

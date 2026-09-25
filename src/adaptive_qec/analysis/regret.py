@@ -176,3 +176,63 @@ class RegretAnalyzer:
         time_averaged = cumulative_regret / max(T, 1)
 
         controller_total = float(np.sum(rewards))
+        normalized = cumulative_regret / max(oracle_total, 1e-10)
+
+        # Count switches
+        switches = 0
+        for i in range(1, len(results)):
+            prev_arm = f"{results[i-1]['action']['decoder']}:{results[i-1]['action']['dd_policy']}"
+            curr_arm = f"{results[i]['action']['decoder']}:{results[i]['action']['dd_policy']}"
+            if prev_arm != curr_arm:
+                switches += 1
+
+        switch_regret = switches * self._switch_penalty
+
+        return RegretAnalysis(
+            controller_name=controller_name,
+            total_steps=T,
+            cumulative_regret=cumulative_regret,
+            time_averaged_regret=time_averaged,
+            normalized_regret=normalized,
+            regret_curve=regret_curve,
+            oracle_arm=oracle_arm,
+            oracle_total_reward=oracle_total,
+            controller_total_reward=controller_total,
+            controller_mean_reward=float(np.mean(rewards)),
+            total_switches=switches,
+            switch_regret=switch_regret,
+            reward_std=float(np.std(rewards)),
+            reward_p5=float(np.percentile(rewards, 5)),
+            reward_p95=float(np.percentile(rewards, 95)),
+        )
+
+    def compare(self) -> dict[str, RegretAnalysis]:
+        """Analyze all controllers and return comparative results."""
+        analyses = {}
+        for name in self._by_controller:
+            analyses[name] = self.analyze(name)
+        return analyses
+
+    def summary_table(self) -> str:
+        """Generate a human-readable comparison table."""
+        analyses = self.compare()
+
+        lines = [
+            "=" * 80,
+            f"{'Controller':<25} {'Avg Reward':>10} {'Cum. Regret':>12} "
+            f"{'Norm. Regret':>13} {'Switches':>9}",
+            "-" * 80,
+        ]
+
+        for name, a in sorted(analyses.items(), key=lambda x: -x[1].controller_mean_reward):
+            lines.append(
+                f"{name:<25} {a.controller_mean_reward:>10.6f} "
+                f"{a.cumulative_regret:>12.4f} "
+                f"{a.normalized_regret:>13.4f} "
+                f"{a.total_switches:>9}"
+            )
+
+        lines.append("=" * 80)
+        lines.append(f"Oracle arm: {list(analyses.values())[0].oracle_arm if analyses else 'N/A'}")
+
+        return "\n".join(lines)

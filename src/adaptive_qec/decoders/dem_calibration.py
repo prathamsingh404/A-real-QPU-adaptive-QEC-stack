@@ -93,3 +93,50 @@ class CalibratedDEM:
                     edge.detector_a,
                     weight=edge.weight,
                     fault_ids=fault_ids,
+                    error_probability=edge.probability,
+                )
+            else:
+                matching.add_edge(
+                    edge.detector_a,
+                    edge.detector_b,
+                    weight=edge.weight,
+                    fault_ids=fault_ids,
+                    error_probability=edge.probability,
+                )
+
+        return matching
+
+
+class DEMCalibrator:
+    """Calibrates DEM edge weights using hardware measurements.
+
+    Parameters
+    ----------
+    circuit : stim.Circuit
+        The QEC circuit (with noise) used to generate the base DEM.
+    scaling_mode : str
+        How to scale edge probabilities:
+        - "proportional": scale by ratio of measured/nominal error rates.
+        - "absolute": replace with measured values directly.
+    """
+
+    def __init__(
+        self,
+        circuit: stim.Circuit,
+        scaling_mode: str = "proportional",
+    ) -> None:
+        self._circuit = circuit
+        self._scaling_mode = scaling_mode
+
+        # Extract base DEM
+        self._base_dem = circuit.detector_error_model(decompose_errors=True)
+        self._base_edges = self._parse_dem(self._base_dem)
+
+        # Store nominal error rates from the circuit
+        self._nominal_p_2q = self._extract_circuit_noise(circuit, "DEPOLARIZE2")
+        self._nominal_p_ro = self._extract_circuit_noise(circuit, "X_ERROR")
+
+    def _parse_dem(self, dem: stim.DetectorErrorModel) -> list[DEMEdge]:
+        """Parse a Stim DEM into a list of DEMEdge objects."""
+        edges: list[DEMEdge] = []
+

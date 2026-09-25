@@ -263,3 +263,28 @@ while running experiment:
         next_schedule = current_schedule
     if next_schedule != current_schedule:
         current_schedule = next_schedule
+        # Optionally: wait a few rounds before switching back (hysteresis)
+    # Issue circuits according to current_schedule for next block
+    run_qec_block(schedule=current_schedule, block_size=N)
+```
+
+- **Schedule Modes:** “Balanced” (alternating), “X-heavy” (2 X-check rounds then 1 Z-check), “Z-heavy”. These are just examples; actual choices can be tuned.  
+- **Tolerance:** A small buffer (e.g. 10%) to prevent switching on minor fluctuations.  
+- **Counting:** `count_Z_stabilizer_detections` means summing Z-type detection events from recent measurements.
+
+### Complexity & Latency
+
+- The control logic is trivial compared to decoding. The main overhead is compiling different circuit schedules. Since each schedule block can be pre-compiled or parameterized, the additional runtime is minimal. The key is ensuring enough shots in each block (e.g. thousands) so the decision metric is stable.
+
+### Calibration
+
+- **Choosing N and Tolerance:** Using simulation, pick N large enough to estimate error rates (e.g. 1000 rounds), and tolerance to avoid ping-pong switching.  
+- **Initial Schedule:** Start with the schedule that matches the calibrated bias (if T1<<T2, maybe start X-heavy).  
+- **Block Size N:** Also influences total run time; we balance resolution vs overhead. Possibly 500–1000 shots per block.
+
+### End-to-End Protocol
+
+1. **Simulation of Noise-Biased Scenarios (1–2 weeks):** Create noise models with varying X vs Z error rates. Determine how different schedules (1:1 vs 2:1) perform. Identify decision thresholds for switching (how much difference in error counts triggers action).  
+   
+2. **Circuit Implementation:** Prepare Qiskit circuits for each schedule (balanced, X-heavy, Z-heavy). Verify they compile on heavy-hex connectivity (embedding stable).  
+   

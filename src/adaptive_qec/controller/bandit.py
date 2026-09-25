@@ -298,3 +298,46 @@ class Exp3PController(BaseController):
 
         # Recenter
         self._log_weights -= self._log_weights.max()
+
+        self._arm_pull_counts[self._last_arm_idx] += 1
+        self._arm_reward_sums[self._last_arm_idx] += reward
+
+        if self._telemetry:
+            self._telemetry[-1].cost = -reward
+            self._telemetry[-1].extras["arm_idx"] = self._last_arm_idx
+
+    def reset(self) -> None:
+        super().reset()
+        self._log_weights = np.zeros(self._K, dtype=np.float64)
+        self._arm_pull_counts = np.zeros(self._K, dtype=np.int64)
+        self._arm_reward_sums = np.zeros(self._K, dtype=np.float64)
+
+    def summary(self) -> dict[str, Any]:
+        base = super().summary()
+        base["eta"] = self._eta
+        base["beta"] = self._beta
+        base["delta"] = self._delta
+        base["arm_labels"] = [a.label for a in self._arms]
+        base["arm_pull_counts"] = self._arm_pull_counts.tolist()
+        base["current_probs"] = self._compute_probs().tolist()
+        return base
+
+
+# ---------------------------------------------------------------------------
+# DA-SE (Drift-Aware Successive Elimination)
+# ---------------------------------------------------------------------------
+
+class DASEController(BaseController):
+    """Drift-Aware Successive Elimination bandit controller.
+
+    For non-stationary environments (drifting QPU noise), maintains
+    per-arm sliding-window reward statistics and eliminates arms
+    whose upper confidence bound is below the best arm's lower bound.
+
+    The sliding window length W adapts to the estimated drift rate:
+        W = min(W_max, ceil(1 / estimated_drift_rate))
+
+    Eliminated arms are reactivated when drift is detected (change-point),
+    implementing a "restart on drift" policy.
+
+    Parameters

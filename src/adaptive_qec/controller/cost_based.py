@@ -48,3 +48,32 @@ class CostBasedController(BaseController):
             hysteresis_patience=hysteresis_patience,
             hysteresis_margin=hysteresis_margin,
         )
+        self._last_action: Optional[ControlAction] = None
+
+    @property
+    def name(self) -> str:
+        return "cost_based_adaptive"
+
+    def observe(self, state: HardwareState) -> None:
+        self._current_state = state
+
+    def decide(self) -> ControlAction:
+        if self._current_state is None:
+            raise RuntimeError("observe() must be called before decide()")
+        action = self._inner.select_action(self._current_state)
+        self._last_action = action
+        return action
+
+    def update(self, reward: float) -> None:
+        if self._telemetry:
+            self._telemetry[-1].cost = -reward
+
+    def reset(self) -> None:
+        super().reset()
+        self._inner.reset()
+        self._last_action = None
+
+    def summary(self) -> dict:
+        base = super().summary()
+        base["inner_metrics"] = self._inner.summary()
+        return base

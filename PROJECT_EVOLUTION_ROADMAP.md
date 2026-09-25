@@ -263,3 +263,36 @@ This enables real-time synchronization between the decoder graph and the QPU's d
 ```
 GAP 1: CONTROLLER IS STATIC & PHENOMENOLOGICAL
   Currently: controller.py lines 170-229 uses:
+    P_L = A * (p_phys / p_th)**((d + 1) / 2)  <-- HARDCODED ASSUMPTION!
+  Problem: If hardware deviates from this textbook formula, decisions are invalid.
+  Solution: Replace with empirical Discounted-UCB / Thompson Sampling MAB.
+
+GAP 2: NO REAL-TIME X/Z STABILIZER SCHEDULER
+  Currently: extraction.py generates strictly balanced 1:1 X/Z round patterns.
+  Problem: Incapable of exploiting T1/T2 noise asymmetry.
+  Solution: Create AdaptiveXZScheduler with variable round compilation.
+
+GAP 3: DECODER GRAPH WEIGHTS ARE STATIC
+  Currently: PyMatching Matching graph is constructed once at circuit initialization.
+  Problem: As T1/gate fidelities drift, matching edge weights become mismatched, raising LER.
+  Solution: Implement DEMCalibrator with closed-form in-place edge reweighting.
+
+GAP 4: NO STATISTICALLY FORMALIZED SWITCHING GATE
+  Currently: controller.py uses simple hysteresis counter (consecutive_triggers >= threshold).
+  Problem: Chasing noise; high Type-I false switch probability under stochastic shots.
+  Solution: Implement Wald SPRT and Wilson Score Confidence Interval gating.
+
+GAP 5: NO HARDWARE CLOSED-LOOP EXPERIMENT PIPELINE
+  Currently: Code runs against Stim simulation; no automated runtime batch orchestrator.
+  Problem: Zero real QPU data; claims cannot be published in top experimental journals.
+  Solution: Implement QiskitRuntimeLoop batch coordinator with shot budget management.
+```
+
+---
+
+## 5. End-to-End System Architecture
+
+```mermaid
+flowchart TD
+    subgraph Classical_Control_Plane["Classical Control Plane (Host / Qiskit Runtime Environment)"]
+        direction TB

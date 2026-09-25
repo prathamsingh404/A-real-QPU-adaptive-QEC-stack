@@ -44,3 +44,50 @@ from adaptive_qec.controller.controller import (
     HardwareState,
 )
 from adaptive_qec.mitigation.dynamical_decoupling import DDSequenceType
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# SPRT core
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SPRTState:
+    """Running state for one SPRT comparison (current vs challenger)."""
+    challenger_label: str
+    log_likelihood_ratio: float = 0.0
+    samples_seen: int = 0
+    current_rewards: list[float] = field(default_factory=list)
+    challenger_rewards: list[float] = field(default_factory=list)
+    decision: str = "undecided"  # "undecided" | "switch" | "stay"
+
+    def reset(self) -> None:
+        self.log_likelihood_ratio = 0.0
+        self.samples_seen = 0
+        self.current_rewards.clear()
+        self.challenger_rewards.clear()
+        self.decision = "undecided"
+
+
+class SPRTEngine:
+    """Wald's Sequential Probability Ratio Test engine.
+
+    Parameters
+    ----------
+    alpha : float
+        Type-I error probability (false switch).  Default 0.05.
+    beta : float
+        Type-II error probability (missed switch).  Default 0.10.
+    delta : float
+        Minimum detectable effect size (in error rate difference).
+        Switching is only justified if the challenger's error rate
+        is at least delta lower.  Default 0.01 (1% absolute).
+    max_samples : int
+        Maximum samples before forcing a decision (truncated SPRT).
+        Prevents indefinite accumulation.
+    """
+
+    def __init__(
+        self,
+        alpha: float = 0.05,

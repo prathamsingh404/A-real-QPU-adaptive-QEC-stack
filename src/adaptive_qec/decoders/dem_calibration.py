@@ -188,3 +188,51 @@ class DEMCalibrator:
     def _extract_circuit_noise(self, circuit: stim.Circuit, noise_type: str) -> float:
         """Extract the dominant noise rate of a given type from the circuit."""
         rates: list[float] = []
+        for instruction in circuit.flattened():
+            if isinstance(instruction, stim.CircuitInstruction):
+                if instruction.name == noise_type:
+                    args = instruction.gate_args_copy()
+                    if args:
+                        rates.append(args[0])
+        return float(np.mean(rates)) if rates else 0.003
+
+    def calibrate(
+        self,
+        measured_p_2q: float,
+        measured_p_ro: float,
+        calibration_timestamp: str = "",
+    ) -> CalibratedDEM:
+        """Reweight the DEM using measured error rates.
+
+        Parameters
+        ----------
+        measured_p_2q : float
+            Measured two-qubit gate error rate.
+        measured_p_ro : float
+            Measured readout error rate.
+        calibration_timestamp : str
+            When the calibration was taken.
+
+        Returns
+        -------
+        CalibratedDEM
+            DEM with reweighted edges.
+        """
+        if self._scaling_mode == "proportional":
+            return self._calibrate_proportional(
+                measured_p_2q, measured_p_ro, calibration_timestamp
+            )
+        else:
+            raise ValueError(f"Unknown scaling mode: {self._scaling_mode}")
+
+    def _calibrate_proportional(
+        self,
+        measured_p_2q: float,
+        measured_p_ro: float,
+        calibration_timestamp: str,
+    ) -> CalibratedDEM:
+        """Scale edge probabilities proportionally to measured/nominal ratio."""
+        ratio_2q = measured_p_2q / max(self._nominal_p_2q, 1e-10)
+        ratio_ro = measured_p_ro / max(self._nominal_p_ro, 1e-10)
+
+        # Geometric mean of the two ratios as the global scaling factor

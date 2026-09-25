@@ -58,3 +58,62 @@ class RegretAnalysis:
     total_switches: int
     switch_regret: float  # switches × penalty
 
+    # Statistical
+    reward_std: float
+    reward_p5: float
+    reward_p95: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "controller_name": self.controller_name,
+            "total_steps": self.total_steps,
+            "cumulative_regret": self.cumulative_regret,
+            "time_averaged_regret": self.time_averaged_regret,
+            "normalized_regret": self.normalized_regret,
+            "oracle_arm": self.oracle_arm,
+            "oracle_total_reward": self.oracle_total_reward,
+            "controller_total_reward": self.controller_total_reward,
+            "controller_mean_reward": self.controller_mean_reward,
+            "total_switches": self.total_switches,
+            "switch_regret": self.switch_regret,
+            "reward_std": self.reward_std,
+            "reward_p5": self.reward_p5,
+            "reward_p95": self.reward_p95,
+        }
+
+
+class RegretAnalyzer:
+    """Computes regret metrics from experiment results.
+
+    Usage:
+        analyzer = RegretAnalyzer(window_results)
+        analysis = analyzer.analyze("exp3")
+    """
+
+    def __init__(
+        self,
+        window_results: list[dict[str, Any]],
+        switch_penalty: float = 0.001,
+    ) -> None:
+        self._results = window_results
+        self._switch_penalty = switch_penalty
+
+        # Group results by controller
+        self._by_controller: dict[str, list[dict]] = {}
+        for r in window_results:
+            name = r["controller_name"]
+            self._by_controller.setdefault(name, []).append(r)
+
+    def _compute_oracle(self, arm_rewards: dict[str, list[float]]) -> tuple[str, float]:
+        """Find the best fixed arm in hindsight.
+
+        The oracle always plays the single arm with the highest
+        total reward over the entire experiment.
+        """
+        best_arm = ""
+        best_total = -float("inf")
+
+        for arm, rewards in arm_rewards.items():
+            total = sum(rewards)
+            if total > best_total:
+                best_total = total

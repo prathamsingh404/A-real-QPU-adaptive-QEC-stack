@@ -288,3 +288,27 @@ while running experiment:
    
 2. **Circuit Implementation:** Prepare Qiskit circuits for each schedule (balanced, X-heavy, Z-heavy). Verify they compile on heavy-hex connectivity (embedding stable).  
    
+3. **Initial Hardware Tests (2 weeks):** On IBM device, run test jobs for each schedule separately (no switching) to measure actual performance under nominal conditions. Record T1/T2 to correlate observed bias.  
+   
+4. **Live Adaptive Runs (3 weeks):** Execute the adaptive schedule loop on hardware. For example: every 1000 rounds, compute detection counts, switch schedule if needed. Use the same Qubits/distance as bandit test. Collect data logs of chosen schedule and outcomes.  
+   
+5. **Analysis:** Compare overall LER of adaptive vs best static schedule. Also examine how often and in what conditions switches occurred. Perform significance tests on LER differences.
+
+6. **Ablations:** 
+   - Fix one component: e.g. allow switching only once or limit to two schedules, to test robustness.  
+   - Vary decision tolerance to see effect on switch frequency.  
+   - Compare to **no switching** baseline and possibly a random schedule.
+
+**Mermaid Sequence Diagram:** (for a high-level view)
+
+```mermaid
+sequenceDiagram
+    participant HW as QuantumProcessor
+    participant CTRL as Controller
+    participant DEC as Decoder
+    CTRL->>HW: Run X and Z stabilizer block
+    HW-->>CTRL: Return syndromes
+    CTRL->>DEC: Decode with chosen decoder
+    CTRL->>CTRL: Analyze syndrome bias
+    alt Switch needed
+        CTRL->>CTRL: Change to X-heavy schedule

@@ -239,3 +239,27 @@ flowchart LR
     C --> D[QEC Cycle Execution]
     D --> E[Syndrome Result]
     E --> B
+```
+
+(“Syndrome/Hardware State” includes drift/burst signals; arrows show data flow.)
+
+## 2. Adaptive X/Z Stabilizer Scheduling
+
+### Algorithm (Pseudocode)
+
+```python
+initialize current_schedule = “balanced”  # equal X/Z
+while running experiment:
+    # After each batch of N rounds, analyze recent syndrome counts
+    recent_X_errors = count_Z_stabilizer_detections(last_N_rounds) 
+    recent_Z_errors = count_X_stabilizer_detections(last_N_rounds)
+    # (Because X-stabilizer detections indicate Z errors, etc.)
+    if recent_Z_errors > recent_X_errors * (1 + tolerance):
+        # More Z-errors => focus on X checks
+        next_schedule = “X-heavy”   # e.g. 2X:1Z
+    elif recent_X_errors > recent_Z_errors * (1 + tolerance):
+        next_schedule = “Z-heavy”   # e.g. 2Z:1X
+    else:
+        next_schedule = current_schedule
+    if next_schedule != current_schedule:
+        current_schedule = next_schedule

@@ -230,3 +230,49 @@ class SPRTController(BaseController):
 
         # Round-robin challenger selection
         self._challenger_queue: list[int] = []
+
+        # Stats
+        self._switch_count: int = 0
+        self._eval_count: int = 0
+
+    @property
+    def name(self) -> str:
+        return "sprt"
+
+    def _make_action(self, arm_idx: int) -> ControlAction:
+        dec, dd = self._arms[arm_idx]
+        burst_mit = (
+            self._current_state is not None
+            and self._current_state.burst_active
+        )
+        return ControlAction(
+            decoder=dec,
+            dd_policy=dd,
+            burst_mitigation=burst_mit,
+            request_recalibration=False,
+            notes=f"SPRT arm={dec.value}:{dd.value}",
+        )
+
+    def _next_challenger(self) -> int:
+        """Pick the next challenger arm to evaluate."""
+        if not self._challenger_queue:
+            # Build queue: all arms except current
+            self._challenger_queue = [
+                i for i in range(len(self._arms)) if i != self._current_arm
+            ]
+        return self._challenger_queue.pop(0)
+
+    def observe(self, state: HardwareState) -> None:
+        self._current_state = state
+
+    def decide(self) -> ControlAction:
+        # If in cooldown, just use current arm
+        if self._cooldown_remaining > 0:
+            self._cooldown_remaining -= 1
+            return self._make_action(self._current_arm)
+
+        # If in evaluation, alternate between current and challenger
+        if self._in_eval and self._challenger_arm is not None:
+            # Alternate: even steps → current, odd steps → challenger
+            if self._sprt_state and self._sprt_state.samples_seen % 2 == 0:
+                return self._make_action(self._challenger_arm)

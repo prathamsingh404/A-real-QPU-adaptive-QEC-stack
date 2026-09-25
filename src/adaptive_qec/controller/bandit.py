@@ -341,3 +341,46 @@ class DASEController(BaseController):
     implementing a "restart on drift" policy.
 
     Parameters
+    ----------
+    window_size : int
+        Maximum sliding window length W_max.
+    confidence : float
+        UCB confidence parameter (multiplier on √(ln(t)/n)).
+    min_pulls : int
+        Minimum pulls before an arm can be eliminated.
+    weights : CostWeights, optional
+        For telemetry cost tracking only.
+    """
+
+    def __init__(
+        self,
+        window_size: int = 50,
+        confidence: float = 2.0,
+        min_pulls: int = 5,
+        weights: Optional[CostWeights] = None,
+    ) -> None:
+        super().__init__(weights=weights)
+        self._arms = build_arm_set()
+        self._K = len(self._arms)
+        self._W = window_size
+        self._c = confidence
+        self._min_pulls = min_pulls
+        self._rng = np.random.default_rng()
+
+        # Per-arm sliding window of recent rewards
+        self._arm_windows: list[list[float]] = [[] for _ in range(self._K)]
+        self._active: np.ndarray = np.ones(self._K, dtype=bool)
+        self._last_arm_idx: int = 0
+
+        # Drift detection: track global reward moving average
+        self._global_rewards: list[float] = []
+        self._last_drift_step: int = 0
+
+    @property
+    def name(self) -> str:
+        return "da_se"
+
+    def _arm_mean(self, i: int) -> float:
+        w = self._arm_windows[i]
+        return float(np.mean(w)) if w else 0.0
+

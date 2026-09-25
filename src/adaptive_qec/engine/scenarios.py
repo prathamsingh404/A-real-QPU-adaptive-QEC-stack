@@ -122,3 +122,44 @@ class NoiseScenarioFactory:
         config.validate()
         self._config = config
         self._generators = {
+            ScenarioType.STATIONARY: self._stationary,
+            ScenarioType.LINEAR_DRIFT: self._linear_drift,
+            ScenarioType.SINUSOIDAL_DRIFT: self._sinusoidal_drift,
+            ScenarioType.BURST: self._burst,
+            ScenarioType.MULTI_PHASE: self._multi_phase,
+        }
+
+    def get_noise(self, step: int) -> NoiseSnapshot:
+        """Get the noise snapshot for the given step."""
+        generator = self._generators.get(self._config.scenario_type)
+        if generator is None:
+            raise ValueError(f"Unknown scenario: {self._config.scenario_type}")
+        return generator(step)
+
+    def _stationary(self, step: int) -> NoiseSnapshot:
+        """Constant noise at baseline calibration values."""
+        return NoiseSnapshot(
+            step=step,
+            p_1q=self._config.baseline_p_1q,
+            p_2q=self._config.baseline_p_2q,
+            p_ro=self._config.baseline_p_ro,
+            t1_mean_us=self._config.baseline_t1_us,
+            t2_mean_us=self._config.baseline_t2_us,
+            scenario_label="stationary",
+        )
+
+    def _linear_drift(self, step: int) -> NoiseSnapshot:
+        """Monotonic degradation of noise parameters."""
+        p_2q = self._config.baseline_p_2q + self._config.drift_rate_p2q * step
+        t1 = max(50.0, self._config.baseline_t1_us + self._config.drift_rate_t1 * step)
+        t2 = max(30.0, min(t1, self._config.baseline_t2_us + self._config.drift_rate_t1 * 0.7 * step))
+
+        return NoiseSnapshot(
+            step=step,
+            p_1q=self._config.baseline_p_1q,
+            p_2q=min(p_2q, 0.05),
+            p_ro=self._config.baseline_p_ro,
+            t1_mean_us=t1,
+            t2_mean_us=t2,
+            scenario_label="linear_drift",
+        )

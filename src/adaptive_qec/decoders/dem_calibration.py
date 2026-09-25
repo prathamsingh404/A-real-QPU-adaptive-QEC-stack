@@ -140,3 +140,51 @@ class DEMCalibrator:
         """Parse a Stim DEM into a list of DEMEdge objects."""
         edges: list[DEMEdge] = []
 
+        for instruction in dem.flattened():
+            if not isinstance(instruction, stim.DemInstruction):
+                continue
+            if instruction.type != "error":
+                continue
+
+            probability = instruction.args_copy()[0]
+            detectors: list[int] = []
+            observables: list[int] = []
+
+            for target in instruction.targets_copy():
+                if target.is_relative_detector_id():
+                    detectors.append(target.val)
+                elif target.is_logical_observable_id():
+                    observables.append(target.val)
+
+            if len(detectors) == 2:
+                edge = DEMEdge(
+                    detector_a=detectors[0],
+                    detector_b=detectors[1],
+                    probability=probability,
+                    observables=observables,
+                )
+            elif len(detectors) == 1:
+                edge = DEMEdge(
+                    detector_a=detectors[0],
+                    detector_b=-1,
+                    probability=probability,
+                    observables=observables,
+                )
+            elif len(detectors) == 0 and observables:
+                edge = DEMEdge(
+                    detector_a=-1,
+                    detector_b=-1,
+                    probability=probability,
+                    observables=observables,
+                )
+            else:
+                continue
+
+            edge.compute_weight()
+            edges.append(edge)
+
+        return edges
+
+    def _extract_circuit_noise(self, circuit: stim.Circuit, noise_type: str) -> float:
+        """Extract the dominant noise rate of a given type from the circuit."""
+        rates: list[float] = []

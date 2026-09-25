@@ -595,3 +595,36 @@ To isolate the individual contribution of each component, the evaluation suite e
 ### 9.2 Existing Files to Modify
 
 | File Path | Nature of Necessary Refactoring |
+| :--- | :--- |
+| `src/adaptive_qec/controller/__init__.py` | Export `BaseController`, `DiscountedUCBController`, `ThompsonSamplingController`, `create_controller` factory. |
+| `src/adaptive_qec/controller/controller.py` | Refactor existing `AdaptiveController` to inherit from `BaseController` as a reference baseline. |
+| `src/adaptive_qec/decoders/mwpm.py` | Add `reweight_edges(weight_map: dict[int, float])` method for zero-copy graph updates. |
+| `src/adaptive_qec/decoders/union_find.py`| Add dynamic cluster growth scaling hooks linked to ancilla defect rates. |
+| `src/adaptive_qec/syndrome/extraction.py`| Generalize Stim circuit generator to support arbitrary periodic $X/Z$ schedules. |
+| `src/adaptive_qec/qpu/ibm.py` | Add live telemetry parser converting IBM backend properties into normalized error maps. |
+| `src/adaptive_qec/provenance.py` | Add `RoundRecord` dataclass and SHA-256 state hashing. |
+| `configs/default.yaml` | Add complete configuration sections for bandit hyperparameters, SPRT thresholds, and scheduling. |
+| `generated-page.html` | Connect UI elements to live JSON output traces for publication demo visualization. |
+
+---
+
+## 10. Risk Register & Physical Failure Mode Mitigations
+
+| Risk ID | Failure Scenario | Likelihood | Impact | Concrete Engineering & Scientific Mitigation |
+| :--- | :--- | :--- | :--- | :--- |
+| **R-01** | **IBM Cloud Queue Delay**: Long wait times between consecutive batches break session continuity. | HIGH | HIGH | Use Qiskit Runtime **Sessions** (which hold dedicated QPU reservation windows). Keep classical bandit updates sub-millisecond so batches dispatch immediately without timing out the session. |
+| **R-02** | **Bandit Starvation**: The bandit exploits an early lucky arm and fails to identify the true optimal arm. | MEDIUM | HIGH | Enforce forced exploration ($N_a \ge N_{\min} = 10$) for all arms before unconstrained exploitation. Use Discounted-UCB with parameter $\xi=1.0$ to guarantee persistent exploration. |
+| **R-03** | **Spurious Switching (Noise Chattering)**: Stochastic syndrome fluctuations cause the controller to switch strategies every round. | HIGH | HIGH | **Wald SPRT & Wilson Score Gate**: No strategy switch is committed unless the candidate is statistically superior at $p < 0.01$ over a minimum observation window. |
+| **R-04** | **Null Result in Scheduling**: Adaptive $X/Z$ scheduling shows negligible improvement under isotropic noise. | MEDIUM | LOW | If hardware noise exhibits $\eta \approx 1$, scheduling naturally remains balanced. If true asymmetry is low on the chosen device, we document the threshold boundary where DA-SE becomes advantageous (still a publishable scientific result). |
+| **R-05** | **Cloud Execution Quota Depletion**: Experiments exceed monthly IBM Quantum API credits. | MEDIUM | HIGH | Pre-calculate exact shot requirements (Section 7.2: 200,000 shots total $\approx 88$ runtime minutes). Implement strict `ShotBudgetManager` that aborts execution if budget limits are approached. Validate all pipelines via Stim simulation first. |
+| **R-06** | **PyMatching Graph Instability**: Incremental edge reweighting produces negative weights or numerical divergence. | LOW | CRITICAL | Enforce weight clamping $p_e \in [10^{-6}, 0.5 - 10^{-6}] \implies w_e \in [\epsilon, \ln(10^6)]$. Fall back to nominal Stim DEM if edge weights exceed physical bounds. |
+
+---
+
+## 11. Traceability & Dependency Matrix
+
+```mermaid
+graph TD
+    P1["Phase 1: Foundation Hardening\n(Harness, Scenarios, BaseController)"] --> P2["Phase 2: Bandit Controller\n(D-UCB, Thompson, SPRT Gate)"]
+    P1 --> P3["Phase 3: Adaptive Scheduling\n(DA-SE, Imbalance Metric, Stim Compilation)"]
+    P1 --> P4["Phase 4: Live DEM Calibration\n(In-Place Edge Reweighting, UF Growth)"]

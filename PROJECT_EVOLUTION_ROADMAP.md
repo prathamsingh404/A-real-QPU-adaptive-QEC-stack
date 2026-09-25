@@ -628,3 +628,36 @@ graph TD
     P1["Phase 1: Foundation Hardening\n(Harness, Scenarios, BaseController)"] --> P2["Phase 2: Bandit Controller\n(D-UCB, Thompson, SPRT Gate)"]
     P1 --> P3["Phase 3: Adaptive Scheduling\n(DA-SE, Imbalance Metric, Stim Compilation)"]
     P1 --> P4["Phase 4: Live DEM Calibration\n(In-Place Edge Reweighting, UF Growth)"]
+    
+    P2 --> P5["Phase 5: Qiskit Runtime Integration\n(Sessions, Batched Loop, Budget Manager)"]
+    P3 --> P5
+    P4 --> P5
+    
+    P5 --> P6["Phase 6: Real QPU Hardware Execution\n(IBM Heron ibm_marrakesh, 200k Shots)"]
+    P6 --> P7["Phase 7: Publication Package\n(Paper Draft, Open Science Artifacts, Zenodo)"]
+
+    style P1 fill:#334155,stroke:#94a3b8,color:#ffffff
+    style P2 fill:#1e40af,stroke:#60a5fa,color:#ffffff
+    style P3 fill:#0369a1,stroke:#38bdf8,color:#ffffff
+    style P4 fill:#4338ca,stroke:#818cf8,color:#ffffff
+    style P5 fill:#0f766e,stroke:#2dd4bf,color:#ffffff
+    style P6 fill:#b91c1c,stroke:#f87171,color:#ffffff
+    style P7 fill:#15803d,stroke:#4ade80,color:#ffffff
+```
+
+---
+
+## 12. Final Pre-Implementation Checklist
+
+- [x] Comprehensive literature review completed (AlphaQubit 1/2, QAdapt, BRAVE, Duke/Brown 2026, Gottesman 2025, IBM Bivariate Bicycle).
+- [x] Clear theoretical demarcation established (Sub-microsecond classical MAB + SPRT gating vs. black-box neural networks).
+- [x] Formal mathematical claims, theorems, and regret bounds formulated.
+- [x] Full codebase audit completed (113 passing unit tests verified).
+- [x] Complete 7-Phase execution blueprint with weekly deliverables mapped.
+- [x] Hardware protocol for IBM Heron 156-qubit heavy-hex lattice designed.
+- [x] Shot budget optimized to 200,000 shots (~88 runtime minutes) with quota guard.
+- [x] Statistical rigor standards defined (Wilson Score intervals, SPRT, Benjamini-Hochberg).
+- [x] All 20 new target files and 9 refactoring targets cataloged.
+- [x] Risk register and failure modes documented with concrete mitigations.
+
+> **Next Step**: Await user confirmation on research direction and roadmap alignment before creating or modifying code files.

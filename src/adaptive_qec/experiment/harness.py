@@ -185,3 +185,65 @@ def build_hardware_state(
     # Feed the drift detector
     drift_report = drift_detector.analyze(defect_rates)
 
+    burst_active = max_defect > burst_threshold
+
+    return HardwareState(
+        defect_rate=mean_defect,
+        drift_magnitude=drift_report.magnitude,
+        drift_status=drift_report.status,
+        burst_active=burst_active,
+        leakage_fraction=leakage_estimate,
+        t1_mean_us=calibration_data.get("t1_mean_us", 100.0),
+        t2_mean_us=calibration_data.get("t2_mean_us", 80.0),
+        p_1q=calibration_data.get("p_1q", 0.0005),
+        p_2q=calibration_data.get("p_2q", 0.003),
+        p_ro=calibration_data.get("p_ro", 0.012),
+        code_distance=code_distance,
+        num_data_qubits=code_distance ** 2,
+        num_detectors=int(defect_rates.shape[0]) if defect_rates.ndim > 0 else 8,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Experiment Harness
+# ---------------------------------------------------------------------------
+
+class ExperimentHarness:
+    """Unified experiment runner for adaptive QEC research.
+
+    Runs one or more controllers against the same hardware stream
+    and collects per-window telemetry for offline analysis.
+
+    Parameters
+    ----------
+    controllers : list[BaseController]
+        Controllers to evaluate.  The first is the baseline.
+    config : AQECConfig
+        Experiment configuration.
+    output_dir : Path
+        Where to save results.
+    """
+
+    def __init__(
+        self,
+        controllers: list[BaseController],
+        config: AQECConfig,
+        output_dir: Optional[Path] = None,
+    ) -> None:
+        if not controllers:
+            raise ValueError("Must provide at least one controller")
+
+        self._controllers = controllers
+        self._config = config
+        self._output_dir = output_dir or Path(config.experiment.output_dir)
+        self._provenance = ProvenanceRegistry()
+
+        # Build Stim circuit from calibration data
+        self._circuit: Optional[stim.Circuit] = None
+        self._extractor: Optional[SyndromeExtractor] = None
+        self._decoders: dict[str, Decoder] = {}
+        self._drift_detector = EWMADriftDetector(
+            num_detectors=1,  # will be updated
+            alpha=0.1,
+            z_warning=2.0,
+            z_drift=3.0,

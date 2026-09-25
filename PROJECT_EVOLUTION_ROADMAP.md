@@ -330,3 +330,36 @@ flowchart TD
     Syndromes --> Noise_Telemetry
     Noise_Telemetry --> Online_Learner
     Online_Learner -->|"Optimal Action a* = (Decoder, DD, Schedule)"| Circuits
+    Noise_Telemetry --> Calibration_Engine
+    Calibration_Engine -->|"Updated Edge Weights we(t)"| Online_Learner
+    Syndromes --> Provenance_and_Analysis
+    Online_Learner --> Provenance_and_Analysis
+
+    classDef controller fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#ffffff;
+    classDef qpu fill:#701a75,stroke:#d946ef,stroke-width:2px,color:#ffffff;
+    classDef stats fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ffffff;
+
+    class Online_Learner,MAB,SPRT controller;
+    class Quantum_Execution_Plane,QPU,Circuits,Syndromes qpu;
+    class Provenance_and_Analysis,DB,Stats stats;
+```
+
+---
+
+## 6. Detailed 7-Phase Execution Plan (Weeks 1–17)
+
+### Phase 1: Foundation Hardening, Experiment Harness & Scenarios (Weeks 1–2)
+
+> **Scientific Objective**: Establish a rock-solid, fully typed, deterministic experimental platform capable of executing arbitrary QEC configurations across both Stim simulations and Qiskit hardware interfaces with 100% data provenance.
+
+#### Detailed Deliverables:
+1.  **Abstract Controller Interface (`src/adaptive_qec/controller/base.py`)**:
+    *   Define formal abstract base class `BaseController` with strict type contracts:
+        ```python
+        class BaseController(ABC):
+            @abstractmethod
+            def select_action(self, context: NoiseState) -> Action: ...
+            @abstractmethod
+            def update(self, action: Action, outcome: RoundOutcome) -> None: ...
+            @abstractmethod
+            def get_state(self) -> dict[str, Any]: ...

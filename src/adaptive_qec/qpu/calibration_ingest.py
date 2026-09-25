@@ -89,3 +89,49 @@ class CalibrationIngest:
                 instance=instance,
             )
             self._backend = self._service.backend(self._backend_name)
+            logger.info(f"Connected to IBM backend: {self._backend_name}")
+
+        except ImportError:
+            raise ImportError(
+                "qiskit-ibm-runtime is required for live calibration.\n"
+                "Install with: pip install qiskit-ibm-runtime"
+            )
+        except Exception as e:
+            raise ConnectionError(
+                f"Failed to connect to IBM backend {self._backend_name}: {e}"
+            )
+
+    def fetch(self) -> CalibrationSnapshot:
+        """Fetch current calibration snapshot from hardware.
+
+        Returns
+        -------
+        CalibrationSnapshot
+            Contains real T1, T2, gate errors, readout errors,
+            coupling map from the IBM backend.
+        """
+        if self._backend is None:
+            self._connect()
+
+        backend = self._backend
+        properties = backend.properties()
+        configuration = backend.configuration()
+
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        # Extract qubit calibrations
+        qubit_cals: list[QubitCalibration] = []
+        num_qubits = configuration.n_qubits if hasattr(configuration, 'n_qubits') else configuration.num_qubits
+
+        for q_idx in range(num_qubits):
+            t1 = self._get_qubit_property(properties, q_idx, "T1")
+            t2 = self._get_qubit_property(properties, q_idx, "T2")
+            ro_err = self._get_qubit_property(properties, q_idx, "readout_error")
+            ro_len = self._get_qubit_property(properties, q_idx, "readout_length")
+            freq = self._get_qubit_property(properties, q_idx, "frequency")
+            anharm = self._get_qubit_property(properties, q_idx, "anharmonicity")
+
+            # Convert T1/T2 from seconds to microseconds
+            t1_us = t1 * 1e6 if t1 is not None else None
+            t2_us = t2 * 1e6 if t2 is not None else None
+            ro_len_ns = ro_len * 1e9 if ro_len is not None else None

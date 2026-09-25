@@ -562,3 +562,36 @@ To isolate the individual contribution of each component, the evaluation suite e
 ---
 
 ## 9. File-Level Implementation Map
+
+### 9.1 New Files to Create
+
+| Target File Path | Primary Class / Functions | Theoretical Role | Est. LOC |
+| :--- | :--- | :--- | :--- |
+| `src/adaptive_qec/controller/base.py` | `BaseController`, `Action`, `NoiseState` | Formal typing contract & abstract lifecycle | ~120 |
+| `src/adaptive_qec/controller/bandit.py` | `DiscountedUCBController`, `ThompsonSamplingController` | Non-stationary online reinforcement learning | ~450 |
+| `src/adaptive_qec/controller/statistics.py` | `SequentialProbabilityRatioTest`, `wilson_ci`, `z_test` | Formal hypothesis testing & switching gates | ~280 |
+| `src/adaptive_qec/qec/schedules.py` | `StabilizerSchedule`, `PREDEFINED_SCHEDULES` | Non-uniform $X/Z$ schedule representations | ~150 |
+| `src/adaptive_qec/qec/adaptive_scheduler.py`| `AdaptiveXZScheduler` | Dynamic anisotropic syndrome extraction (DA-SE) | ~320 |
+| `src/adaptive_qec/decoders/dem_calibrator.py`| `DEMCalibrator` | Closed-form in-place DEM graph edge reweighting | ~350 |
+| `src/adaptive_qec/experiment/harness.py` | `ExperimentHarness`, `ExperimentConfig`, `ExperimentResult` | Unified execution harness (Stim & Hardware) | ~450 |
+| `src/adaptive_qec/engine/scenarios.py` | `NoiseScenarioFactory`, `NoiseScenario` | 6 reproducible physical noise drift scenarios | ~300 |
+| `src/adaptive_qec/runtime/qiskit_loop.py` | `QiskitRuntimeLoop` | Closed-loop batched Qiskit Runtime session driver | ~420 |
+| `src/adaptive_qec/runtime/budget.py` | `ShotBudgetManager` | Hardware execution quota & credit enforcement | ~160 |
+| `experiments/bandit_vs_static.py` | Full simulation comparison script | Benchmark Phase 2 simulation suite | ~280 |
+| `experiments/adaptive_scheduling.py`| Scheduling benchmark script | Benchmark Phase 3 anisotropic noise suite | ~250 |
+| `experiments/hardware_baseline.py` | Hardware baseline runner | Execute Phase 6.1 static QPU experiments | ~220 |
+| `experiments/full_adaptive.py` | Main hardware experiment driver | Execute Phase 6.2 closed-loop QPU experiments | ~350 |
+| `experiments/analysis.py` | Automated statistical & figure generator | Generate publication plots, p-values & tables | ~480 |
+| `tests/test_bandit_controller.py` | Unit & convergence tests for D-UCB / TS | Verify regret bounds & arm updates | ~320 |
+| `tests/test_statistics.py` | Numerical verification of SPRT & Wilson CI | Verify type-I error bounds & numerical stability | ~240 |
+| `tests/test_adaptive_scheduler.py` | Tests for syndrome imbalance & switching | Verify schedule distance preservation | ~220 |
+| `tests/test_dem_calibrator.py` | Tests for in-place DEM reweighting | Verify weight update speed ($<2\,\mu\text{s}$) & math | ~250 |
+| `tests/test_experiment_harness.py` | End-to-end integration tests | Verify full pipeline determinism & provenance | ~280 |
+
+**Total Projected New Code**: **~5,690 LOC**
+
+---
+
+### 9.2 Existing Files to Modify
+
+| File Path | Nature of Necessary Refactoring |

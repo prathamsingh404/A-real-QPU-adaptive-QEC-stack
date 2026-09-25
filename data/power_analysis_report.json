@@ -166,3 +166,87 @@
       1021,
       1022,
       1023,
+      1024,
+      1025,
+      1026,
+      1027,
+      1028,
+      1029
+    ]
+  },
+  "target_effect_size_d": 0.6,
+  "target_power_n30": 0.888,
+  "meets_80_pct_threshold": true,
+  "power_curve": [
+    {
+      "cohens_d": 0.2,
+      "power_two_sided_n30": 0.1852,
+      "power_one_sided_n30": 0.2827,
+      "n_required_for_80_pct_power": 199,
+      "n_required_for_90_pct_power": 200
+    },
+    {
+      "cohens_d": 0.3,
+      "power_two_sided_n30": 0.3555,
+      "power_one_sided_n30": 0.484,
+      "n_required_for_80_pct_power": 90,
+      "n_required_for_90_pct_power": 119
+    },
+    {
+      "cohens_d": 0.4,
+      "power_two_sided_n30": 0.5628,
+      "power_one_sided_n30": 0.6895,
+      "n_required_for_80_pct_power": 52,
+      "n_required_for_90_pct_power": 68
+    },
+    {
+      "cohens_d": 0.5,
+      "power_two_sided_n30": 0.754,
+      "power_one_sided_n30": 0.8483,
+      "n_required_for_80_pct_power": 34,
+      "n_required_for_90_pct_power": 44
+    },
+    {
+      "cohens_d": 0.55,
+      "power_two_sided_n30": 0.8293,
+      "power_one_sided_n30": 0.9025,
+      "n_required_for_80_pct_power": 28,
+      "n_required_for_90_pct_power": 37
+    },
+    {
+      "cohens_d": 0.6,
+      "power_two_sided_n30": 0.888,
+      "power_one_sided_n30": 0.941,
+      "n_required_for_80_pct_power": 24,
+      "n_required_for_90_pct_power": 32
+    },
+    {
+      "cohens_d": 0.7,
+      "power_two_sided_n30": 0.9594,
+      "power_one_sided_n30": 0.982,
+      "n_required_for_80_pct_power": 19,
+      "n_required_for_90_pct_power": 24
+    },
+    {
+      "cohens_d": 0.8,
+      "power_two_sided_n30": 0.9885,
+      "power_one_sided_n30": 0.9958,
+      "n_required_for_80_pct_power": 15,
+      "n_required_for_90_pct_power": 19
+    },
+    {
+      "cohens_d": 1.0,
+      "power_two_sided_n30": 0.9996,
+      "power_one_sided_n30": 0.9999,
+      "n_required_for_80_pct_power": 10,
+      "n_required_for_90_pct_power": 13
+    },
+    {
+      "cohens_d": 1.2,
+      "power_two_sided_n30": 1.0,
+      "power_one_sided_n30": 1.0,
+      "n_required_for_80_pct_power": 8,
+      "n_required_for_90_pct_power": 10
+    }
+  ]
+}

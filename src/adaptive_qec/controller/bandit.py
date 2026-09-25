@@ -384,3 +384,46 @@ class DASEController(BaseController):
         w = self._arm_windows[i]
         return float(np.mean(w)) if w else 0.0
 
+    def _arm_ucb(self, i: int, t: int) -> float:
+        w = self._arm_windows[i]
+        n = len(w)
+        if n == 0:
+            return float("inf")
+        mean = float(np.mean(w))
+        bonus = self._c * math.sqrt(math.log(max(t, 2)) / n)
+        return mean + bonus
+
+    def _arm_lcb(self, i: int, t: int) -> float:
+        w = self._arm_windows[i]
+        n = len(w)
+        if n == 0:
+            return float("-inf")
+        mean = float(np.mean(w))
+        bonus = self._c * math.sqrt(math.log(max(t, 2)) / n)
+        return mean - bonus
+
+    def _detect_drift(self) -> bool:
+        """Simple CUSUM-like drift detector on global reward stream."""
+        if len(self._global_rewards) < 20:
+            return False
+        recent = self._global_rewards[-10:]
+        older = self._global_rewards[-20:-10]
+        diff = abs(float(np.mean(recent)) - float(np.mean(older)))
+        se = float(np.std(older)) / math.sqrt(len(older)) + 1e-10
+        return diff / se > 3.0  # z-score > 3
+
+    def observe(self, state: HardwareState) -> None:
+        self._current_state = state
+
+    def decide(self) -> ControlAction:
+        t = self._step + 1
+
+        # Check for drift → reactivate all arms
+        if self._detect_drift():
+            logger.info("DA-SE: drift detected — reactivating all arms")
+            self._active[:] = True
+            self._arm_windows = [[] for _ in range(self._K)]
+            self._last_drift_step = self._step
+
+        # Among active arms, pick the one with highest UCB
+        # If any active arm has < min_pulls, force-explore it

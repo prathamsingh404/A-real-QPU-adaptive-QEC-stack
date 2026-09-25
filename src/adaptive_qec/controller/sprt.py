@@ -184,3 +184,49 @@ class SPRTController(BaseController):
 
     Parameters
     ----------
+    alpha : float
+        Type-I error rate for SPRT.
+    beta : float
+        Type-II error rate for SPRT.
+    delta : float
+        Minimum effect size for SPRT.
+    eval_interval : int
+        Steps between evaluation attempts.
+    cooldown : int
+        Steps after a "stay" decision before trying a new challenger.
+    weights : CostWeights, optional
+        For telemetry tracking.
+    """
+
+    def __init__(
+        self,
+        alpha: float = 0.05,
+        beta: float = 0.10,
+        delta: float = 0.01,
+        eval_interval: int = 10,
+        cooldown: int = 20,
+        weights: Optional[CostWeights] = None,
+    ) -> None:
+        super().__init__(weights=weights)
+
+        self._sprt = SPRTEngine(alpha=alpha, beta=beta, delta=delta)
+
+        # Arms
+        self._arms = [
+            (DecoderChoice.MWPM, DDSequenceType.NONE),
+            (DecoderChoice.UNION_FIND, DDSequenceType.NONE),
+            (DecoderChoice.MWPM, DDSequenceType.XY4),
+            (DecoderChoice.UNION_FIND, DDSequenceType.XY4),
+        ]
+        self._current_arm: int = 0  # start with MWPM + NONE
+        self._challenger_arm: Optional[int] = None
+
+        # SPRT state
+        self._sprt_state: Optional[SPRTState] = None
+        self._in_eval: bool = False
+        self._eval_interval = eval_interval
+        self._cooldown = cooldown
+        self._cooldown_remaining: int = 0
+
+        # Round-robin challenger selection
+        self._challenger_queue: list[int] = []

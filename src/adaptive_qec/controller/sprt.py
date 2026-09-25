@@ -91,3 +91,49 @@ class SPRTEngine:
     def __init__(
         self,
         alpha: float = 0.05,
+        beta: float = 0.10,
+        delta: float = 0.01,
+        max_samples: int = 100,
+    ) -> None:
+        self.alpha = alpha
+        self.beta = beta
+        self.delta = delta
+        self.max_samples = max_samples
+
+        # Wald boundaries
+        self._upper = math.log((1.0 - beta) / alpha)
+        self._lower = math.log(beta / (1.0 - alpha))
+
+    def update(
+        self,
+        state: SPRTState,
+        current_reward: float,
+        challenger_reward: float,
+    ) -> str:
+        """Feed one paired observation and return decision.
+
+        Returns "switch", "stay", or "undecided".
+
+        We model rewards as Bernoulli with parameter = survival probability.
+        Under H₀: p_current = p_challenger  (no improvement)
+        Under H₁: p_challenger = p_current + delta  (challenger is better)
+        """
+        state.current_rewards.append(current_reward)
+        state.challenger_rewards.append(challenger_reward)
+        state.samples_seen += 1
+
+        # Empirical survival probabilities (bounded away from 0/1)
+        p0 = np.clip(np.mean(state.current_rewards), 0.01, 0.99)
+        p1 = np.clip(np.mean(state.challenger_rewards), 0.01, 0.99)
+
+        # Compute per-observation LLR contribution
+        # Using Bernoulli model: observation = 1 if challenger won this round
+        challenger_won = float(challenger_reward > current_reward)
+
+        # Under H₁, P(challenger wins) = p1; under H₀, P(challenger wins) = p0
+        # But we need to handle the case where p0 ≈ p1
+        p1_effective = min(p1, 0.99)
+        p0_effective = max(p0, 0.01)
+
+        if challenger_won > 0.5:
+            llr_increment = math.log(

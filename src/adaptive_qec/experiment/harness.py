@@ -309,3 +309,66 @@ class ExperimentHarness:
             value=p_2q,
             provenance=DataProvenance.MEASURED,
             source="IBM QPU calibration",
+        ))
+        self._provenance.register("p_ro", ProvenanceTag(
+            value=p_ro,
+            provenance=DataProvenance.MEASURED,
+            source="IBM QPU calibration",
+        ))
+
+    def _sample_syndromes(self, shots: int) -> tuple[np.ndarray, np.ndarray]:
+        """Sample detection events and observable flips from the circuit.
+
+        In Stim-benchmark mode, this uses the compiled sampler.
+        In QPU mode, this would be replaced by live hardware execution.
+        """
+        if self._circuit is None:
+            raise RuntimeError("Circuit not initialized — call _setup_circuit first")
+
+        sampler = self._circuit.compile_detector_sampler()
+        detection_events, observable_flips = sampler.sample(
+            shots, separate_observables=True
+        )
+        return detection_events.astype(np.uint8), observable_flips.astype(np.uint8)
+
+    def _decode_window(
+        self,
+        decoder_name: str,
+        syndromes: np.ndarray,
+        observable_flips: np.ndarray,
+    ) -> DecoderMetrics:
+        """Decode a batch of syndromes and return metrics."""
+        decoder = self._decoders.get(decoder_name)
+        if decoder is None:
+            raise ValueError(f"Unknown decoder: {decoder_name}")
+        return decoder.decode_batch(syndromes, observable_flips)
+
+    def run(
+        self,
+        num_windows: int = 100,
+        shots_per_window: int = 1000,
+        calibration: Optional[dict[str, float]] = None,
+    ) -> ExperimentRunResult:
+        """Run the experiment for `num_windows` observation windows.
+
+        Parameters
+        ----------
+        num_windows : int
+            Number of QEC observation windows to run.
+        shots_per_window : int
+            Number of syndrome shots per window.
+        calibration : dict, optional
+            Hardware calibration data.  If None, uses config defaults.
+
+        Returns
+        -------
+        ExperimentRunResult
+            Complete results including per-window telemetry.
+        """
+        start_time = datetime.now(timezone.utc).isoformat()
+        exp_id = f"exp_{int(time.time())}"
+
+        # Use calibration or defaults
+        cal = calibration or {
+            "t1_mean_us": 100.0,
+            "t2_mean_us": 80.0,

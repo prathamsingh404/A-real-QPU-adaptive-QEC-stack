@@ -215,3 +215,27 @@ while running experiment:
     - Use the bandit UCB policy. 
     - After each block of, say, 500–1000 rounds, optionally apply a hypothesis test to confirm a switch. 
     - Continue for a fixed number of total rounds (e.g. 20k). 
+   Collect all syndrome and metadata. 
+
+5. **Analysis:** For each run, compute final estimated error rates for chosen strategies, overall LER, and compare to the best static strategy. Use a two-proportion Z-test to see if adaptive LER is significantly lower. 
+
+6. **Ablations:** 
+   - Compare UCB vs ε-greedy controllers in simulation.  
+   - Test sensitivity to the UCB exploration factor (2 in sqrt).  
+   - Try disabling adaptation (always use MWPM) to isolate benefit.  
+
+**Reproducibility:** Log all random seeds (Stim circuits), Qiskit job IDs, and full config (action list, thresholds). Publish analysis scripts (Jupyter notebooks) with the data.  
+
+### Figures/Tables to Produce
+
+- **Convergence Plot:** Bandit’s Q-values (or chosen arms) over time in simulation, showing learning.  
+- **LER Comparison Table:** LER (with 95% CI) for Static vs Adaptive for each environment.  
+- **Control Flow Diagram (Mermaid):** Illustrate the control loop (syndrome → state classifier → bandit → strategy selection → QEC → update).
+
+```mermaid
+flowchart LR
+    A[Syndrome/Hardware State] --> B{Controller (Bandit/UCB)}
+    B -->|Select Action| C[Decoder + Mitigation (e.g. UF+XY8)]
+    C --> D[QEC Cycle Execution]
+    D --> E[Syndrome Result]
+    E --> B

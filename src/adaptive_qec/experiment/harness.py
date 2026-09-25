@@ -372,3 +372,65 @@ class ExperimentHarness:
         cal = calibration or {
             "t1_mean_us": 100.0,
             "t2_mean_us": 80.0,
+            "p_1q": self._config.noise.gate.single_qubit,
+            "p_2q": self._config.noise.gate.two_qubit,
+            "p_ro": self._config.noise.readout.p0_given_1,
+        }
+
+        self._setup_circuit(cal)
+
+        # Reset all controllers
+        for ctrl in self._controllers:
+            ctrl.reset()
+
+        all_results: list[dict[str, Any]] = []
+
+        for window_idx in range(num_windows):
+            t_start = time.perf_counter()
+
+            # 1. Sample syndromes from hardware/Stim
+            syndromes, obs_flips = self._sample_syndromes(shots_per_window)
+
+            # 2. Compute defect rates for this window
+            defect_rates = syndromes.mean(axis=0).astype(np.float64)
+
+            # 3. Build hardware state
+            hw_state = build_hardware_state(
+                defect_rates=defect_rates,
+                drift_detector=self._drift_detector,
+                calibration_data=cal,
+                code_distance=self._config.qec.distance,
+            )
+
+            # 4. Run each controller
+            for ctrl in self._controllers:
+                action = ctrl.step(hw_state)
+
+                # 5. Decode with the controller's chosen decoder
+                decoder_name = action.decoder.value
+                if decoder_name not in self._decoders:
+                    # Fall back to MWPM if requested decoder unavailable
+                    decoder_name = "mwpm"
+
+                metrics = self._decode_window(decoder_name, syndromes, obs_flips)
+
+                # 6. Compute reward
+                reward = 1.0 - metrics.logical_error_rate
+
+                # 7. Feed reward back to controller
+                ctrl.update(reward)
+
+                t_end = time.perf_counter()
+                elapsed_ms = (t_end - t_start) * 1000.0
+
+                result = WindowResult(
+                    window_index=window_idx,
+                    controller_name=ctrl.name,
+                    action={
+                        "decoder": action.decoder.value,
+                        "dd_policy": action.dd_policy.value,
+                        "burst_mitigation": action.burst_mitigation,
+                    },
+                    hardware_state={
+                        "defect_rate": hw_state.defect_rate,
+                        "drift_magnitude": hw_state.drift_magnitude,

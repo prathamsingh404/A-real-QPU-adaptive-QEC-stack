@@ -226,3 +226,49 @@ class CalibrationIngest:
 
     @staticmethod
     def _get_qubit_property(
+        properties: Any,
+        qubit_index: int,
+        prop_name: str,
+    ) -> Optional[float]:
+        """Safely extract a qubit property from backend properties."""
+        try:
+            if hasattr(properties, 'qubit_property'):
+                return properties.qubit_property(qubit_index, prop_name)
+            elif hasattr(properties, 'qubits') and qubit_index < len(properties.qubits):
+                qubit_props = properties.qubits[qubit_index]
+                for prop in qubit_props:
+                    if hasattr(prop, 'name') and prop.name == prop_name:
+                        return prop.value
+            return None
+        except (IndexError, KeyError, AttributeError):
+            return None
+
+
+class OfflineCalibrationIngest:
+    """Load calibration from a saved JSON snapshot (no network needed).
+
+    For reproducibility and offline experiments.
+
+    Parameters
+    ----------
+    snapshot_path : str
+        Path to a JSON file containing a serialized CalibrationSnapshot.
+    """
+
+    def __init__(self, snapshot_path: str) -> None:
+        import json
+        with open(snapshot_path, "r") as f:
+            data = json.load(f)
+        self._data = data
+
+    def fetch_summary(self) -> dict[str, float]:
+        """Return calibration summary from saved data."""
+        return {
+            "t1_mean_us": self._data.get("t1_mean_us", 180.0),
+            "t2_mean_us": self._data.get("t2_mean_us", 120.0),
+            "p_ro": self._data.get("p_ro", 0.012),
+            "p_1q": self._data.get("p_1q", 0.0005),
+            "p_2q": self._data.get("p_2q", 0.003),
+            "num_qubits": self._data.get("num_qubits", 156),
+            "timestamp": self._data.get("timestamp", "offline"),
+        }

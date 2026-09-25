@@ -138,3 +138,65 @@ class BaseController(ABC):
         t0 = time.perf_counter_ns()
 
         self.observe(state)
+        action = self.decide()
+
+        t1 = time.perf_counter_ns()
+        latency_us = (t1 - t0) / 1_000.0
+
+        self._current_state = state
+        self._current_action = action
+
+        # build telemetry
+        record = TelemetryRecord(
+            step=self._step,
+            timestamp_ns=t0,
+            hardware_state={
+                "defect_rate": state.defect_rate,
+                "drift_magnitude": state.drift_magnitude,
+                "drift_status": state.drift_status.value,
+                "burst_active": state.burst_active,
+                "leakage_fraction": state.leakage_fraction,
+                "t1_mean_us": state.t1_mean_us,
+                "t2_mean_us": state.t2_mean_us,
+                "p_2q": state.p_2q,
+                "p_ro": state.p_ro,
+                "code_distance": state.code_distance,
+            },
+            action_taken={
+                "decoder": action.decoder.value,
+                "dd_policy": action.dd_policy.value,
+                "burst_mitigation": action.burst_mitigation,
+                "request_recalibration": action.request_recalibration,
+            },
+            cost=0.0,  # filled in by update()
+            decision_latency_us=latency_us,
+            controller_name=self.name,
+        )
+        self._telemetry.append(record)
+        self._step += 1
+
+        return action
+
+    def reset(self) -> None:
+        """Reset controller state for a new experiment run."""
+        self._step = 0
+        self._telemetry.clear()
+        self._current_state = None
+        self._current_action = None
+
+    def summary(self) -> dict[str, Any]:
+        """Return a JSON-serializable controller summary."""
+        latencies = [r.decision_latency_us for r in self._telemetry]
+        costs = [r.cost for r in self._telemetry if r.cost != 0.0]
+        return {
+            "controller": self.name,
+            "total_steps": self._step,
+            "mean_decision_latency_us": float(np.mean(latencies)) if latencies else 0.0,
+            "p99_decision_latency_us": float(np.percentile(latencies, 99)) if latencies else 0.0,
+            "mean_cost": float(np.mean(costs)) if costs else 0.0,
+        }
+
+    @property
+    def telemetry(self) -> list[TelemetryRecord]:
+        """Access the telemetry stream for offline analysis."""
+        return self._telemetry

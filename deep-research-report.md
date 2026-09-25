@@ -46,3 +46,27 @@ Each proposal (1–5) is implementable within ~3–6 months and can be validated
 - **Primary metric:** Estimated Logical Error Rate (LER) for each strategy (and overall). Compute Wilson 95% confidence intervals for each LER. Use two-proportion Z-tests or overlap of confidence intervals to test if the chosen adaptive strategy significantly outperforms baselines (e.g. best static strategy) at p<0.05.  
 - **Latency / Overhead:** Measure decoding time (from post-processing) and any added runtime overhead from bandit computation. Ensure all strategies meet real-time constraints (PyMatching decoding time is ~0.1–1 μs/round).  
 - **Regret:** In simulation, track cumulative regret or performance loss of the bandit vs omniscient policy.  
+- **Adaptation Speed:** Time or number of shots until the bandit identifies the current best arm. This can be quantified by how quickly logical failure rates converge.  
+- For all metrics, use at least ~10k shots per point to keep statistical uncertainty low (Wilson CI width ≈1% for LER~10%).  
+
+**Failure Modes and Risk Mitigation:** 
+- *Too slow adaptation:* If the hardware noise changes faster than data can be collected, the bandit may chase noise. Mitigation: use discounting (EWMA) in reward estimates or combine with drift detection to “reset” learning on regime change.  
+- *Insufficient exploration:* If one arm looks best early, bandit might exploit prematurely. Use UCB or forced exploration to ensure long-term optimality.  
+- *Hardware limitations:* Qiskit cloud queue times might hinder on-the-fly adaptation. Mitigation: use Qiskit Runtime or submit consecutive small jobs simulating adaptation (simulate control offline first).  
+- *Interference effects:* Frequent switching of circuits may confuse calibration. Mitigation: ensure enough shots per action for stable estimates; use bootstrapping.  
+
+**Novelty vs Prior Work (with citations):** This approach explicitly leverages **online statistical learning** to adapt QEC strategy. While adaptive decoding is known (e.g. Nickerson & Brown, Quantum J. 2019 and Google’s RL QEC (Nature 2026)), those works did *offline* adaptation or used deep RL. Our bandit-based scheme is simpler, interpretable, and novel in the QEC context. It directly addresses *industry concerns* (exploit known decoders, avoid black-box NN) and fits within short development cycles.
+
+## 2. Adaptive X/Z Stabilizer Scheduling
+
+**Description.** Implement a controller that **dynamically varies the frequency of X-basis vs Z-basis stabilizer checks** based on the current noise profile. For example, if syndrome analysis or hardware calibration indicates strong relaxation (short T1 causing bit-flips), perform extra X-stabilizer rounds (which detect Z errors) or vice versa. Concretely, one can design circuits where some rounds omit either the X- or Z-checks (simulating biased repetition codes) and switch between these modes. The controller monitors syndrome imbalance (e.g. higher rate of one type of detection event) and accordingly adjusts the schedule.
+
+**Novelty vs Prior Work.** Fixed QEC schedules (alternating X- and Z-check rounds) are the norm. Some works studied *basis-biased codes* (e.g. the XZZX code) for static noise bias, but *real-time adaptive scheduling* has not been demonstrated. This idea is new: using syndrome feedback to choose the next circuit variant. It leverages IBM’s ability to customize circuits per batch. It also aligns with “hardware-aware” design by exploiting known asymmetry (heavy-hex qubits often have shorter T1 than T2). 
+
+**Hardware/Software Resources.** Same QPUs and Qiskit as above. Additional resource: the ability to compile and run different stabilizer circuits (with different orders of X/Z checks) quickly. Stim and PyMatching can simulate biased schedules. 
+
+**Expected Experiments (Simulation → Real).** 
+
+- *Simulation:* Build circuit variants with, e.g., 2X+1Z, 1X+2Z patterns, etc. Simulate under noise models where $p_X\neq p_Z$ (e.g. $T_1<T_2$). Verify which schedule yields lower logical error (and latency). Then implement an adaptive rule: if recent rounds show more Z-detections, increase X-check rounds. Compare adaptive schedule vs best fixed schedule. 
+
+- *Hardware:* Choose a heavy-hex subset (distance-3 or 5) and run QEC rounds with alternating schedules. Use qubits with known T1/T2 imbalance. Collect syndrome for equal numbers of X- and Z-heavy cycles to verify difference. Then implement the rule (e.g., two experiments: one with static 1:1 schedule, one with adaptive 2:1 when needed) and compare LER. 

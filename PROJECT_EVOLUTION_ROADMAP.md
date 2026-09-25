@@ -296,3 +296,37 @@ GAP 5: NO HARDWARE CLOSED-LOOP EXPERIMENT PIPELINE
 flowchart TD
     subgraph Classical_Control_Plane["Classical Control Plane (Host / Qiskit Runtime Environment)"]
         direction TB
+        subgraph Online_Learner["Online Bandit Learning Engine"]
+            MAB["Discounted-UCB1 / Thompson Controller\nsrc/adaptive_qec/controller/bandit.py"]
+            SPRT["Statistical Hypothesis Gate (Wald SPRT & Wilson CI)\nsrc/adaptive_qec/controller/statistics.py"]
+            MAB <--> SPRT
+        end
+
+        subgraph Noise_Telemetry["Real-Time Noise & Defect Telemetry"]
+            Drift["EWMA Drift Estimator (drift.py)"]
+            Burst["Cosmic Ray / Burst Detector (burst_detector.py)"]
+            Imbalance["Syndrome Imbalance Metric ΔXZ\n(adaptive_scheduler.py)"]
+        end
+
+        subgraph Calibration_Engine["Live Graph Calibrator"]
+            DEM_Cal["In-Place DEM Reweighting\nsrc/adaptive_qec/decoders/dem_calibrator.py"]
+            UF_Weight["Dynamic Peeling Cluster Weights\n(union_find.py)"]
+        end
+    end
+
+    subgraph Quantum_Execution_Plane["Quantum Execution Plane (IBM Heron QPU)"]
+        direction TB
+        QPU["156-Qubit IBM Heron Processor\n(Heavy-Hex Lattice: ibm_marrakesh)"]
+        Circuits["Batched Dynamic QEC Circuits\n(Balanced / X-Heavy / Z-Heavy + DD)"]
+        Syndromes["Syndrome Extraction Detectors\n(Mid-Circuit Measurements + Fast Reset)"]
+        QPU --> Circuits --> Syndromes
+    end
+
+    subgraph Provenance_and_Analysis["Provenance, Storage & Statistical Suite"]
+        DB["Provenance-Tagged Round Database\nsrc/adaptive_qec/provenance.py"]
+        Stats["Hypothesis Testing & Regret Analyzer\nexperiments/analysis.py"]
+    end
+
+    Syndromes --> Noise_Telemetry
+    Noise_Telemetry --> Online_Learner
+    Online_Learner -->|"Optimal Action a* = (Decoder, DD, Schedule)"| Circuits

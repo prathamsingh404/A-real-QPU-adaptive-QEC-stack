@@ -323,3 +323,49 @@ class SPRTController(BaseController):
                     )
 
                     if decision == "switch":
+                        old_arm = self._current_arm
+                        self._current_arm = self._challenger_arm
+                        self._in_eval = False
+                        self._challenger_arm = None
+                        self._switch_count += 1
+                        logger.info(
+                            f"SPRT: switching from arm {old_arm} to {self._current_arm} "
+                            f"(LLR={self._sprt_state.log_likelihood_ratio:.3f})"
+                        )
+                    elif decision == "stay":
+                        self._in_eval = False
+                        self._challenger_arm = None
+                        self._cooldown_remaining = self._cooldown
+                        logger.info(
+                            f"SPRT: staying with arm {self._current_arm} "
+                            f"(LLR={self._sprt_state.log_likelihood_ratio:.3f})"
+                        )
+
+            self._sprt_state.samples_seen += 1
+
+        if self._telemetry:
+            self._telemetry[-1].cost = -reward
+            self._telemetry[-1].extras["in_eval"] = self._in_eval
+            self._telemetry[-1].extras["current_arm"] = self._current_arm
+
+    def reset(self) -> None:
+        super().reset()
+        self._current_arm = 0
+        self._challenger_arm = None
+        self._sprt_state = None
+        self._in_eval = False
+        self._cooldown_remaining = 0
+        self._challenger_queue.clear()
+        self._switch_count = 0
+        self._eval_count = 0
+
+    def summary(self) -> dict[str, Any]:
+        base = super().summary()
+        dec, dd = self._arms[self._current_arm]
+        base["current_arm"] = f"{dec.value}:{dd.value}"
+        base["switch_count"] = self._switch_count
+        base["eval_count"] = self._eval_count
+        base["sprt_alpha"] = self._sprt.alpha
+        base["sprt_beta"] = self._sprt.beta
+        base["sprt_delta"] = self._sprt.delta
+        return base

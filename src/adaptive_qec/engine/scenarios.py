@@ -39,3 +39,45 @@ class ScenarioType(str, Enum):
     BURST = "burst"
     MULTI_PHASE = "multi_phase"
 
+
+@dataclass
+class NoiseSnapshot:
+    """Instantaneous noise parameters at time step t.
+
+    All values are from real calibration ranges.
+    """
+    step: int
+    p_1q: float        # single-qubit depolarizing error
+    p_2q: float        # two-qubit depolarizing error
+    p_ro: float        # readout error
+    t1_mean_us: float  # mean T1 in microseconds
+    t2_mean_us: float  # mean T2 in microseconds
+    burst_active: bool = False
+    scenario_label: str = ""
+
+    def to_calibration_dict(self) -> dict[str, float]:
+        return {
+            "p_1q": self.p_1q,
+            "p_2q": self.p_2q,
+            "p_ro": self.p_ro,
+            "t1_mean_us": self.t1_mean_us,
+            "t2_mean_us": self.t2_mean_us,
+        }
+
+
+@dataclass
+class ScenarioConfig:
+    """Configuration for a noise scenario.
+
+    Parameters are drawn from real IBM Heron calibration ranges.
+    """
+    scenario_type: ScenarioType
+    total_steps: int
+
+    # Baseline calibration (from real hardware)
+    baseline_p_1q: float = 0.000454
+    baseline_p_2q: float = 0.003021
+    baseline_p_ro: float = 0.01208
+    baseline_t1_us: float = 180.0
+    baseline_t2_us: float = 120.0
+

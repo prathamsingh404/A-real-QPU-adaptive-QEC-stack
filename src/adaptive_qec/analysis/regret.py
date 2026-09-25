@@ -117,3 +117,62 @@ class RegretAnalyzer:
             total = sum(rewards)
             if total > best_total:
                 best_total = total
+                best_arm = arm
+
+        return best_arm, best_total
+
+    def _extract_arm_rewards(
+        self, results: list[dict], all_results: list[dict]
+    ) -> dict[str, list[float]]:
+        """Build per-arm reward histories from ALL controllers' results.
+
+        For the oracle comparison, we need the reward that each arm
+        *would have* achieved at each step.  In an interleaved experiment,
+        different controllers pull different arms at the same step.
+        """
+        arm_rewards: dict[str, list[float]] = {}
+
+        for r in all_results:
+            arm_label = f"{r['action']['decoder']}:{r['action']['dd_policy']}"
+            arm_rewards.setdefault(arm_label, []).append(r["reward"])
+
+        return arm_rewards
+
+    def analyze(self, controller_name: str) -> RegretAnalysis:
+        """Compute regret analysis for a specific controller.
+
+        Parameters
+        ----------
+        controller_name : str
+            Name of the controller to analyze.
+
+        Returns
+        -------
+        RegretAnalysis
+            Comprehensive regret metrics.
+        """
+        if controller_name not in self._by_controller:
+            raise ValueError(f"No results for controller: {controller_name}")
+
+        results = self._by_controller[controller_name]
+        rewards = np.array([r["reward"] for r in results])
+        T = len(rewards)
+
+        # Compute oracle (best fixed arm in hindsight)
+        arm_rewards = self._extract_arm_rewards(results, self._results)
+        oracle_arm, oracle_total = self._compute_oracle(arm_rewards)
+
+        # Per-step oracle reward (best arm's mean reward)
+        oracle_per_step = oracle_total / max(T, 1)
+
+        # Cumulative regret: Σ_t [oracle_per_step - reward_t]
+        regret_curve: list[float] = []
+        cumulative = 0.0
+        for r in rewards:
+            cumulative += oracle_per_step - r
+            regret_curve.append(cumulative)
+
+        cumulative_regret = cumulative
+        time_averaged = cumulative_regret / max(T, 1)
+
+        controller_total = float(np.sum(rewards))

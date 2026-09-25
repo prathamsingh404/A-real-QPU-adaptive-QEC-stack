@@ -84,3 +84,46 @@ def build_arm_set() -> list[BanditArm]:
 class Exp3Controller(BaseController):
     """Exp3 adversarial bandit controller.
 
+    Maintains a probability distribution p_t over K arms using
+    exponential weights.  At each step, samples an arm from p_t,
+    observes the reward, and updates weights.
+
+    Parameters
+    ----------
+    gamma : float
+        Exploration-exploitation mixing parameter in (0, 1].
+        Higher → more uniform exploration.  Default is tuned for
+        K=4 arms and T~1000 windows.
+    weights : CostWeights, optional
+        For telemetry cost tracking only.
+
+    Formal guarantee:
+        E[Regret_T] ≤ 2 √(K T ln K)  when γ = √(K ln K / T).
+    """
+
+    def __init__(
+        self,
+        gamma: float = 0.15,
+        weights: Optional[CostWeights] = None,
+    ) -> None:
+        super().__init__(weights=weights)
+        self._gamma = gamma
+        self._arms = build_arm_set()
+        self._K = len(self._arms)
+        self._log_weights = np.zeros(self._K, dtype=np.float64)
+        self._last_arm_idx: int = 0
+        self._rng = np.random.default_rng()
+
+        # History for analysis
+        self._arm_pull_counts = np.zeros(self._K, dtype=np.int64)
+        self._arm_reward_sums = np.zeros(self._K, dtype=np.float64)
+
+    @property
+    def name(self) -> str:
+        return "exp3"
+
+    def _compute_probs(self) -> np.ndarray:
+        """Compute the mixed strategy p_t from log-weights."""
+        shifted = self._log_weights - self._log_weights.max()
+        exp_w = np.exp(shifted)
+        raw = exp_w / exp_w.sum()

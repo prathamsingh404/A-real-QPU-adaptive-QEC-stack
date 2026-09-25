@@ -135,3 +135,49 @@ class CalibrationIngest:
             t1_us = t1 * 1e6 if t1 is not None else None
             t2_us = t2 * 1e6 if t2 is not None else None
             ro_len_ns = ro_len * 1e9 if ro_len is not None else None
+            freq_ghz = freq * 1e-9 if freq is not None else None
+            anharm_ghz = anharm * 1e-9 if anharm is not None else None
+
+            qubit_cals.append(QubitCalibration(
+                qubit_index=q_idx,
+                t1_us=t1_us,
+                t2_us=t2_us,
+                readout_error=ro_err,
+                readout_length_ns=ro_len_ns,
+                frequency_ghz=freq_ghz,
+                anharmonicity_ghz=anharm_ghz,
+            ))
+
+        # Extract gate calibrations
+        gate_cals: list[GateCalibration] = []
+        if hasattr(properties, 'gates') and properties.gates:
+            for gate in properties.gates:
+                gate_name = gate.gate if hasattr(gate, 'gate') else str(gate)
+                qubits = tuple(gate.qubits) if hasattr(gate, 'qubits') else ()
+                error = None
+                length = None
+
+                if hasattr(gate, 'parameters'):
+                    for param in gate.parameters:
+                        if hasattr(param, 'name'):
+                            if param.name == 'gate_error':
+                                error = param.value
+                            elif param.name == 'gate_length':
+                                length = param.value * 1e9 if param.value else None
+
+                gate_cals.append(GateCalibration(
+                    gate_name=gate_name,
+                    qubits=qubits,
+                    error=error,
+                    gate_length_ns=length,
+                ))
+
+        # Extract coupling map
+        coupling_map: list[tuple[int, int]] = []
+        if hasattr(configuration, 'coupling_map') and configuration.coupling_map:
+            coupling_map = [tuple(edge) for edge in configuration.coupling_map]
+
+        snapshot = CalibrationSnapshot(
+            timestamp=timestamp,
+            backend_name=self._backend_name,
+            qubit_calibrations=qubit_cals,

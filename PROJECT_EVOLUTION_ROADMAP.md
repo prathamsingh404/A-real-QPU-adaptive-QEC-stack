@@ -363,3 +363,36 @@ flowchart TD
             def update(self, action: Action, outcome: RoundOutcome) -> None: ...
             @abstractmethod
             def get_state(self) -> dict[str, Any]: ...
+        ```
+2.  **Experiment Harness (`src/adaptive_qec/experiment/harness.py`)**:
+    *   Construct `ExperimentHarness` supporting execution across backends (`"stim"`, `"qiskit"`).
+    *   Capture exact per-shot records: syndrome vectors, chosen arms, decoding latencies, logical observable evaluations, and hardware calibration snapshots.
+3.  **Noise Scenario Factory (`src/adaptive_qec/engine/scenarios.py`)**:
+    *   Implement 6 reproducible noise regimes:
+        *   `STATIC`: Baseline depolarizing noise ($p = 0.001$).
+        *   `DRIFT_LINEAR`: Monotonic $T_1$ degradation from $200\,\mu\text{s} \to 40\,\mu\text{s}$ over 1,000 rounds.
+        *   `DRIFT_SINUSOIDAL`: Diurnal periodic fluctuations modeling cryostat thermal oscillations.
+        *   `BURST_INTERMITTENT`: Poisson-distributed localized error bursts simulating cosmic ray phonon cascades.
+        *   `BIASED_ANISOTROPIC`: Severe dephasing bias ($p_Z / p_X = 50$).
+        *   `MIXED_REALISTIC`: Composite channel combining slow $T_1$ drift, random phase jumps, and sporadic bursts.
+4.  **Provenance Serialization (`src/adaptive_qec/provenance.py`)**:
+    *   Implement `RoundRecord` and `ExperimentArtifact` with SHA-256 hash chaining of all circuit configurations and random seeds.
+
+---
+
+### Phase 2: Online Bandit Controller & Statistical Decision Framework (Weeks 3–5)
+
+> **Scientific Objective**: Implement the primary theoretical contribution—replacing the static phenomenological cost function with an empirical Multi-Armed Bandit algorithm (Discounted-UCB1 and Thompson Sampling) integrated with Wald SPRT hypothesis testing.
+
+#### Detailed Deliverables:
+1.  **Bandit Controller (`src/adaptive_qec/controller/bandit.py`)**:
+    *   Implement `DiscountedUCBController` with decay factor $\gamma \in (0.95, 0.999)$.
+    *   Implement `ThompsonSamplingController` using Beta-Binomial conjugacy:
+        $$\text{Prior: } \text{Beta}(\alpha_0, \beta_0) \implies \text{Posterior: } \text{Beta}(\alpha_0 + S_a, \beta_0 + F_a)$$
+    *   Implement forced exploration initialization guaranteeing $N_a \ge N_{\min}$ before unconstrained bandit exploitation.
+2.  **Statistical Decision Module (`src/adaptive_qec/controller/statistics.py`)**:
+    *   Implement `SequentialProbabilityRatioTest` (Wald SPRT) with exact log-likelihood updates.
+    *   Implement `wilson_confidence_interval(successes, trials, confidence=0.95)` with continuity correction.
+    *   Implement `two_proportion_z_test(k1, n1, k2, n2)` returning z-statistic and two-sided p-value.
+3.  **Simulation Validation Suite (`experiments/bandit_vs_static.py`)**:
+    *   Run $10^5$ shots across all 6 noise scenarios comparing:

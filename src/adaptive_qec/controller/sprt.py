@@ -276,3 +276,50 @@ class SPRTController(BaseController):
             # Alternate: even steps → current, odd steps → challenger
             if self._sprt_state and self._sprt_state.samples_seen % 2 == 0:
                 return self._make_action(self._challenger_arm)
+            else:
+                return self._make_action(self._current_arm)
+
+        # Check if it's time to start a new evaluation
+        if (
+            self._step > 0
+            and self._step % self._eval_interval == 0
+            and not self._in_eval
+        ):
+            self._challenger_arm = self._next_challenger()
+            challenger_dec, challenger_dd = self._arms[self._challenger_arm]
+            self._sprt_state = SPRTState(
+                challenger_label=f"{challenger_dec.value}:{challenger_dd.value}"
+            )
+            self._in_eval = True
+            self._eval_count += 1
+            logger.info(
+                f"SPRT: starting evaluation of challenger "
+                f"{challenger_dec.value}:{challenger_dd.value}"
+            )
+            return self._make_action(self._challenger_arm)
+
+        return self._make_action(self._current_arm)
+
+    def update(self, reward: float) -> None:
+        if self._in_eval and self._sprt_state is not None and self._challenger_arm is not None:
+            # Determine if this round was current or challenger
+            is_challenger_round = (self._sprt_state.samples_seen % 2 == 0)
+
+            if is_challenger_round:
+                # Wait for the paired current-arm observation
+                self._sprt_state.challenger_rewards.append(reward)
+            else:
+                self._sprt_state.current_rewards.append(reward)
+
+                # We now have a paired observation — run SPRT
+                if self._sprt_state.challenger_rewards:
+                    challenger_r = self._sprt_state.challenger_rewards[-1]
+                    current_r = reward
+
+                    decision = self._sprt._update_paired(
+                        self._sprt_state, current_r, challenger_r
+                    ) if hasattr(self._sprt, '_update_paired') else self._sprt.update(
+                        self._sprt_state, current_r, challenger_r
+                    )
+
+                    if decision == "switch":

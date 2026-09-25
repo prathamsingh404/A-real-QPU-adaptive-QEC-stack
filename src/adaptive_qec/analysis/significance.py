@@ -74,3 +74,79 @@ class ComparisonReport:
     def to_dict(self) -> dict[str, Any]:
         return {
             "baseline_name": self.baseline_name,
+            "treatment_name": self.treatment_name,
+            "baseline_mean": self.baseline_mean,
+            "treatment_mean": self.treatment_mean,
+            "absolute_improvement": self.absolute_improvement,
+            "relative_improvement": self.relative_improvement,
+            "tests": [t.to_dict() for t in self.tests],
+            "bootstrap_ci": list(self.bootstrap_ci),
+            "conclusion": self.conclusion,
+        }
+
+
+class SignificanceTester:
+    """Statistical testing engine for controller comparisons.
+
+    Parameters
+    ----------
+    alpha : float
+        Significance level (default 0.05).
+    bootstrap_samples : int
+        Number of bootstrap resamples for CI estimation.
+    """
+
+    def __init__(
+        self,
+        alpha: float = 0.05,
+        bootstrap_samples: int = 10000,
+    ) -> None:
+        self._alpha = alpha
+        self._bootstrap_n = bootstrap_samples
+        self._rng = np.random.default_rng(42)
+
+    def welch_t_test(
+        self,
+        baseline: np.ndarray,
+        treatment: np.ndarray,
+    ) -> HypothesisTestResult:
+        """Welch's t-test for unequal variances.
+
+        H₀: μ_baseline = μ_treatment
+        H₁: μ_treatment < μ_baseline (treatment has lower error rate)
+        """
+        t_stat, p_value = stats.ttest_ind(
+            baseline, treatment, equal_var=False, alternative="greater"
+        )
+
+        # Cohen's d effect size
+        pooled_std = np.sqrt(
+            (np.var(baseline, ddof=1) + np.var(treatment, ddof=1)) / 2.0
+        )
+        d = (float(np.mean(baseline)) - float(np.mean(treatment))) / max(float(pooled_std), 1e-10)
+
+        # CI on the difference
+        diff = baseline.mean() - treatment.mean()
+        se = np.sqrt(np.var(baseline, ddof=1)/len(baseline) + np.var(treatment, ddof=1)/len(treatment))
+        t_crit = stats.t.ppf(1 - self._alpha/2, df=min(len(baseline), len(treatment)) - 1)
+        ci = (float(diff - t_crit * se), float(diff + t_crit * se))
+
+        return HypothesisTestResult(
+            test_name="Welch's t-test",
+            null_hypothesis="μ_baseline = μ_treatment",
+            alternative_hypothesis="μ_treatment < μ_baseline (lower error rate)",
+            test_statistic=float(t_stat),
+            p_value=float(p_value),
+            significant=float(p_value) < self._alpha,
+            alpha=self._alpha,
+            effect_size=float(d),
+            confidence_interval=ci,
+            sample_sizes=(len(baseline), len(treatment)),
+        )
+
+    def mann_whitney_test(
+        self,
+        baseline: np.ndarray,
+        treatment: np.ndarray,
+    ) -> HypothesisTestResult:
+        """Mann-Whitney U test (non-parametric).

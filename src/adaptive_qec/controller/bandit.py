@@ -470,3 +470,46 @@ class DASEController(BaseController):
             self._global_rewards.pop(0)
 
         # Successive elimination: drop arms whose UCB < best LCB
+        t = self._step
+        active_indices = np.where(self._active)[0]
+
+        if len(active_indices) > 1:
+            lcbs = {i: self._arm_lcb(i, t) for i in active_indices}
+            best_lcb_arm = max(lcbs, key=lcbs.get)  # type: ignore[arg-type]
+            best_lcb = lcbs[best_lcb_arm]
+
+            for i in active_indices:
+                if i == best_lcb_arm:
+                    continue
+                if (
+                    len(self._arm_windows[i]) >= self._min_pulls
+                    and self._arm_ucb(i, t) < best_lcb
+                ):
+                    self._active[i] = False
+                    arm = self._arms[i]
+                    logger.info(
+                        f"DA-SE: eliminated arm {arm.label} "
+                        f"(UCB={self._arm_ucb(i, t):.4f} < LCB={best_lcb:.4f})"
+                    )
+
+        if self._telemetry:
+            self._telemetry[-1].cost = -reward
+            self._telemetry[-1].extras["arm_idx"] = self._last_arm_idx
+            self._telemetry[-1].extras["active_arms"] = int(self._active.sum())
+
+    def reset(self) -> None:
+        super().reset()
+        self._arm_windows = [[] for _ in range(self._K)]
+        self._active = np.ones(self._K, dtype=bool)
+        self._global_rewards.clear()
+        self._last_drift_step = 0
+
+    def summary(self) -> dict[str, Any]:
+        base = super().summary()
+        base["window_size"] = self._W
+        base["confidence"] = self._c
+        base["arm_labels"] = [a.label for a in self._arms]
+        base["active_arms"] = self._active.tolist()
+        base["arm_means"] = [self._arm_mean(i) for i in range(self._K)]
+        base["arm_window_sizes"] = [len(self._arm_windows[i]) for i in range(self._K)]
+        return base

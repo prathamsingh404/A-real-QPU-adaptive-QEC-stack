@@ -495,3 +495,36 @@ flowchart TD
         *   *Main Sections*: Introduction, Theoretical Framework & Regret Bounds, System Architecture, Heavy-Hex Embedding & Circuit Compilation, Hardware Experimental Results, Ablation Studies, Discussion & Scaling Analysis.
 2.  **Reproducibility Package (`reproducibility/`)**:
     *   Jupyter notebooks replicating every figure from raw hardware telemetry.
+    *   Complete Zenodo data repository containing raw bitstrings, timestamps, and IBM calibration JSONs.
+3.  **Interactive Visualizer Upgrade (`generated-page.html`)**:
+    *   Connect the existing web dashboard to live experiment JSON traces to enable interactive exploration of bandit convergence and syndrome imbalance over time.
+
+---
+
+## 7. Hardware Experimentation Protocol on IBM Heron
+
+### 7.1 Target Hardware Specifications
+
+*   **Processor Family**: IBM Heron (Revision 2 or 3)
+*   **Candidate Backends**: `ibm_marrakesh` (156 qubits), `ibm_kingston` (156 qubits), or `ibm_sherbrooke` (127 qubits Eagle as fallback)
+*   **Topology**: Heavy-Hexagonal Lattice (degree-2 and degree-3 vertices)
+*   **Native 2Q Gate**: Direct CNOT or Cross-Resonance (CR) calibrated CZ
+*   **Code Embedding**: Distance-3 rotated planar surface code embedded on heavy-hex sub-graph using flag qubits or SWAP-free bridge ancillas (17 physical qubits total: 9 data qubits, 8 syndrome ancillas).
+
+### 7.2 Shot Allocation & Execution Budget
+
+To ensure statistical power while strictly respecting IBM cloud runtime allocations, the experimental budget is structured as follows:
+
+| Experiment Phase | Configurations / Arms | Shots per Step | Total Batches | Total Shots | Est. Qiskit Runtime Time |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Phase 6.1: Static Baselines** | 6 fixed configurations | 2,000 | 5 batches / arm | 60,000 | $\approx 25\text{ minutes}$ |
+| **Phase 6.2: Adaptive Stack** | Full Bandit + DA-SE + Calibrator | 1,000 | 80 batches | 80,000 | $\approx 35\text{ minutes}$ |
+| **Phase 6.3: Ablations** | No-Gate Bandit & Static Scheduler | 1,000 | 40 batches | 40,000 | $\approx 18\text{ minutes}$ |
+| **Buffer / Calibration** | Benchmarking & Noise Probes | 1,000 | 20 batches | 20,000 | $\approx 10\text{ minutes}$ |
+| **TOTAL** | — | — | **145 batches** | **200,000 shots** | $\approx \mathbf{88\text{ minutes}}$ |
+
+---
+
+## 8. Statistical Rigor, Power Analysis & Ablation Protocol
+
+### 8.1 Statistical Hypothesis Testing Standards

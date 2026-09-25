@@ -427,3 +427,46 @@ class DASEController(BaseController):
 
         # Among active arms, pick the one with highest UCB
         # If any active arm has < min_pulls, force-explore it
+        active_indices = np.where(self._active)[0]
+        if len(active_indices) == 0:
+            # Safety: reactivate all
+            self._active[:] = True
+            active_indices = np.arange(self._K)
+
+        under_explored = [
+            i for i in active_indices
+            if len(self._arm_windows[i]) < self._min_pulls
+        ]
+
+        if under_explored:
+            self._last_arm_idx = int(self._rng.choice(under_explored))
+        else:
+            ucbs = {i: self._arm_ucb(i, t) for i in active_indices}
+            self._last_arm_idx = max(ucbs, key=ucbs.get)  # type: ignore[arg-type]
+
+        arm = self._arms[self._last_arm_idx]
+        burst_mit = (
+            self._current_state is not None
+            and self._current_state.burst_active
+        )
+
+        return ControlAction(
+            decoder=arm.decoder,
+            dd_policy=arm.dd_policy,
+            burst_mitigation=burst_mit,
+            request_recalibration=False,
+            notes=f"DA-SE arm={arm.label} active={int(self._active.sum())}/{self._K}",
+        )
+
+    def update(self, reward: float) -> None:
+        # Add reward to the arm's sliding window
+        w = self._arm_windows[self._last_arm_idx]
+        w.append(reward)
+        if len(w) > self._W:
+            w.pop(0)
+
+        self._global_rewards.append(reward)
+        if len(self._global_rewards) > self._W * 2:
+            self._global_rewards.pop(0)
+
+        # Successive elimination: drop arms whose UCB < best LCB

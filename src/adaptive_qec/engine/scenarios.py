@@ -81,3 +81,44 @@ class ScenarioConfig:
     baseline_t1_us: float = 180.0
     baseline_t2_us: float = 120.0
 
+    # Drift parameters
+    drift_rate_p2q: float = 0.0001   # per-step increase in p_2q
+    drift_rate_t1: float = -0.5      # per-step decrease in T1 (μs)
+
+    # Sinusoidal parameters
+    amplitude_p2q: float = 0.002     # peak-to-peak variation
+    period_steps: int = 200          # oscillation period
+
+    # Burst parameters
+    burst_start: int = 50            # step when burst begins
+    burst_duration: int = 10         # how many steps the burst lasts
+    burst_multiplier: float = 3.0    # noise multiplier during burst
+
+    # Multi-phase timing
+    phase_durations: list[int] = field(default_factory=lambda: [30, 30, 10, 30])
+
+    def validate(self) -> None:
+        """Validate that parameters are in realistic ranges."""
+        assert 0 < self.baseline_p_1q < 0.01, "p_1q out of IBM Heron range"
+        assert 0 < self.baseline_p_2q < 0.05, "p_2q out of IBM Heron range"
+        assert 0 < self.baseline_p_ro < 0.10, "p_ro out of IBM Heron range"
+        assert 50 < self.baseline_t1_us < 500, "T1 out of IBM Heron range"
+        assert 30 < self.baseline_t2_us < 400, "T2 out of IBM Heron range"
+
+
+class NoiseScenarioFactory:
+    """Factory that generates time-varying noise profiles.
+
+    Usage:
+        factory = NoiseScenarioFactory(ScenarioConfig(
+            scenario_type=ScenarioType.LINEAR_DRIFT,
+            total_steps=100,
+        ))
+        for step in range(100):
+            snapshot = factory.get_noise(step)
+    """
+
+    def __init__(self, config: ScenarioConfig) -> None:
+        config.validate()
+        self._config = config
+        self._generators = {

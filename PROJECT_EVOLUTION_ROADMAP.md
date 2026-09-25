@@ -230,3 +230,36 @@ where $p_e$ is the independent error probability of fault mechanism $e$. When ha
 
 #### Closed-Form Incremental Update Engine
 We introduce an analytical incremental reweighting formula that maps directly to the underlying `pymatching.Matching` graph without topological reconstruction:
+
+$$w_e(t) = w_e(0) + \ln \left(\frac{1 - \hat{p}_e(t)}{\hat{p}_e(t)}\right) - \ln \left(\frac{1 - p_e(0)}{p_e(0)}\right)$$
+
+$$\hat{p}_e(t) = (1 - \alpha_{\text{EWMA}}) \hat{p}_e(t-1) + \alpha_{\text{EWMA}} \cdot \tilde{p}_e^{\text{meas}}(t)$$
+
+By structuring this as an in-place edge attribute mutation across only the active defect subgraph $E_{\text{active}}$, update time drops to:
+
+$$\mathcal{T}_{\text{update}} = O(|E_{\text{active}}|) \le 1.2\,\mu\text{s}$$
+
+This enables real-time synchronization between the decoder graph and the QPU's drifting physical reality.
+
+---
+
+## 4. Current Codebase State & Algorithmic Gap Analysis
+
+### 4.1 Existing Working Foundation (`src/adaptive_qec/`)
+
+| Module | Component | Current Implementation Details | Status |
+| :--- | :--- | :--- | :--- |
+| `decoders/` | **MWPM Decoder** | `mwpm.py` wrapping PyMatching 2. Fully functional. | **WORKING** |
+| `decoders/` | **Union-Find Decoder** | `union_find.py` radius-weighted cluster growth + peeling. | **WORKING** |
+| `noise/` | **Noise Estimators** | `drift.py`, `burst_detector.py`, `leakage.py`, `statistics.py`. Passes 113 tests. | **WORKING** |
+| `topology/` | **Heavy-Hex Lattice** | `heavy_hex.py` & `embedding.py` for IBM Eagle/Heron architectures. | **WORKING** |
+| `syndrome/` | **Syndrome Extraction** | `extraction.py` Stim circuit builder for heavy-hex surface codes. | **WORKING** |
+| `mitigation/`| **Dynamical Decoupling** | `dynamical_decoupling.py` (CPMG, XY4, XY8 sequence generators). | **WORKING** |
+| `qpu/` | **IBM Backend Wrapper**| `ibm.py` Qiskit Runtime connector (pulls raw backend properties). | **WORKING** |
+| `tests/` | **Unit Test Suite** | 113 unit tests across all subsystems passing. | **PASSING** |
+
+### 4.2 The Five Critical Gaps to Solve
+
+```
+GAP 1: CONTROLLER IS STATIC & PHENOMENOLOGICAL
+  Currently: controller.py lines 170-229 uses:

@@ -131,3 +131,36 @@ To ensure our work represents a groundbreaking, peer-reviewable contribution and
 ## 3. Theoretical Foundations & Formal Mathematical Claims
 
 To establish the academic rigor required for top-tier publication, the project implements four central mathematical and algorithmic contributions.
+
+### 3.1 Claim 1: Non-Stationary Multi-Armed Bandit Control Regret Bounds
+
+Let the discrete action space of QEC configurations be denoted $\mathcal{A} = \mathcal{D} \times \mathcal{M} \times \mathcal{S}$, where:
+- $\mathcal{D} \in \{\text{MWPM (PyMatching 2)}, \text{Radius-Weighted Union-Find (UF)}\}$,
+- $\mathcal{M} \in \{\text{No-DD}, \text{CPMG}, \text{XY4}, \text{XY8}\}$,
+- $\mathcal{S} \in \{\text{Balanced (1:1)}, \text{X-Biased (2:1)}, \text{Z-Biased (1:2)}\}$.
+
+Each arm $a \in \mathcal{A}$ has an unknown, time-varying logical success rate $\mu_a(t) = 1 - P_L(a, t)$. Under physical hardware drift, the reward distribution is piece-wise stationary or slowly drifting with total variation $V_T = \sum_{t=1}^{T-1} \sup_{a} |\mu_a(t+1) - \mu_a(t)|$.
+
+#### Mathematical Formulation: Discounted-UCB (D-UCB)
+To track non-stationary rewards, we formulate a discounted empirical estimator with discount factor $\gamma \in (0, 1)$:
+
+$$N_a(\gamma, t) = \sum_{s=1}^t \gamma^{t-s} \mathbb{I}\{A_s = a\}$$
+
+$$\bar{X}_a(\gamma, t) = \frac{1}{N_a(\gamma, t)} \sum_{s=1}^t \gamma^{t-s} R_s \mathbb{I}\{A_s = a\}$$
+
+$$c_a(\gamma, t) = 2 B \sqrt{\frac{\xi \ln n(\gamma, t)}{N_a(\gamma, t)}}$$
+
+$$\text{Action Choice: } A_t = \arg\max_{a \in \mathcal{A}} \left[ \bar{X}_a(\gamma, t) + c_a(\gamma, t) \right]$$
+
+where $n(\gamma, t) = \sum_{a \in \mathcal{A}} N_a(\gamma, t)$, $B$ is the reward bound ($B=1$), and $\xi > 1/2$.
+
+#### Formal Theorem (Regret Bound)
+Following Garivier & Moulines (2011), for a budget of $T$ rounds experiencing $K$ abrupt environmental shifts, setting $\gamma = 1 - \frac{1}{4} \sqrt{\frac{K}{T \ln T}}$ guarantees that the expected cumulative regret satisfies:
+
+$$\mathbb{E}[\mathcal{R}(T)] = O\left(\sqrt{K T \ln T}\right)$$
+
+This guarantees sub-linear regret, proving that the controller converges to the optimal QEC configuration without getting permanently trapped in locally suboptimal arms.
+
+---
+
+### 3.2 Claim 2: Statistically Gated Strategy Switching (Wald SPRT & Wilson Bounds)

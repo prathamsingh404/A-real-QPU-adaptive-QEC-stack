@@ -312,3 +312,27 @@ sequenceDiagram
     CTRL->>CTRL: Analyze syndrome bias
     alt Switch needed
         CTRL->>CTRL: Change to X-heavy schedule
+    else
+        CTRL->>CTRL: Continue current schedule
+    end
+    Note right of CTRL: Repeat for next block
+```
+
+### Figures/Tables
+
+- **Schedule Block Diagram:** A Gantt-style chart showing rounds colored by X/Z-check with time-axis.  
+- **Error Count Histogram:** Bar chart of X-detections vs Z-detections per block, illustrating a switch trigger.  
+- **LER Table:** Compare Balanced vs Adaptive schedule.
+
+## 3–5. (Brief Schemas)
+
+For the other candidates, shorter summaries suffice:
+
+- **Data-Driven Decoder Calibration:** We would implement a subroutine that periodically runs calibration circuits and fits error probabilities (e.g. fit a simple exponential decay for T1 from relaxation experiments, or measure gate error from repeated CNOTs). These parameters update the PyMatching weights (retrieved from calibration metadata or syndrome frequencies). We’ll then show in experiments that using this live-updated model yields lower LER than a static model. Key metrics are reduction in *decoder mis-weight* (quantified by log-likelihood of syndromes). Risk: noisy calibration, mitigated by smoothing.
+
+- **Statistical Decision Framework:** We will add hypothesis tests into (1) and (2). For the bandit, after each block, perform a two-proportion Z-test between the best two actions’ cumulative fail rates. Only switch if p<0.05 and the improvement exceeds the tolerance. In scheduling, similarly test if error differences justify a mode change. This ensures decisions are not random. We will validate via simulation that this reduces erroneous switches.
+
+- **Qiskit Runtime Integration:** Implementation details as above; not repeated. The end goal is to have an on-hardware closed-loop demo. 
+
+Each of these (3–5) would follow simulation validation and then on-device tests, with the same metrics (LER, CI, switching behavior). 
+

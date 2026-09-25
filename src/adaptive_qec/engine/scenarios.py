@@ -163,3 +163,44 @@ class NoiseScenarioFactory:
             t2_mean_us=t2,
             scenario_label="linear_drift",
         )
+
+    def _sinusoidal_drift(self, step: int) -> NoiseSnapshot:
+        """Periodic noise variation (simulates diurnal temperature cycle)."""
+        phase = 2.0 * np.pi * step / self._config.period_steps
+        p_2q = self._config.baseline_p_2q + self._config.amplitude_p2q * np.sin(phase)
+        t1 = self._config.baseline_t1_us + 20.0 * np.cos(phase)
+
+        return NoiseSnapshot(
+            step=step,
+            p_1q=self._config.baseline_p_1q,
+            p_2q=float(np.clip(p_2q, 0.001, 0.05)),
+            p_ro=self._config.baseline_p_ro,
+            t1_mean_us=float(np.clip(t1, 80.0, 300.0)),
+            t2_mean_us=float(np.clip(min(t1, self._config.baseline_t2_us), 50.0, 200.0)),
+            scenario_label="sinusoidal_drift",
+        )
+
+    def _burst(self, step: int) -> NoiseSnapshot:
+        """Sudden TLF-like burst event at a known step."""
+        in_burst = (
+            self._config.burst_start <= step
+            < self._config.burst_start + self._config.burst_duration
+        )
+
+        if in_burst:
+            p_2q = self._config.baseline_p_2q * self._config.burst_multiplier
+            p_ro = self._config.baseline_p_ro * 1.5
+        else:
+            p_2q = self._config.baseline_p_2q
+            p_ro = self._config.baseline_p_ro
+
+        return NoiseSnapshot(
+            step=step,
+            p_1q=self._config.baseline_p_1q,
+            p_2q=min(p_2q, 0.05),
+            p_ro=min(p_ro, 0.10),
+            t1_mean_us=self._config.baseline_t1_us,
+            t2_mean_us=self._config.baseline_t2_us,
+            burst_active=in_burst,
+            scenario_label="burst",
+        )

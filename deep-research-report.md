@@ -95,3 +95,27 @@ Each proposal (1–5) is implementable within ~3–6 months and can be validated
 - *Hardware:* Run short experiments (like repeated single-qubit gates or readouts) to measure actual error rates. Update the decoder’s input DEM (PyMatching weighted graph) with these values. Then run full QEC and compare to using default/assumed error model. 
 
 **Data Collected:** 
+- Raw measurement outcomes from calibration circuits (counts for |0>/<1> to estimate readout error, parity checks to estimate gate error asymmetry). 
+- Syndrome from QEC runs for analysis. 
+- Metadata: which DEM parameters were used in each run. 
+
+**Metrics:** 
+- Improvement in logical error rate due to calibration. 
+- We can use likelihood-based metrics: e.g. log-likelihood of observed syndromes under the old vs new model. 
+- Use AIC/BIC or simple histogram matching to show decoder is better fit to data.  
+
+**Failure/Risks:** 
+- *Noisy calibrations:* If calibration data is too short, weight estimates will have large error. Mitigate by running enough shots or using Bayesian priors. 
+- *Miscalibration:* Over-fitting to transient noise could hurt decode. Mitigate by smoothing (EWMA) the inferred parameters over time. 
+- *Complexity:* Updating the DEM (possibly correlated edges) must be fast enough for the controller. PyMatching supports quick reweighting (a few ms), so this is low risk. 
+
+This contribution bridges simulation and hardware by ensuring the decoder “knows” the real device. It complements contributions (1)–(2) by sharpening the error models used in the adaptive controller.
+
+## 4. Qiskit Runtime Closed-Loop Implementation
+
+**Description.** Develop a Qiskit Runtime program (or iterative loop) that implements the adaptive control loop on actual hardware. This involves writing circuits for each candidate strategy, dispatching shots, retrieving syndromes, running the controller logic (bandit or scheduling), and using Qiskit’s parameterized jobs to switch strategies between runs. 
+
+**Novelty vs Prior Work.** While Qiskit’s runtime supports dynamic circuits, to our knowledge no one has demonstrated a full adaptive QEC loop on IBM Q hardware (the recent Google experiment used their own control hardware). This contribution is largely engineering-focused, but it is critical to transition from simulation to a real demonstration. It also yields an “artifact” (runtime code) that is exactly the kind of industry-relevant deliverable sought. 
+
+**Resources.** IBM Qiskit Runtime access with ample credits. Qiskit Pulse (if needed for tailored pulses, though not mandatory). The existing AdaptiveQEC code and Stim can be ported or interfaced with Qiskit jobs. 
+

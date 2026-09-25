@@ -336,3 +336,27 @@ For the other candidates, shorter summaries suffice:
 
 Each of these (3–5) would follow simulation validation and then on-device tests, with the same metrics (LER, CI, switching behavior). 
 
+---
+
+# Implementation Roadmap
+
+A suggested timeline with milestones and estimated effort (person-weeks):
+
+| Phase                  | Tasks                                                | Duration (weeks) | Person-Weeks |
+|------------------------|------------------------------------------------------|------------------|--------------|
+| **1. Preparation**     | Literature review, set up simulators (Stim/PyMatching), gather baseline data, refresh Qiskit Runtime skills. | 2                | 4            |
+| **2. Bandit Control**  | - Implement UCB bandit logic in simulation<br>- Tune on synthetic noise scenarios (drift, bursts)<br>- Design metrics & CI analysis scripts. | 3                | 6            |
+| **3. Scheduling**      | - Code alternative stabilizer-schedule circuits<br>- Simulate biased noise, choose thresholds (tolerance, N)<br>- Integrate schedule-switch logic. | 3                | 6            |
+| **4. Decoder Tuning**  | - Write calibration routines (idle/gate tests)<br>- Implement DEM weight update in PyMatching<br>- Test impact via sim. | 2                | 4            |
+| **5. Integration**     | - Port controllers (bandit & schedule) to Qiskit Runtime<br>- Validate on simulator that Qiskit loop matches intended behavior. | 2                | 4            |
+| **6. Hardware Testing**| - Baseline runs for each static strategy (1 week)<br>- Controlled drift/burst experiments (1 week)<br>- Full adaptive runs (bandit & scheduling, 2–3 weeks) including retries. | 4                | 12           |
+| **7. Analysis**       | - Statistical tests on collected data<br>- Ablation studies (e.g. no-adapt, random)<br>- Compile results (tables/plots). | 2                | 4            |
+| **8. Write-up**       | - Draft paper/report, figures (Flowcharts, schedules)<br>- Review key sources (Google RL, Local Clustering) to position work. | 3                | 6            |
+
+**Total:** ~19 weeks (~5 months) of work. (Person-weeks assume 1–2 people in parallel on subtasks.) This timeline can compress some parts or run contributions in parallel. 
+
+Across all phases, exact seed values, job IDs, and config parameters will be documented for reproducibility. The plan emphasizes iterative simulation verification before each hardware deployment to minimize wasted runs. 
+
+In summary, these contributions and plan aim to produce a **working, validated adaptive QEC prototype on IBM hardware** with clear evidence of (hopefully) improved logical performance. By carefully combining learning, scheduling, calibration, and statistical rigor, we align with both cutting-edge research and industry best practices. 
+
+**Sources:** We cite relevant background for context and performance assumptions: PyMatching’s speed and complexity, IBM heavy-hex design goals, and recent hardware QEC demonstrations. Additional recommended readings include: the Google Nature 2026 QEC (reinforcement learning) and the 2025-26 Local Clustering/Nature Comm papers on leakage-aware decoding.

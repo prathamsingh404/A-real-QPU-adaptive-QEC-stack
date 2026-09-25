@@ -137,3 +137,50 @@ class SPRTEngine:
 
         if challenger_won > 0.5:
             llr_increment = math.log(
+                max(p1_effective, 1e-10) / max(p0_effective, 1e-10)
+            )
+        else:
+            llr_increment = math.log(
+                max(1 - p1_effective, 1e-10) / max(1 - p0_effective, 1e-10)
+            )
+
+        state.log_likelihood_ratio += llr_increment
+
+        # Check boundaries
+        if state.log_likelihood_ratio >= self._upper:
+            state.decision = "switch"
+            return "switch"
+        elif state.log_likelihood_ratio <= self._lower:
+            state.decision = "stay"
+            return "stay"
+        elif state.samples_seen >= self.max_samples:
+            # Truncated SPRT: decide based on sign of accumulated evidence
+            if state.log_likelihood_ratio > 0:
+                state.decision = "switch"
+                return "switch"
+            else:
+                state.decision = "stay"
+                return "stay"
+
+        return "undecided"
+
+
+# ---------------------------------------------------------------------------
+# SPRT Controller
+# ---------------------------------------------------------------------------
+
+class SPRTController(BaseController):
+    """SPRT-gated adaptive controller.
+
+    Operates in two phases:
+    1. Exploitation: use the current best arm.
+    2. Evaluation: periodically run a paired comparison (interleaved
+       rounds) between the current arm and a challenger, accumulating
+       SPRT evidence.
+
+    When the SPRT decides to "switch", the controller commits to the
+    challenger.  When it decides "stay", the challenger is dismissed
+    and a new one is nominated after a cooldown period.
+
+    Parameters
+    ----------

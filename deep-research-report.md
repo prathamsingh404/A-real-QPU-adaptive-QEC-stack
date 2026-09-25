@@ -70,3 +70,28 @@ Each proposal (1–5) is implementable within ~3–6 months and can be validated
 - *Simulation:* Build circuit variants with, e.g., 2X+1Z, 1X+2Z patterns, etc. Simulate under noise models where $p_X\neq p_Z$ (e.g. $T_1<T_2$). Verify which schedule yields lower logical error (and latency). Then implement an adaptive rule: if recent rounds show more Z-detections, increase X-check rounds. Compare adaptive schedule vs best fixed schedule. 
 
 - *Hardware:* Choose a heavy-hex subset (distance-3 or 5) and run QEC rounds with alternating schedules. Use qubits with known T1/T2 imbalance. Collect syndrome for equal numbers of X- and Z-heavy cycles to verify difference. Then implement the rule (e.g., two experiments: one with static 1:1 schedule, one with adaptive 2:1 when needed) and compare LER. 
+
+**Data to Collect:** Syndromes and logical outcomes for each circuit type. Label each shot with the schedule type. Also log hardware parameters (T1, T2) from calibrations. It is crucial to track which rounds were X-heavy vs Z-heavy so we can correlate syndrome patterns to schedule performance. 
+
+**Evaluation Metrics / Statistical Tests:** Compare logical error rates between static vs adaptive scheduling. Use paired tests if comparing the same noise conditions. A Chi-squared or two-proportion Z-test can assess if differences in failure rates are significant. We also measure cycle latency (different sequences may have different gate counts). A possible metric is “logical error per unit time” to capture both error suppression and speed. 
+
+**Failure Modes and Mitigation:** 
+- *Noisy syndrome detection:* If syndrome statistics are too noisy to detect bias, schedule changes may misfire. Mitigate by using EWMA smoothing or requiring persistent trend before switching (hysteresis).  
+- *Overhead costs:* Changing schedule adds overhead (compiling new circuits, possible idle times). Ensure the potential error suppression justifies extra complexity. If not, fall back to static schedule.  
+- *Hardware calibration drift:* Frequent changes in circuit may be sensitive to drift. Mitigate by testing schedule choices under stable conditions first.  
+
+**Novelty:** This contribution goes beyond existing QEC practice by making the **code itself adaptive**. It leverages hardware-specific error biases (heavy-hex qubits and cross-resonance gates cause known asymmetries) in real-time. To our knowledge, no prior work has implemented live switching of check schedules based on feedback. It is implementable via IBM’s programmable circuits and addresses industry need for hardware-optimized QEC.
+
+## 3. Data-Driven Decoder Calibration
+
+**Description.** Continuously refine decoder parameters from live data. For instance, use the observed syndrome frequencies or calibration metadata to update the **error probabilities** assigned to edges in the Detector Error Model (DEM). Or use measured syndrome correlations to infer correlated/hyperedge errors and enable **correlated matching** in PyMatching. In practice, this could mean periodically running short calibration circuits (e.g. prepare states or run stabilizers without correction) to gather error statistics, then updating the decoder’s weight tables. 
+
+**Novelty vs Prior Work.** Standard practice assumes static noise models or uses manufacturer datasheets. Recent works (Lee et al. 2026) improved performance by “detailed noise characterization” and measurement soft info, but they did this as an offline pre-step. We propose *online and automated* calibration during operation, without human intervention. This dynamic adjustment is novel and makes decoding truly hardware-aware. It also ties into upcoming correlated matching features of PyMatching. 
+
+**Resources.** Same hardware. Software: Stim/PyMatching pipelines already support customized DEMs (see [29] above). Will need small calibration routines (e.g. idle or single gates) and scripts to fit error rates from measurement outcomes. 
+
+**Experiments.** 
+- *Simulation:* Inject a known bias or correlation into error model (e.g. more Z-errors on certain qubit). Run the default decoder vs a decoder with weights tuned to the model. Confirm that adaptive calibration (e.g. inferring increased $p_Z$ or linking correlated events) improves logical fidelity. 
+- *Hardware:* Run short experiments (like repeated single-qubit gates or readouts) to measure actual error rates. Update the decoder’s input DEM (PyMatching weighted graph) with these values. Then run full QEC and compare to using default/assumed error model. 
+
+**Data Collected:** 

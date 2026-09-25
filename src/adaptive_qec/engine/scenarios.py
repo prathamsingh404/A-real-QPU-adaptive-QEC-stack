@@ -246,3 +246,44 @@ class NoiseScenarioFactory:
 # Convenience constructors
 # ---------------------------------------------------------------------------
 
+def stationary_scenario(total_steps: int = 100) -> NoiseScenarioFactory:
+    """Create a stationary noise scenario with IBM Heron defaults."""
+    return NoiseScenarioFactory(ScenarioConfig(
+        scenario_type=ScenarioType.STATIONARY,
+        total_steps=total_steps,
+    ))
+
+
+def drift_scenario(total_steps: int = 100, rate: float = 0.0001) -> NoiseScenarioFactory:
+    """Create a linear-drift noise scenario."""
+    return NoiseScenarioFactory(ScenarioConfig(
+        scenario_type=ScenarioType.LINEAR_DRIFT,
+        total_steps=total_steps,
+        drift_rate_p2q=rate,
+    ))
+
+
+def burst_scenario(
+    total_steps: int = 100,
+    burst_at: int = 50,
+    duration: int = 10,
+) -> NoiseScenarioFactory:
+    """Create a burst-injection noise scenario."""
+    return NoiseScenarioFactory(ScenarioConfig(
+        scenario_type=ScenarioType.BURST,
+        total_steps=total_steps,
+        burst_start=burst_at,
+        burst_duration=duration,
+    ))
+
+
+def multi_phase_scenario(
+    phase_durations: Optional[list[int]] = None,
+) -> NoiseScenarioFactory:
+    """Create a multi-phase scenario (stable→drift→burst→recovery)."""
+    durations = phase_durations or [30, 30, 10, 30]
+    return NoiseScenarioFactory(ScenarioConfig(
+        scenario_type=ScenarioType.MULTI_PHASE,
+        total_steps=sum(durations),
+        phase_durations=durations,
+    ))

@@ -429,3 +429,36 @@ flowchart TD
 ---
 
 ### Phase 4: Closed-Loop Live DEM & Peeling Graph Calibration (Weeks 7–9)
+
+> **Scientific Objective**: Bridge passive noise characterization and real-time decoding by synchronizing the decoder's internal matching and peeling graph weights with observed physical drift.
+
+#### Detailed Deliverables:
+1.  **DEM Reweighting Engine (`src/adaptive_qec/decoders/dem_calibrator.py`)**:
+    *   Implement `DEMCalibrator` with closed-form in-place edge weight mutation:
+        $$w_e = \ln \left(\frac{1 - \hat{p}_e}{\hat{p}_e}\right)$$
+    *   Ensure zero graph reallocation: mutate PyMatching weights directly in memory.
+2.  **Correlated Burst Reweighting**:
+    *   Integrate with `noise/burst_detector.py`: when a spatial burst is flagged across a cluster of ancillas, temporarily scale up edge weights on adjacent detectors to prevent spurious long-distance matchings.
+3.  **Radius-Weighted Peeling Adaptation (`src/adaptive_qec/decoders/union_find.py`)**:
+    *   Dynamically update cluster expansion speed $\Delta r_i(t) \propto \hat{p}_i(t)$ so that high-noise physical regions expand faster in the Union-Find growth phase.
+4.  **Benchmark Validation (`experiments/live_calibration.py`)**:
+    *   Simulate drifting physical noise channels and demonstrate that live-calibrated MWPM consistently outperforms static DEM MWPM by $\ge 12\%$ in LER.
+
+---
+
+### Phase 5: Qiskit Runtime Closed-Loop Cloud Architecture (Weeks 9–11)
+
+> **Scientific Objective**: Engineer the cloud execution pipeline using Qiskit Runtime Primitives, establishing a robust, batched closed-loop interface with real IBM Heron hardware.
+
+#### Detailed Deliverables:
+1.  **Runtime Closed-Loop Coordinator (`src/adaptive_qec/runtime/qiskit_loop.py`)**:
+    *   Implement `QiskitRuntimeLoop` utilizing Qiskit Runtime Sessions and `SamplerV2`.
+    *   Implement **batched-step adaptation**: execute a batch of $N_{\text{batch}} = 500 - 2,000$ shots, retrieve syndrome bitstrings, evaluate bandit reward and noise state, update DEM weights and circuits, and submit the subsequent batch within the active session.
+2.  **Live Telemetry Ingestion (`src/adaptive_qec/qpu/ibm.py`)**:
+    *   Implement automated retrieval of IBM backend properties: $T_1(q), T_2(q)$, readout error $\epsilon_{\text{RO}}(q)$, and 2-qubit gate error $\epsilon_{\text{ECR/CZ}}(q_1, q_2)$.
+    *   Feed live calibration parameters into the prior distributions of the bandit and DEM calibrator.
+3.  **Shot Budget & Quota Manager (`src/adaptive_qec/runtime/budget.py`)**:
+    *   Implement strict credit allocation guards to prevent accidental over-consumption of IBM cloud execution quotas.
+4.  **Hardware Dry-Run Validation (`experiments/hardware_dryrun.py`)**:
+    *   Validate the complete closed loop using the cloud simulator (`ibmq_qasm_simulator` or fake Heron backends) before touching physical hardware.
+

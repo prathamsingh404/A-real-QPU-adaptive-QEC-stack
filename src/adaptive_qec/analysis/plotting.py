@@ -213,3 +213,110 @@ def plot_error_rate_trajectory(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(output_path, bbox_inches="tight")
         logger.info(f"Saved error rate trajectory to {output_path}")
+    plt.close()
+
+
+def plot_arm_selection_timeline(
+    window_results: list[dict[str, Any]],
+    controller_name: str,
+    output_path: Optional[Path] = None,
+    title: str = "Arm Selection Timeline",
+) -> None:
+    """Visualize which arm was selected at each step.
+
+    Parameters
+    ----------
+    window_results : list[dict]
+        Raw window results.
+    controller_name : str
+        Which controller to visualize.
+    """
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        logger.warning("matplotlib not available — skipping plot")
+        return
+
+    plt.rcParams.update(PLOT_STYLE)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+
+    results = [r for r in window_results if r["controller_name"] == controller_name]
+    if not results:
+        logger.warning(f"No results for controller: {controller_name}")
+        return
+
+    steps = [r["window_index"] for r in results]
+    arms = [f"{r['action']['decoder']}:{r['action']['dd_policy']}" for r in results]
+    rewards = [r["reward"] for r in results]
+
+    # Map arms to integers for plotting
+    unique_arms = sorted(set(arms))
+    arm_to_idx = {a: i for i, a in enumerate(unique_arms)}
+    arm_indices = [arm_to_idx[a] for a in arms]
+
+    # Top: arm selection
+    arm_colors = [_get_color(a.split(":")[0]) for a in arms]
+    ax1.scatter(steps, arm_indices, c=arm_colors, s=20, alpha=0.7)
+    ax1.set_yticks(range(len(unique_arms)))
+    ax1.set_yticklabels(unique_arms)
+    ax1.set_ylabel("Selected Arm")
+    ax1.set_title(f"{title} — {controller_name}")
+
+    # Bottom: reward
+    ax2.plot(steps, rewards, color=_get_color(controller_name), alpha=0.5, linewidth=1)
+    window = min(10, len(rewards) // 4)
+    if window > 1:
+        smoothed = np.convolve(rewards, np.ones(window)/window, mode="valid")
+        ax2.plot(steps[:len(smoothed)], smoothed, color=_get_color(controller_name),
+                 linewidth=2, label=f"MA({window})")
+    ax2.set_xlabel("Window (t)")
+    ax2.set_ylabel("Reward")
+    ax2.legend()
+
+    plt.tight_layout()
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(output_path, bbox_inches="tight")
+        logger.info(f"Saved arm selection timeline to {output_path}")
+    plt.close()
+
+
+def generate_all_plots(
+    experiment_result: dict[str, Any],
+    output_dir: Path,
+) -> list[Path]:
+    """Generate all standard plots for an experiment.
+
+    Returns list of paths to generated plot files.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    generated: list[Path] = []
+
+    window_results = experiment_result.get("window_results", [])
+    if not window_results:
+        logger.warning("No window results to plot")
+        return generated
+
+    # 1. Error rate trajectory
+    p = output_dir / "error_rate_trajectory.png"
+    plot_error_rate_trajectory(window_results, output_path=p)
+    generated.append(p)
+
+    # 2. Reward distributions
+    by_ctrl: dict[str, list[float]] = {}
+    for r in window_results:
+        by_ctrl.setdefault(r["controller_name"], []).append(r["reward"])
+    p = output_dir / "reward_distributions.png"
+    plot_reward_distributions(by_ctrl, output_path=p)
+    generated.append(p)
+
+    # 3. Arm selection timelines for each controller
+    controllers = set(r["controller_name"] for r in window_results)
+    for ctrl in controllers:
+        p = output_dir / f"arm_timeline_{ctrl}.png"
+        plot_arm_selection_timeline(window_results, ctrl, output_path=p)
+        generated.append(p)
+
+    return generated

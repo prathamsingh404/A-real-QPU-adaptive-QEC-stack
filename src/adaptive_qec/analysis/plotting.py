@@ -105,3 +105,111 @@ def plot_regret_curves(
 
 
 def plot_reward_distributions(
+    results_by_controller: dict[str, list[float]],
+    output_path: Optional[Path] = None,
+    title: str = "Reward Distribution by Controller",
+) -> None:
+    """Box plots of per-window reward distributions.
+
+    Parameters
+    ----------
+    results_by_controller : dict
+        Mapping of controller name → list of per-window rewards.
+    """
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        logger.warning("matplotlib not available — skipping plot")
+        return
+
+    plt.rcParams.update(PLOT_STYLE)
+    fig, ax = plt.subplots()
+
+    names = list(results_by_controller.keys())
+    data = [results_by_controller[n] for n in names]
+    colors = [_get_color(n) for n in names]
+
+    bp = ax.boxplot(data, labels=names, patch_artist=True, widths=0.6)
+    for patch, color in zip(bp["boxes"], colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.7)
+
+    ax.set_ylabel("Reward (1 − error rate)")
+    ax.set_title(title)
+    ax.axhline(y=np.mean([np.mean(d) for d in data]), color="gray",
+               linestyle=":", alpha=0.5, label="overall mean")
+
+    plt.tight_layout()
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(output_path, bbox_inches="tight")
+        logger.info(f"Saved reward distribution plot to {output_path}")
+    plt.close()
+
+
+def plot_error_rate_trajectory(
+    window_results: list[dict[str, Any]],
+    controller_names: Optional[list[str]] = None,
+    output_path: Optional[Path] = None,
+    title: str = "Logical Error Rate Over Time",
+) -> None:
+    """Plot error rate trajectories for multiple controllers.
+
+    Parameters
+    ----------
+    window_results : list[dict]
+        Raw window results from the experiment harness.
+    controller_names : list[str], optional
+        If provided, only plot these controllers.
+    """
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        logger.warning("matplotlib not available — skipping plot")
+        return
+
+    plt.rcParams.update(PLOT_STYLE)
+    fig, ax = plt.subplots()
+
+    # Group by controller
+    by_ctrl: dict[str, list[tuple[int, float]]] = {}
+    for r in window_results:
+        name = r["controller_name"]
+        if controller_names and name not in controller_names:
+            continue
+        by_ctrl.setdefault(name, []).append(
+            (r["window_index"], r["logical_error_rate"])
+        )
+
+    for name, points in by_ctrl.items():
+        points.sort(key=lambda x: x[0])
+        steps = [p[0] for p in points]
+        rates = [p[1] for p in points]
+        color = _get_color(name)
+
+        # Plot with rolling average
+        window = min(10, len(rates) // 4)
+        if window > 1:
+            smoothed = np.convolve(rates, np.ones(window)/window, mode="valid")
+            ax.plot(steps[:len(smoothed)], smoothed, label=name, color=color, alpha=0.9)
+            ax.fill_between(
+                steps, rates, alpha=0.1, color=color
+            )
+        else:
+            ax.plot(steps, rates, label=name, color=color, alpha=0.9)
+
+    ax.set_xlabel("Window (t)")
+    ax.set_ylabel("Logical Error Rate")
+    ax.set_title(title)
+    ax.legend()
+    ax.set_yscale("log")
+
+    plt.tight_layout()
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(output_path, bbox_inches="tight")
+        logger.info(f"Saved error rate trajectory to {output_path}")

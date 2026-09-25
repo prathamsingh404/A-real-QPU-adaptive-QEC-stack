@@ -44,3 +44,48 @@ class CalibrationIngest:
     IBM backends and retrieve current calibration properties.
 
     Parameters
+    ----------
+    backend_name : str
+        Name of the IBM backend (e.g., "ibm_marrakesh").
+    channel : str
+        IBM channel: "ibm_cloud" or "ibm_quantum".
+    token_env : str
+        Environment variable containing the API token.
+    instance_env : str
+        Environment variable containing the CRN/instance.
+    """
+
+    def __init__(
+        self,
+        backend_name: str = "ibm_marrakesh",
+        channel: str = "ibm_cloud",
+        token_env: str = "IBM_QUANTUM_TOKEN",
+        instance_env: str = "IBM_QUANTUM_INSTANCE",
+    ) -> None:
+        self._backend_name = backend_name
+        self._channel = channel
+        self._token_env = token_env
+        self._instance_env = instance_env
+        self._service = None
+        self._backend = None
+
+    def _connect(self) -> None:
+        """Establish connection to IBM Quantum Runtime service."""
+        token = os.environ.get(self._token_env)
+        instance = os.environ.get(self._instance_env)
+
+        if not token:
+            raise EnvironmentError(
+                f"Missing API token.  Set {self._token_env} environment variable.\n"
+                f"Get your token at https://quantum.ibm.com/"
+            )
+
+        try:
+            from qiskit_ibm_runtime import QiskitRuntimeService
+
+            self._service = QiskitRuntimeService(
+                channel=self._channel,
+                token=token,
+                instance=instance,
+            )
+            self._backend = self._service.backend(self._backend_name)

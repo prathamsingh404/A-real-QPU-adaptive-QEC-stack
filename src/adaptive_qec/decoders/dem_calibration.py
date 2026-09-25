@@ -46,3 +46,50 @@ class DEMEdge:
     """A single edge in the detector error model."""
     detector_a: int          # -1 for boundary
     detector_b: int          # -1 for boundary
+    probability: float       # error probability
+    observables: list[int]   # which logical observables this edge flips
+    weight: float = 0.0      # -log(p/(1-p)), computed from probability
+
+    def compute_weight(self) -> float:
+        """Convert probability to matching weight: w = log((1-p)/p)."""
+        p = np.clip(self.probability, 1e-15, 1.0 - 1e-15)
+        self.weight = float(np.log((1.0 - p) / p))
+        return self.weight
+
+
+@dataclass
+class CalibratedDEM:
+    """A detector error model with calibrated edge weights.
+
+    Contains the original Stim DEM plus per-edge probability
+    updates from hardware calibration.
+    """
+    num_detectors: int
+    num_observables: int
+    edges: list[DEMEdge]
+    calibration_timestamp: str = ""
+    source: str = "stim_default"
+
+    def to_matching(self) -> pymatching.Matching:
+        """Build a PyMatching Matching object from calibrated edges."""
+        matching = pymatching.Matching()
+        matching.set_boundary_nodes({-1})
+
+        for edge in self.edges:
+            if edge.detector_a < 0 and edge.detector_b < 0:
+                continue
+
+            fault_ids = edge.observables if edge.observables else None
+
+            if edge.detector_a < 0:
+                matching.add_boundary_edge(
+                    edge.detector_b,
+                    weight=edge.weight,
+                    fault_ids=fault_ids,
+                    error_probability=edge.probability,
+                )
+            elif edge.detector_b < 0:
+                matching.add_boundary_edge(
+                    edge.detector_a,
+                    weight=edge.weight,
+                    fault_ids=fault_ids,

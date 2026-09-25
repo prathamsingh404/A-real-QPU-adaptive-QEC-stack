@@ -64,3 +64,36 @@ However, physical superconducting quantum processing units (QPUs) violate all th
 
 To ensure our work represents a groundbreaking, peer-reviewable contribution and does not inadvertently duplicate existing open-source projects, industrial demos, or academic papers, we conducted a rigorous literature and patent/repository survey across quantum computing and machine learning venues from 2021 through 2026.
 
+### 2.1 Deep Taxonomy of Existing Paradigms (2024–2026)
+
+#### A. Deep Neural Network Decoders & Transformers
+*   **AlphaQubit & AlphaQubit 2** (Google DeepMind & Google Quantum AI, *Nature* 635, 2024; arXiv:2512.07737, Dec 2025):
+    *   *Approach*: Large transformer/recurrent architectures trained via supervised and reinforcement learning on millions of simulated and hardware-generated syndrome shots on the Sycamore processor.
+    *   *Strengths*: Exceptional decoding accuracy near the theoretical maximum likelihood limit; handles complex correlated noise.
+    *   *Critical Weaknesses & Gaps*: Massive computational footprint (requires TPU/GPU inference servers); inference latency ($>100\,\mu\text{s}$ to milliseconds per round in early iterations, scaled down via custom quantization); complete black box; static once weights are frozen (incapable of real-time online adaptation to out-of-distribution drift without costly offline fine-tuning).
+    *   *Our Delineation*: We do not build another neural decoder. We use lightweight classical decoders (PyMatching 2, radius-weighted Union-Find) and adapt their mathematical graph parameters online with sub-microsecond latency.
+
+#### B. Continual Learning & Neural Pre-Decoding
+*   **QAdapt** (arXiv:2607.28422, July 2026) & **SAGE-QEC** (2026):
+    *   *Approach*: Neural pre-decoders that ingest syndrome histories to capture local spatio-temporal correlations, forwarding residual syndromes to a global matching decoder. Uses continual learning to handle noise distribution shifts.
+    *   *Critical Weaknesses & Gaps*: Susceptible to catastrophic forgetting; lacks formal convergence guarantees; adds classical latency; does not alter physical quantum control (no dynamical decoupling selection, no adaptive stabilizer scheduling).
+    *   *Our Delineation*: Our adaptation occurs at both the *circuit control layer* (dynamical decoupling sequences, stabilizer check ratios) and the *algorithmic decoder layer* (DEM edge reweighting), backed by provable sub-linear bandit regret bounds rather than heuristic neural loss optimization.
+
+#### C. Reinforcement Learning & Bandit Retraining for Variational Codes
+*   **BRAVE: Bandit Retraining for Adaptive Variational Error Correction** (Guatto, Preti, Schilling, Calarco, Cárdenas-López, Motzoi, arXiv:2509.03974, July 2026):
+    *   *Approach*: Combines offline Multi-Agent Reinforcement Learning (MARL) to discover variational quantum error correcting circuits with an online bandit layer that decides when to trigger retraining of low-dimensional variational angles.
+    *   *Critical Weaknesses & Gaps*: Restricted to small, unencoded, continuous variational parameterizations (qubits/qutrits); does not apply to topological stabilizer codes (surface codes, heavy-hex codes) where stabilizer checks are discrete projections; relies on continuous gate re-parameterization which is incompatible with fixed native cross-resonance gate calibrations on IBM cloud hardware.
+    *   *Our Delineation*: We formulate an online bandit controller explicitly over *discrete combinatorial action spaces* in topological stabilizer codes on standard superconducting transmon architectures.
+
+#### D. Passive Noise Estimation & Sliding-Window Filtering
+*   **Bhardwaj, Takou, Lin, and Brown** (Duke University, *PRX Quantum* 7, 033024, August 2026; arXiv:2511.09491):
+    *   *Approach*: "Adaptive Estimation of Drifting Noise in Quantum Error Correction." Uses an analytical sliding-window and overlapping spectral filter to passively recover time-dependent Pauli noise frequency components directly from syndrome statistics.
+    *   *Critical Weaknesses & Gaps*: Strictly **passive** characterization. They estimate the drifting noise parameters in simulation, but do not close the control loop: no dynamic strategy switching, no adaptive stabilizer scheduling, no runtime hardware control.
+    *   *Our Delineation*: We take syndrome-derived noise tracking and close the active feedback loop on real QPUs: updating PyMatching DEM graphs online, adjusting X/Z measurement ratios, and switching dynamical decoupling sequences.
+
+#### E. Concatenated Adaptive Syndrome Extraction
+*   **Berthusen, Tan, Huang, and Gottesman** (*PRX Quantum* 6, 030307, 2025; arXiv:2502.14835):
+    *   *Approach*: "Adaptive Syndrome Extraction." Demonstrates that in concatenated codes (specifically a $[[4,2,2]]$ code concatenated with hypergraph product codes), measuring physical error detectors in the inner code can selectively prune which outer stabilizer generators need to be measured.
+    *   *Critical Weaknesses & Gaps*: Requires a specific concatenated code structure; inapplicable to 2D topological planar or heavy-hex surface codes where stabilizer generators must be measured periodically to form continuous spacetime fault paths.
+    *   *Our Delineation*: We implement **Dynamic Anisotropic Stabilizer Scheduling (DA-SE)** directly on heavy-hex surface codes, varying the global temporal measurement ratio between non-commuting check operators ($X$ vs $Z$) in response to measured physical noise bias, without changing the code code-family.
+

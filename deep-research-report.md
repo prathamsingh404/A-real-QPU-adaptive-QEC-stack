@@ -167,3 +167,27 @@ initialize Q_values[action] = 0 for each action in {MWPM, UF, ...}
 initialize N_trials[action] = 0 for each action
 initialize total_rounds = 0
 while running experiment:
+    # Observe current hardware state or context C (e.g., drift detector results)
+    for each action in actions:
+        if N_trials[action] == 0:
+            # Ensure each action tried at least once
+            UCB_score[action] = +inf
+        else:
+            # compute UCB1 score: Q + sqrt(2*log(total)/N)
+            UCB_score[action] = Q_values[action] + sqrt(2 * log(total_rounds) / N_trials[action])
+    chosen_action = argmax(UCB_score)
+    
+    # Execute QEC round using chosen_action (decoder+mitigation)
+    logical_failure = run_qec_cycle(action=chosen_action)
+    reward = (logical_failure == False) ? 1 : 0  # 1 for success
+    
+    # Update bandit statistics
+    N_trials[chosen_action] += 1
+    total_rounds += 1
+    Q_values[chosen_action] += (reward - Q_values[chosen_action]) / N_trials[chosen_action]
+```
+
+- **Action Set:** e.g. { (MWPM, no DD), (MWPM, XY8), (UF, no DD), (UF, XY8), ... }  
+- **Reward:** Can use binary success or a utility combining error and latency (e.g. reward=1 for success, minus a small penalty proportional to decode time). For simplicity, start with binary success.  
+- **Bandit Policy:** The pseudocode above is classic UCB1. Thompson Sampling or ε-greedy could also be used. UCB is chosen for its deterministic fairness and interpretability.
+

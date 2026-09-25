@@ -31,3 +31,36 @@
    - [Phase 5: Qiskit Runtime Closed-Loop Cloud Architecture](#phase-5-qiskit-runtime-closed-loop-cloud-architecture-weeks-911)
    - [Phase 6: Real QPU Hardware Execution on IBM Heron](#phase-6-real-qpu-hardware-execution-on-ibm-heron-weeks-1114)
    - [Phase 7: Publication, Artifact Release & Open Science Suite](#phase-7-publication-artifact-release--open-science-suite-weeks-1417)
+7. [Hardware Experimentation Protocol on IBM Heron](#7-hardware-experimentation-protocol-on-ibm-heron)
+8. [Statistical Rigor, Power Analysis & Ablation Protocol](#8-statistical-rigor-power-analysis--ablation-protocol)
+9. [File-Level Implementation Map](#9-file-level-implementation-map)
+10. [Risk Register & Physical Failure Mode Mitigations](#10-risk-register--physical-failure-mode-mitigations)
+11. [Traceability & Dependency Matrix](#11-traceability--dependency-matrix)
+
+---
+
+## 1. Executive Summary & Central Scientific Thesis
+
+### 1.1 The Fundamental Problem
+Standard Quantum Error Correction (QEC) protocols universally operate under the assumption of **stationary, Markovian, and isotropic noise**. Circuits, stabilizer measurement sequences, and decoding graphs (such as Minimum-Weight Perfect Matching or Union-Find decoding hypergraphs) are compiled *offline* based on nominal factory calibration sheets or ideal phenomenological models.
+
+However, physical superconducting quantum processing units (QPUs) violate all three assumptions:
+1. **Non-Stationarity**: Coherence times ($T_1, T_2$), two-qubit gate fidelities, and readout misidentifications fluctuate wildly over hours due to two-level fluctuator (TLF) spectral diffusion and thermal drifts.
+2. **Anisotropy / Noise Asymmetry**: Energy relaxation ($T_1$) creates pronounced asymmetry between bit-flip ($X$) and phase-flip ($Z$) errors, which shifts dynamically as individual qubits degrade or recover.
+3. **Correlated Spatial-Temporal Bursts**: Stray high-energy ionizing radiation (cosmic rays, substrate gamma rays) and quasiparticle poisoning induce localized spatio-temporal error bursts that violate independent edge weight assumptions in decoders.
+
+### 1.2 Central Scientific Thesis
+> **Hypothesis**: An online, data-driven closed-loop controller that couples:
+> 1. **Empirical Multi-Armed Bandit (MAB) learning** over discrete decoding and dynamical decoupling actions,
+> 2. **Sequential hypothesis testing (Wald SPRT / Wilson bounds)** to prevent spurious strategy oscillation,
+> 3. **Dynamic Anisotropic Stabilizer Scheduling (DA-SE)** responding to real-time syndrome bias, and
+> 4. **Live closed-loop Detector Error Model (DEM) graph reweighting**,
+> 
+> will achieve a **statistically significant reduction in logical error rate (LER)** over static, factory-calibrated QEC baselines under physical noise drift on IBM heavy-hex superconducting hardware, while incurring **sub-microsecond classical decision overhead**, without requiring neural network accelerators or millions of offline training samples.
+
+---
+
+## 2. Comprehensive Prior-Art Landscape & Novelty Demarcation
+
+To ensure our work represents a groundbreaking, peer-reviewable contribution and does not inadvertently duplicate existing open-source projects, industrial demos, or academic papers, we conducted a rigorous literature and patent/repository survey across quantum computing and machine learning venues from 2021 through 2026.
+

@@ -143,3 +143,27 @@ This contribution does not directly propose a new QEC idea, but it is indispensa
 **Novelty vs Prior Work.** Hysteresis was already included in AdaptiveQEC, but we tighten it by using explicit confidence intervals (Wilson intervals) or hypothesis tests to trigger mode changes. This idea is standard in other adaptive systems but not yet applied in QEC control (as far as we know). Its novelty lies in formalizing the controller’s “trigger rules” using hypothesis testing rather than ad-hoc thresholds. 
 
 **Hardware/Software Resources.** No extra hardware. Use Python stats libraries. Requires collecting enough shots to perform valid tests (≥1000 typically for normal approximation). 
+
+**Expected Experiments:** In simulation, demonstrate cases where simple difference-of-means might switch erroneously due to noise, but our test avoids it. On hardware, compare “naive” vs “statistical” switching rules. 
+
+**Data & Metrics:** We would log p-values and decision points. Evaluate false switch rate and false non-switch rate.  
+
+**Failure/Risks:** If sample sizes are too small, tests lose power; we mitigate by accumulating more shots before testing. Overly conservative thresholds may delay beneficial switches; this is a parameter to tune (e.g. 95% vs 90% confidence).  
+
+This framework underpins (1) and (2) by making their decision logic more robust. We consider it a supporting contribution.
+
+---
+
+# Detailed Design for Top Contributions
+
+Below we elaborate the two highest-priority ideas (Bandit Control and Adaptive Scheduling) with algorithmic detail, analysis, and experimental protocols.
+
+## 1. Multi-Armed Bandit Controller
+
+### Algorithm (Pseudocode)
+
+```python
+initialize Q_values[action] = 0 for each action in {MWPM, UF, ...}
+initialize N_trials[action] = 0 for each action
+initialize total_rounds = 0
+while running experiment:

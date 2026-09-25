@@ -462,3 +462,36 @@ flowchart TD
 4.  **Hardware Dry-Run Validation (`experiments/hardware_dryrun.py`)**:
     *   Validate the complete closed loop using the cloud simulator (`ibmq_qasm_simulator` or fake Heron backends) before touching physical hardware.
 
+---
+
+### Phase 6: Real QPU Hardware Execution on IBM Heron (Weeks 11–14)
+
+> **Scientific Objective**: Execute the complete, integrated adaptive QEC stack on an IBM Heron processor (`ibm_marrakesh` or `ibm_kingston`), generating empirical evidence of adaptive advantage.
+
+#### Detailed Deliverables:
+1.  **Hardware Baseline Suite (`experiments/hardware_baseline.py`)**:
+    *   Execute 6 static baseline configurations (MWPM vs UF) $\times$ (No-DD vs XY4 vs XY8) at code distance $d=3$ (17 physical qubits on heavy-hex lattice).
+    *   Collect 10,000 shots per configuration ($60,000$ shots total).
+    *   Compute empirical LER with exact 95% Wilson Score intervals.
+2.  **Closed-Loop Bandit Execution (`experiments/full_adaptive.py`)**:
+    *   Deploy the full adaptive stack for 100,000 shots across an active hardware drift window (monitoring diurnal calibration shifts).
+    *   Log all strategy selections, empirical rewards, DEM weight trajectories, and SPRT switching decisions.
+3.  **Ablation Runs on Hardware**:
+    *   Run bandit controller *without* statistical gating (verifying whether chattering degrades physical performance).
+    *   Run adaptive scheduling under static nominal decoders.
+4.  **Automated Analysis Pipeline (`experiments/analysis.py`)**:
+    *   Generate publication-ready figures: LER comparison with error bars, cumulative regret curves, bandit Q-value trajectories, and timeline of statistical switching events.
+
+---
+
+### Phase 7: Publication, Artifact Release & Open Science Suite (Weeks 14–17)
+
+> **Scientific Objective**: Consolidate all empirical data, statistical proofs, and software into a publication package and open-source release.
+
+#### Detailed Deliverables:
+1.  **Manuscript Preparation**:
+    *   Draft full paper adhering to *PRX Quantum* / *Nature Communications* standards:
+        *   *Title*: "Real-Time Adaptive Quantum Error Correction via Online Bandit Control on a 156-Qubit Superconducting Processor"
+        *   *Main Sections*: Introduction, Theoretical Framework & Regret Bounds, System Architecture, Heavy-Hex Embedding & Circuit Compilation, Hardware Experimental Results, Ablation Studies, Discussion & Scaling Analysis.
+2.  **Reproducibility Package (`reproducibility/`)**:
+    *   Jupyter notebooks replicating every figure from raw hardware telemetry.

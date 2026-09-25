@@ -528,3 +528,37 @@ To ensure statistical power while strictly respecting IBM cloud runtime allocati
 ## 8. Statistical Rigor, Power Analysis & Ablation Protocol
 
 ### 8.1 Statistical Hypothesis Testing Standards
+To guarantee publishable rigor, every performance claim must satisfy the following statistical criteria:
+1.  **Primary Metric**: Logical Error Rate per Round ($P_{L,\text{round}}$).
+2.  **Uncertainty Quantification**: 95% Wilson Score intervals (not naive Gaussian $\sqrt{p(1-p)/n}$, which fails at low error rates).
+3.  **Significance Testing**: Two-tailed two-proportion Z-test. A performance gain is claimed **only if** $p < 0.01$.
+4.  **Multiple Testing Correction**: When comparing across all 6 candidate arms, apply Benjamini-Hochberg False Discovery Rate (FDR) control at $q = 0.05$.
+5.  **Statistical Power**: With $N = 20,000$ shots per arm, the two-proportion test achieves statistical power $1 - \beta \ge 0.90$ for detecting a true LER difference of $\Delta P_L = 0.005$ at baseline $P_L = 0.03$.
+
+### 8.2 Comprehensive Ablation Matrix
+
+To isolate the individual contribution of each component, the evaluation suite executes the following 6-arm ablation study:
+
+```
+[ARM 1] FULL ADAPTIVE STACK (Our Complete Proposed System)
+        Bandit (D-UCB) + SPRT Statistical Gate + Adaptive X/Z Scheduler + Live DEM Reweighting
+
+[ARM 2] ABLATION: NO STATISTICAL GATE
+        Bandit (D-UCB) without SPRT (tests impact of stochastic decision chattering)
+
+[ARM 3] ABLATION: NO ADAPTIVE SCHEDULING
+        Bandit (D-UCB) + SPRT Gate + Fixed Balanced Schedule (tests contribution of DA-SE)
+
+[ARM 4] ABLATION: NO LIVE CALIBRATION
+        Bandit (D-UCB) + SPRT Gate + Static Offline DEM (tests value of in-situ reweighting)
+
+[ARM 5] BASELINE: STATIC HEURISTIC CONTROLLER
+        Existing controller.py (analytical cost function + simple hysteresis counter)
+
+[ARM 6] NULL BASELINE: STATIC MWPM
+        Standard offline PyMatching 2 with fixed 1:1 schedule and no dynamical decoupling
+```
+
+---
+
+## 9. File-Level Implementation Map

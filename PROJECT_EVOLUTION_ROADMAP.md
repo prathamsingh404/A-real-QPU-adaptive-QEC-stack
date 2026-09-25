@@ -164,3 +164,36 @@ This guarantees sub-linear regret, proving that the controller converges to the 
 ---
 
 ### 3.2 Claim 2: Statistically Gated Strategy Switching (Wald SPRT & Wilson Bounds)
+
+In standard heuristic controllers, strategy switching occurs whenever a rolling cost function crosses an arbitrary threshold. Because quantum measurement outcomes are inherently Bernoulli-distributed random variables ($R_t \in \{0, 1\}$), stochastic fluctuations cause high-frequency strategy switching (chattering), which degrades QEC performance due to reconfiguration overhead.
+
+#### Mathematical Formulation: Sequential Probability Ratio Test (SPRT)
+Before the controller commits to switching from incumbent arm $a_0$ to candidate arm $a_1$, it must satisfy a formal hypothesis test:
+- $H_0: P_L(a_1) \ge P_L(a_0)$ (candidate is no better than incumbent)
+- $H_1: P_L(a_1) \le P_L(a_0) - \delta$ (candidate achieves at least a $\delta$-improvement)
+
+The log-likelihood ratio for observations $x_1, \dots, x_m$ is:
+
+$$\Lambda_m = \sum_{i=1}^m \ln \frac{f(x_i \mid H_1)}{f(x_i \mid H_0)}$$
+
+The decision boundary is governed by error bounds $\alpha$ (Type I error: false switch) and $\beta$ (Type II error: missed improvement):
+
+$$\text{Switch to } a_1 \iff \Lambda_m \ge \ln \left(\frac{1 - \beta}{\alpha}\right)$$
+
+$$\text{Retain } a_0 \iff \Lambda_m \le \ln \left(\frac{\beta}{1 - \alpha}\right)$$
+
+$$\text{Otherwise: Continue sampling (do not switch)}$$
+
+#### Wilson Score Confidence Interval Gate
+For batched data, strategy $a_1$ must satisfy non-overlapping 95% Wilson Score intervals:
+
+$$W(p, n) = \frac{p + \frac{z^2}{2n} \pm z \sqrt{\frac{p(1-p)}{n} + \frac{z^2}{4n^2}}}{1 + \frac{z^2}{n}}$$
+
+A switch is committed **if and only if**:
+
+$$\text{Upper } W(P_L(a_1), n_1) < \text{Lower } W(P_L(a_0), n_0) \quad \text{at } z=1.96$$
+
+This guarantees a false-switching rate strictly bounded by $\alpha \le 0.05$ (or $\alpha \le 0.01$ at $z=2.576$).
+
+---
+

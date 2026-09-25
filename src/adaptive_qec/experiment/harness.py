@@ -60,3 +60,65 @@ class WindowResult:
     hardware_state: dict[str, Any]
     decoder_metrics: dict[str, Any]
     logical_error_rate: float
+    reward: float  # 1 - logical_error_rate
+    elapsed_ms: float
+    timestamp: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "window_index": self.window_index,
+            "controller_name": self.controller_name,
+            "action": self.action,
+            "hardware_state": self.hardware_state,
+            "decoder_metrics": self.decoder_metrics,
+            "logical_error_rate": self.logical_error_rate,
+            "reward": self.reward,
+            "elapsed_ms": self.elapsed_ms,
+            "timestamp": self.timestamp,
+        }
+
+
+@dataclass
+class ExperimentRunResult:
+    """Complete result from an experiment run."""
+    experiment_id: str
+    config: dict[str, Any]
+    controller_summaries: dict[str, Any]
+    window_results: list[dict[str, Any]]
+    aggregate_metrics: dict[str, Any]
+    provenance: dict[str, Any]
+    start_time: str
+    end_time: str
+    total_windows: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "experiment_id": self.experiment_id,
+            "config": self.config,
+            "controller_summaries": self.controller_summaries,
+            "window_results": self.window_results,
+            "aggregate_metrics": self.aggregate_metrics,
+            "provenance": self.provenance,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "total_windows": self.total_windows,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Stim circuit builder (uses real noise parameters, not hardcoded)
+# ---------------------------------------------------------------------------
+
+def build_surface_code_circuit(
+    distance: int,
+    rounds: int,
+    p_1q: float,
+    p_2q: float,
+    p_ro: float,
+) -> stim.Circuit:
+    """Build a rotated surface-code memory circuit with calibrated noise.
+
+    Noise rates come from hardware calibration data, not constants.
+
+    Parameters
+    ----------

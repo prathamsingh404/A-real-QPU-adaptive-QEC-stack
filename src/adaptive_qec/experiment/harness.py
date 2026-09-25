@@ -434,3 +434,65 @@ class ExperimentHarness:
                     hardware_state={
                         "defect_rate": hw_state.defect_rate,
                         "drift_magnitude": hw_state.drift_magnitude,
+                        "drift_status": hw_state.drift_status.value,
+                        "burst_active": hw_state.burst_active,
+                    },
+                    decoder_metrics=metrics.to_dict(),
+                    logical_error_rate=metrics.logical_error_rate,
+                    reward=reward,
+                    elapsed_ms=elapsed_ms,
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                )
+                all_results.append(result.to_dict())
+
+            if (window_idx + 1) % 10 == 0:
+                logger.info(f"Completed window {window_idx + 1}/{num_windows}")
+
+        end_time = datetime.now(timezone.utc).isoformat()
+
+        # Build aggregate metrics per controller
+        aggregate: dict[str, Any] = {}
+        for ctrl in self._controllers:
+            ctrl_results = [
+                r for r in all_results if r["controller_name"] == ctrl.name
+            ]
+            error_rates = [r["logical_error_rate"] for r in ctrl_results]
+            rewards = [r["reward"] for r in ctrl_results]
+            aggregate[ctrl.name] = {
+                "mean_logical_error_rate": float(np.mean(error_rates)),
+                "std_logical_error_rate": float(np.std(error_rates)),
+                "mean_reward": float(np.mean(rewards)),
+                "total_windows": len(ctrl_results),
+            }
+
+        result = ExperimentRunResult(
+            experiment_id=exp_id,
+            config={
+                "distance": self._config.qec.distance,
+                "rounds": self._config.qec.rounds,
+                "shots_per_window": shots_per_window,
+                "num_windows": num_windows,
+            },
+            controller_summaries={
+                ctrl.name: ctrl.summary() for ctrl in self._controllers
+            },
+            window_results=all_results,
+            aggregate_metrics=aggregate,
+            provenance=self._provenance.to_dict(),
+            start_time=start_time,
+            end_time=end_time,
+            total_windows=num_windows,
+        )
+
+        # Save results
+        self._save_results(result)
+
+        return result
+
+    def _save_results(self, result: ExperimentRunResult) -> None:
+        """Persist experiment results to disk."""
+        self._output_dir.mkdir(parents=True, exist_ok=True)
+        out_path = self._output_dir / f"{result.experiment_id}.json"
+        with open(out_path, "w") as f:
+            json.dump(result.to_dict(), f, indent=2, default=str)
+        logger.info(f"Results saved to {out_path}")

@@ -396,3 +396,36 @@ flowchart TD
     *   Implement `two_proportion_z_test(k1, n1, k2, n2)` returning z-statistic and two-sided p-value.
 3.  **Simulation Validation Suite (`experiments/bandit_vs_static.py`)**:
     *   Run $10^5$ shots across all 6 noise scenarios comparing:
+        *   Static MWPM Baseline
+        *   Static Union-Find Baseline
+        *   Heuristic Cost Controller (Existing `controller.py`)
+        *   Discounted-UCB1 Controller (New)
+        *   Thompson Sampling Controller (New)
+    *   *Success Metric*: Statistically significant reduction in cumulative regret ($\mathcal{R}(T)$) and LER with $p < 0.001$.
+
+---
+
+### Phase 3: Dynamic Anisotropic Stabilizer Scheduling (Weeks 5–7)
+
+> **Scientific Objective**: Implement and validate the second core novelty—adjusting the temporal frequency of $X$-type vs $Z$-type stabilizer measurements in real time based on observed syndrome defect imbalance.
+
+#### Detailed Deliverables:
+1.  **Schedule Specifications (`src/adaptive_qec/qec/schedules.py`)**:
+    *   Define formal measurement schedule patterns:
+        *   `BALANCED`: Standard alternating round pattern ($[X, Z]$).
+        *   `X_HEAVY`: 2:1 ratio ($[X, Z, X]$) optimizing for dominant phase-flip errors.
+        *   `Z_HEAVY`: 2:1 ratio ($[Z, X, Z]$) optimizing for dominant bit-flip ($T_1$) errors.
+        *   `EXTREME_X` / `EXTREME_Z`: 3:1 ratio for extreme noise regimes.
+2.  **Adaptive Scheduler (`src/adaptive_qec/qec/adaptive_scheduler.py`)**:
+    *   Implement `AdaptiveXZScheduler` with EWMA smoothing over sliding windows ($W = 50 - 200$ rounds).
+    *   Include dual-threshold hysteresis ($\theta_{\text{enter}} = 0.15, \theta_{\text{exit}} = 0.05$) to eliminate boundary chattering.
+3.  **Dynamic Circuit Compiler (`src/adaptive_qec/syndrome/extraction.py`)**:
+    *   Upgrade Stim circuit generator to dynamically construct heavy-hex surface code detectors for arbitrary $X/Z$ repetitive sequences.
+    *   Ensure spacetime detector definitions maintain valid boundary conditions so no false detectors are triggered at schedule transitions.
+4.  **Simulation Benchmark (`experiments/adaptive_scheduling.py`)**:
+    *   Test under varying noise bias $\eta = p_Z / p_X \in [1, 100]$.
+    *   *Success Metric*: Demonstrate that under $\eta = 50$, `AdaptiveXZScheduler` achieves $>18\%$ lower LER than static balanced schedules.
+
+---
+
+### Phase 4: Closed-Loop Live DEM & Peeling Graph Calibration (Weeks 7–9)

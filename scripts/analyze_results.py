@@ -59,3 +59,32 @@ def main() -> None:
             print(json.dumps(metrics, indent=2, default=str))
         except FileNotFoundError:
             print(f"Experiment not found: {args.experiment}")
+
+    elif args.compare:
+        ids = args.compare.split(",")
+        if len(ids) != 2:
+            print("Please provide exactly two experiment IDs separated by a comma")
+            return
+
+        try:
+            m1 = store.load_metrics(ids[0])
+            m2 = store.load_metrics(ids[1])
+
+            # Extract error counts
+            # We need the decoder results for the actual counts
+            ci1 = m1.get("logical_error_rate_ci", [0, 0])
+            ci2 = m2.get("logical_error_rate_ci", [0, 0])
+
+            print(f"\n=== Comparison: {ids[0]} vs {ids[1]} ===")
+            print(f"  A: LER={m1['logical_error_rate']:.6f} CI={ci1}")
+            print(f"  B: LER={m2['logical_error_rate']:.6f} CI={ci2}")
+
+        except FileNotFoundError as e:
+            print(f"Experiment not found: {e}")
+
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

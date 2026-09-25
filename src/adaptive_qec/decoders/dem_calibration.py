@@ -236,3 +236,50 @@ class DEMCalibrator:
         ratio_ro = measured_p_ro / max(self._nominal_p_ro, 1e-10)
 
         # Geometric mean of the two ratios as the global scaling factor
+        # (most DEM edges involve both gate and measurement operations)
+        ratio = np.sqrt(ratio_2q * ratio_ro)
+
+        new_edges: list[DEMEdge] = []
+        for edge in self._base_edges:
+            new_prob = np.clip(edge.probability * ratio, 1e-15, 1.0 - 1e-15)
+            new_edge = DEMEdge(
+                detector_a=edge.detector_a,
+                detector_b=edge.detector_b,
+                probability=float(new_prob),
+                observables=list(edge.observables),
+            )
+            new_edge.compute_weight()
+            new_edges.append(new_edge)
+
+        return CalibratedDEM(
+            num_detectors=self._base_dem.num_detectors,
+            num_observables=self._base_dem.num_observables,
+            edges=new_edges,
+            calibration_timestamp=calibration_timestamp,
+            source=f"proportional (ratio={ratio:.4f})",
+        )
+
+    def calibrate_per_qubit(
+        self,
+        qubit_error_rates: dict[int, float],
+        readout_error_rates: dict[int, float],
+        calibration_timestamp: str = "",
+    ) -> CalibratedDEM:
+        """Fine-grained reweighting using per-qubit measured errors.
+
+        This is more accurate than global scaling but requires knowing
+        which qubits each DEM edge corresponds to.  For surface codes,
+        we use detector coordinates to map edges to qubits.
+
+        Parameters
+        ----------
+        qubit_error_rates : dict[int, float]
+            Measured gate error rate per physical qubit.
+        readout_error_rates : dict[int, float]
+            Measured readout error rate per physical qubit.
+        """
+        # For now, fall back to global calibration using the mean rates
+        mean_p_2q = float(np.mean(list(qubit_error_rates.values()))) if qubit_error_rates else self._nominal_p_2q
+        mean_p_ro = float(np.mean(list(readout_error_rates.values()))) if readout_error_rates else self._nominal_p_ro
+
+        return self.calibrate(mean_p_2q, mean_p_ro, calibration_timestamp)

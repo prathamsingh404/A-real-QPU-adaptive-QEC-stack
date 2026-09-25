@@ -38,3 +38,24 @@
         "code_space_fidelity": 0.72,
         "ci_95": [
           0.45712383226342285,
+          0.5189680133026505
+        ]
+      },
+      "statistical_comparison": {
+        "z_statistic": -14.867463040462036,
+        "p_value": 5.360651698534969e-50,
+        "significant_at_005": true
+      }
+    },
+    "dynamic_circuit_feedforward": {
+      "description": "OpenQASM 3 sub-microsecond on-chip active feedforward conditional correction",
+      "job_id": "dasj9edvr3kc73ek6o60",
+      "metrics": {
+        "shots": 1000,
+        "feedforward_corrections_applied": 18,
+        "feedforward_trigger_rate": 0.018,
+        "final_bell_parity_fidelity": 0.915
+      }
+    }
+  }
+}

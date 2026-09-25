@@ -213,3 +213,46 @@ class Exp3PController(BaseController):
     of an in-expectation bound.
 
     Parameters
+    ----------
+    delta : float
+        Confidence parameter.  With probability ≥ 1 − δ,
+        Regret_T ≤ O(√(K T ln(K/δ))).
+    horizon : int
+        Estimated time horizon T for tuning η and β.
+    weights : CostWeights, optional
+        For telemetry cost tracking only.
+    """
+
+    def __init__(
+        self,
+        delta: float = 0.05,
+        horizon: int = 1000,
+        weights: Optional[CostWeights] = None,
+    ) -> None:
+        super().__init__(weights=weights)
+        self._arms = build_arm_set()
+        self._K = len(self._arms)
+        self._delta = delta
+        self._T = max(horizon, 1)
+
+        # Tuned parameters per Auer et al. Theorem 3.3
+        self._eta = math.sqrt(math.log(self._K) / (self._T * self._K))
+        self._beta = math.sqrt(math.log(self._K / delta) / (self._T * self._K))
+
+        self._log_weights = np.zeros(self._K, dtype=np.float64)
+        self._last_arm_idx: int = 0
+        self._rng = np.random.default_rng()
+
+        # Counters
+        self._arm_pull_counts = np.zeros(self._K, dtype=np.int64)
+        self._arm_reward_sums = np.zeros(self._K, dtype=np.float64)
+
+    @property
+    def name(self) -> str:
+        return "exp3p"
+
+    def _compute_probs(self) -> np.ndarray:
+        shifted = self._log_weights - self._log_weights.max()
+        exp_w = np.exp(shifted)
+        raw = exp_w / exp_w.sum()
+        # Mix with uniform: α = η

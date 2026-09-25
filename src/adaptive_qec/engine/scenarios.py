@@ -204,3 +204,45 @@ class NoiseScenarioFactory:
             burst_active=in_burst,
             scenario_label="burst",
         )
+
+    def _multi_phase(self, step: int) -> NoiseSnapshot:
+        """Concatenation of: stable → linear drift → burst → recovery."""
+        durations = self._config.phase_durations
+        boundaries = np.cumsum(durations)
+
+        if step < boundaries[0]:
+            # Phase 1: stationary
+            return self._stationary(step)
+        elif step < boundaries[1]:
+            # Phase 2: linear drift
+            drift_step = step - boundaries[0]
+            return self._linear_drift(drift_step)
+        elif step < boundaries[2]:
+            # Phase 3: burst
+            burst_config = ScenarioConfig(
+                scenario_type=ScenarioType.BURST,
+                total_steps=durations[2],
+                baseline_p_1q=self._config.baseline_p_1q,
+                baseline_p_2q=self._config.baseline_p_2q * 1.5,  # already degraded
+                baseline_p_ro=self._config.baseline_p_ro,
+                baseline_t1_us=self._config.baseline_t1_us * 0.8,
+                baseline_t2_us=self._config.baseline_t2_us * 0.8,
+                burst_start=0,
+                burst_duration=durations[2],
+                burst_multiplier=self._config.burst_multiplier,
+            )
+            factory = NoiseScenarioFactory(burst_config)
+            snap = factory.get_noise(step - int(boundaries[1]))
+            snap.scenario_label = "multi_phase:burst"
+            return snap
+        else:
+            # Phase 4: recovery (return to stationary)
+            snap = self._stationary(step)
+            snap.scenario_label = "multi_phase:recovery"
+            return snap
+
+
+# ---------------------------------------------------------------------------
+# Convenience constructors
+# ---------------------------------------------------------------------------
+

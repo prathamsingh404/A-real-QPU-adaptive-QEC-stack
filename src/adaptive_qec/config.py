@@ -137,14 +137,22 @@ class HardwareConfig(BaseModel):
 
 
 class ReadoutNoiseConfig(BaseModel):
-    """Readout noise parameters."""
+    """Readout noise parameters.
+    
+    Default baseline values are modeled from the IBM Marrakesh daily calibration
+    snapshot artifact (data/calibration/ibm_marrakesh_snapshot.json).
+    """
     enabled: bool = True
     p0_given_1: float = Field(default=0.01208, ge=0.0, le=1.0)
     p1_given_0: float = Field(default=0.01208, ge=0.0, le=1.0)
 
 
 class GateNoiseConfig(BaseModel):
-    """Gate noise parameters."""
+    """Gate noise parameters.
+    
+    Default baseline values are modeled from the IBM Marrakesh daily calibration
+    snapshot artifact (data/calibration/ibm_marrakesh_snapshot.json).
+    """
     single_qubit: float = Field(default=0.000454, ge=0.0, le=1.0)
     two_qubit: float = Field(default=0.003021, ge=0.0, le=1.0)
     model: NoiseModel = NoiseModel.DEPOLARIZING

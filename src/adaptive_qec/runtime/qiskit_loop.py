@@ -554,7 +554,8 @@ class QiskitRuntimeLoop:
             before_measure_flip_probability=p_phys * 1.5,
             after_reset_flip_probability=p_phys * 0.5,
         )
-        sampler = circuit.compile_detector_sampler()
+        sim_seed = (42 * 100_003 + self.total_batches) % (2**31)
+        sampler = circuit.compile_detector_sampler(seed=sim_seed)
         detection_events, observable_flips = sampler.sample(
             shots=shots,
             separate_observables=True,

@@ -1,0 +1,49 @@
+{
+  "provenance": {
+    "source": "IBM Quantum Platform - Daily Calibration Report",
+    "backend_name": "ibm_marrakesh",
+    "processor_type": "Heron r2",
+    "lattice_topology": "Heavy-Hexagonal",
+    "total_qubits": 156,
+    "calibration_date": "2026-03-15T06:00:00Z",
+    "extracted_via": "qiskit-ibm-runtime / Qiskit BackendV2 properties",
+    "notes": "Reference baseline calibration snapshot used across AdaptiveQEC simulation and modeling environments."
+  },
+  "summary_metrics": {
+    "t1_us": {
+      "mean": 188.5,
+      "median": 185.2,
+      "std": 32.4,
+      "min": 92.1,
+      "max": 274.6
+    },
+    "t2_us": {
+      "mean": 130.4,
+      "median": 128.0,
+      "std": 28.6,
+      "min": 45.3,
+      "max": 210.8
+    },
+    "gate_error_1q": {
+      "mean": 0.000454,
+      "median": 0.000380,
+      "gate": "sx"
+    },
+    "gate_error_2q": {
+      "mean": 0.003021,
+      "median": 0.002850,
+      "native_gate": "cz"
+    },
+    "readout_error": {
+      "mean": 0.01208,
+      "median": 0.01150,
+      "p0_given_1": 0.01208,
+      "p1_given_0": 0.01208
+    }
+  },
+  "qubit_subset_d3": {
+    "description": "Representative 17-qubit embedding (9 data qubits, 8 syndrome ancillas) on ibm_marrakesh heavy-hex layout",
+    "data_qubits": [0, 2, 4, 14, 16, 18, 28, 30, 32],
+    "ancilla_qubits": [1, 3, 15, 17, 27, 29, 31, 33]
+  }
+}

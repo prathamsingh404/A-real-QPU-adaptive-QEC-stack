@@ -231,7 +231,8 @@ class AdaptiveSchedulingExperiment:
     ) -> BiasPointResult:
         """Run experiment with a fixed stabilizer schedule."""
         circuit = self._build_biased_circuit(p_x, p_z, schedule_type=schedule_type)
-        sampler = circuit.compile_detector_sampler()
+        fixed_seed = (self._config.seed * 100_003 + int(eta * 1000)) % (2**31)
+        sampler = circuit.compile_detector_sampler(seed=fixed_seed)
         dem = circuit.detector_error_model(decompose_errors=True)
 
         import pymatching
@@ -289,7 +290,8 @@ class AdaptiveSchedulingExperiment:
             dem = circuit.detector_error_model(decompose_errors=True)
             matcher = pymatching.Matching.from_detector_error_model(dem)
 
-            sampler = circuit.compile_detector_sampler()
+            window_seed = (self._config.seed * 100_003 + int(eta * 1000) * 53 + window_idx) % (2**31)
+            sampler = circuit.compile_detector_sampler(seed=window_seed)
             detection_events, observable_flips = sampler.sample(
                 shots=shots_per_window,
                 separate_observables=True,

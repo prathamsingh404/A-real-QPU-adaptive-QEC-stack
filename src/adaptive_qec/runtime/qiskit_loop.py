@@ -225,13 +225,26 @@ class QiskitRuntimeLoop:
             return
 
         try:
+            import os
+            from dotenv import load_dotenv
             from qiskit_ibm_runtime import (
                 QiskitRuntimeService,
                 SamplerV2,
                 Session,
             )
 
-            service = QiskitRuntimeService()
+            load_dotenv(".env")
+            channel = os.getenv("IBM_QUANTUM_CHANNEL", "ibm_cloud")
+            token = os.getenv("IBM_QUANTUM_TOKEN")
+            instance = os.getenv("IBM_QUANTUM_INSTANCE")
+
+            if token and instance:
+                service = QiskitRuntimeService(channel=channel, token=token, instance=instance)
+            elif token:
+                service = QiskitRuntimeService(channel=channel, token=token)
+            else:
+                service = QiskitRuntimeService()
+
             self._backend = service.backend(self._config.backend_name)
 
             logger.info(

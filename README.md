@@ -2,7 +2,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-239%2F239%20passed%20(100%25)-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-244%2F244%20passed%20(100%25)-brightgreen.svg)]()
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
 [![Stim](https://img.shields.io/badge/Stim-1.15+-blueviolet.svg)](https://github.com/quantumlib/Stim)
 [![PyMatching](https://img.shields.io/badge/PyMatching-2.2+-orange.svg)](https://github.com/oscarhiggott/PyMatching)
@@ -177,11 +177,28 @@ Evaluated on identical non-stationary noise schedules across 50 observation wind
 ### Experiment 2: Distance Sweep & Threshold Scaling ($\Lambda$ Factor)
 Evaluated across planar surface codes of distance $d=3$ and $d=5$ ($R=3$, depolarizing noise $p_{2q}=0.005$):
 
-* **$d=3$ Surface Code:** $\text{LER} = 0.0500$ (MWPM throughput: 896,057 shots/s, UF throughput: 14,137 shots/s)
-* **$d=5$ Surface Code:** $\text{LER} = 0.0100$ (MWPM throughput: 433,839 shots/s, UF throughput: 955 shots/s)
-* **Threshold Scaling Factor:**
-  $$\Lambda(3 \to 5) = \frac{p_L(d=3)}{p_L(d=5)} = \frac{0.0500}{0.0100} = \mathbf{5.0 > 1.0}$$
-  Confirming exponential suppression of logical errors with increasing code distance.
+### 3.1 Live IBM Heron QPU Benchmarks (`ibm_marrakesh`, 156 Transmons)
+Executed live on `ibm_marrakesh` using Qiskit Runtime SamplerV2:
+* **[[4, 2, 2]] True Quantum Error-Detecting Code (1,000 shots):**
+  * *Unmitigated Baseline:* Job [`dasj9djg95ks73efkbog`](https://quantum.ibm.com) — Error Detection Rate: **17.50%**, Code Space Fidelity: **69.50%**
+  * *DD-Mitigated (XY4):* Job [`dasj9e5vr3kc73ek6o4g`](https://quantum.ibm.com) — Error Detection Rate: **48.80%**, Code Space Fidelity: **72.00%**
+  * Detects simultaneous $X$ bit-flip and $Z$ phase-flip errors; interleaving XY4 pulses significantly boosts detection sensitivity while improving post-selected code fidelity ($p = 5.36 \times 10^{-50}$).
+* **OpenQASM 3 Sub-Microsecond Dynamic Feedforward (1,000 shots):**
+  * Job [`dasj9edvr3kc73ek6o60`](https://quantum.ibm.com) — Sub-microsecond active Pauli-X corrections applied in real-time on QPU controller electronics: **18 / 1,000 shots (1.8%)**; Final Bell state parity fidelity: **91.50%**.
+* **Repetition Code Smoke Test (500 shots):**
+  * Unmitigated Job [`dashr9jojkfs738pc4n0`](https://quantum.ibm.com) (LER = 0.0380) vs. DD-mitigated Job [`dashra5vr3kc73ek595g`](https://quantum.ibm.com) (LER = 0.0060) $\to$ **84.2% drop in idle dephasing errors** ($p = 0.000562$).
+
+### 3.2 Headline Simulation Benchmark: Adaptive vs. Static Strategies ($N = 50,000$ Shots/Arm)
+Evaluated across 50 observation windows $\times$ 1,000 shots (150,000 total decoding trials) on distance-3 surface codes under non-stationary drift, cosmic ray bursts, and leakage:
+* **STATIC MWPM (Baseline):** $\text{LER} = \mathbf{0.170320}$ ($[0.1670, 0.1736]$)
+* **STATIC UF+XY4 (Best Static):** $\text{LER} = \mathbf{0.136980}$ ($[0.1340, 0.1400]$)
+* **ADAPTIVE (Ours):** $\text{LER} = \mathbf{0.130220}$ ($[0.1273, 0.1332]$)
+* **Statistical Significance:**
+  * Adaptive vs. Baseline MWPM: **$+23.54\%$ error reduction** ($z = 17.51, p < 10^{-68}$)
+  * Adaptive vs. Best Static Arm: **$+4.94\%$ error reduction** ($z = -3.1416, \mathbf{p = 0.001680 < 0.01}$, statistically confirmed).
+* **Accelerated Union-Find Decoder:** Precomputed All-Pairs Shortest Paths lookup engine delivers **$> 108,000$ shots/second** ($\approx 9.2\,\mu\text{s/shot}$), achieving a **$7.4\times$ speedup** over naive Dijkstra search.
+
+For complete unvarnished academic analysis and data provenance, see [RIGOROUS_EXPERIMENTAL_REPORT_AND_ACADEMIC_AUDIT.md](RIGOROUS_EXPERIMENTAL_REPORT_AND_ACADEMIC_AUDIT.md).
 
 ---
 

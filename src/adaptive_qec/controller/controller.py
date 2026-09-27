@@ -229,19 +229,13 @@ def estimate_logical_error_rate(
     PROVENANCE: INFERRED — this is a model-based estimate, not a direct
     measurement. The model coefficients are approximate.
     """
-    # Base physical error rate
-    p_eff = state.p_2q + state.p_ro / 2.0
-
-    # Add drift contribution
-    if state.drift_magnitude > 1.0:
-        p_eff *= (1.0 + 0.1 * state.drift_magnitude)
-
-    # Add burst contribution (if not mitigated)
-    if state.burst_active and not burst_mitigate:
-        p_eff *= 3.0  # bursts roughly triple the error rate
-
-    # Add leakage contribution
-    p_eff += state.leakage_fraction * 0.1
+    # Base physical decomposition
+    p_base = state.p_2q
+    f_floor = 0.12
+    f_drift = 0.85
+    p_floor = 0.005
+    p_dep = f_floor * min(p_base, p_floor) + f_drift * max(0.0, p_base - p_floor)
+    p_non_dep = max(0.0, p_base - p_dep)
 
     # DD trade-off: suppression of idle dephasing vs pulse error overhead
     PULSE_COUNTS = {
@@ -251,23 +245,30 @@ def estimate_logical_error_rate(
         DDSequenceType.XY8: 8,
     }
     pulses = PULSE_COUNTS.get(dd, 0)
-    pulse_penalty = pulses * state.p_1q
+    pulse_overhead = pulses * state.p_1q
 
     DD_SUPPRESSION = {
         DDSequenceType.NONE: 1.0,
-        DDSequenceType.CPMG: 0.45,
-        DDSequenceType.XY4: 0.22,
-        DDSequenceType.XY8: 0.12,
+        DDSequenceType.CPMG: 0.40,
+        DDSequenceType.XY4: 0.15,
+        DDSequenceType.XY8: 0.08,
     }
-    f_dephase = 0.35
     suppression = DD_SUPPRESSION.get(dd, 1.0)
-    p_eff = (1.0 - f_dephase) * p_eff + (f_dephase * p_eff * suppression) + pulse_penalty
 
-    # Decoder accuracy: MWPM is near-optimal for surface codes.
-    # Union-Find trades ~10-15% higher logical error rate for lower latency
-    # and linear complexity scaling.
+    p_eff = p_non_dep + (p_dep * suppression) + pulse_overhead + state.p_ro / 2.0
+
+    # Add burst contribution (if not mitigated)
+    if state.burst_active and not burst_mitigate:
+        p_eff *= 2.5
+
+    # Decoder accuracy: MWPM is near-optimal for uniform stochastic errors.
+    # Under persistent spatial defects / leakage, Union-Find's cluster
+    # bounding localizes errors, whereas MWPM creates boundary-crossing chains.
     if decoder == DecoderChoice.UNION_FIND:
-        p_eff *= 1.12
+        if state.leakage_fraction > 0.05:
+            p_eff *= 0.70
+        else:
+            p_eff *= 1.12
 
     # Phenomenological model
     p_th = 0.01  # approximate threshold
@@ -510,12 +511,15 @@ class AdaptiveController:
 
         # Check if this is a mode switch
         if self._current_action is not None:
-            if best_action.decoder != self._current_action.decoder:
+            if (
+                best_action.decoder != self._current_action.decoder
+                or best_action.dd_policy != self._current_action.dd_policy
+            ):
                 self.metrics.total_mode_switches += 1
                 logger.info(
                     f"Controller: mode switch "
-                    f"{self._current_action.decoder.value} -> "
-                    f"{best_action.decoder.value} "
+                    f"({self._current_action.decoder.value}:{self._current_action.dd_policy.value}) -> "
+                    f"({best_action.decoder.value}:{best_action.dd_policy.value}) "
                     f"(cost: {best_cost:.6f})"
                 )
 

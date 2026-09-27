@@ -190,12 +190,17 @@ def apply_dd_to_noise(
     }
 
     p_base = base_noise.gate.two_qubit
-    f_dephase = 0.35  # fraction of idling dephasing noise
+    f_floor = 0.12
+    f_drift = 0.85
+    p_floor = 0.005
+    p_dep = f_floor * min(p_base, p_floor) + f_drift * max(0.0, p_base - p_floor)
+    p_non_dep = max(0.0, p_base - p_dep)
+
     suppression = SUPPRESSION.get(dd_policy, 1.0)
     pulses = PULSE_COUNTS.get(dd_policy, 0)
 
     # Suppressed dephasing + unsuppressed error + pulse overhead
-    p_eff = (1.0 - f_dephase) * p_base + (f_dephase * p_base * suppression) + (pulses * single_qubit_pulse_error)
+    p_eff = p_non_dep + (p_dep * suppression) + (pulses * single_qubit_pulse_error)
     noise.gate.two_qubit = float(max(0.0, p_eff))
     return noise
 
@@ -371,6 +376,7 @@ def run_adaptive_vs_static(
 
     mwpm_decoder_adaptive = MWPMDecoder()
     uf_decoder_adaptive = UnionFindDecoder()
+    uf_decoder_adaptive.configure(circuit=circuit_base_uf)
 
     # Initialize controller
     controller = AdaptiveController(
@@ -520,7 +526,6 @@ def run_adaptive_vs_static(
             else:
                 adaptive_metrics = mwpm_decoder_adaptive.decode_batch(synd_adapt, obs_adapt.astype(np.uint8))
         else:
-            uf_decoder_adaptive.configure(circuit=circuit_adapt)
             adaptive_metrics = uf_decoder_adaptive.decode_batch(synd_adapt, obs_adapt.astype(np.uint8))
 
         n_err_adaptive = adaptive_metrics.num_logical_errors

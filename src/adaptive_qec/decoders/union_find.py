@@ -392,10 +392,27 @@ class UnionFindDecoder(Decoder):
         self._num_detectors = dem.num_detectors
         self._num_observables = dem.num_observables
 
+        # Precompute all-pairs shortest paths table if graph is compact (< 256 nodes)
+        # for ultra-fast O(1) lookup during decoding
+        n_nodes = self._num_detectors + 1
+        if n_nodes <= 256:
+            self._dist_matrix = np.full((n_nodes, n_nodes), np.inf, dtype=np.float32)
+            self._obs_matrix = np.zeros((n_nodes, n_nodes), dtype=np.uint32)
+            for u in range(n_nodes):
+                targets = set(range(n_nodes)) - {u}
+                paths = _dijkstra_to_targets(self._graph, u, targets)
+                self._dist_matrix[u, u] = 0.0
+                for v, (w, o) in paths.items():
+                    self._dist_matrix[u, v] = w
+                    self._obs_matrix[u, v] = o
+        else:
+            self._dist_matrix = None
+            self._obs_matrix = None
+
         logger.info(
             f"UF decoder configured: {self._num_detectors} detectors, "
             f"{self._num_observables} observables, "
-            f"{len(self._graph.edges)} edges (sparse adjacency, no dense APSP)"
+            f"{len(self._graph.edges)} edges (fast lookup enabled: {self._dist_matrix is not None})"
         )
 
     def configure_from_dem(self, dem: stim.DetectorErrorModel) -> None:
@@ -416,8 +433,7 @@ class UnionFindDecoder(Decoder):
         Defects grow towards the static boundary at radius r = dist(di, boundary).
         Merging in radius order preserves maximum-likelihood cluster boundaries.
 
-        Distances are computed on-demand via Dijkstra from each defect, not
-        from a precomputed dense matrix.
+        Distances are looked up in O(1) from the precomputed all-pairs table.
 
         Args:
             syndrome: shape (num_detectors,), dtype uint8
@@ -433,26 +449,32 @@ class UnionFindDecoder(Decoder):
             return np.zeros(self._num_observables, dtype=np.uint8)
 
         boundary = self._graph.boundary_node
-
-        # Compute on-demand shortest paths from each defect
-        events = []
         defects_int = [int(d) for d in defects]
+        events = []
 
-        for i, di in enumerate(defects_int):
-            targets_for_di = set(defects_int[i + 1:]) | {boundary}
-            paths = _dijkstra_to_targets(self._graph, di, targets_for_di)
-
-            # Boundary event
-            if boundary in paths:
-                wb, ob = paths[boundary]
-                events.append((wb, di, boundary, ob, True))
-
-            # Defect-defect events
-            for j in range(i + 1, len(defects_int)):
-                dj = defects_int[j]
-                if dj in paths:
-                    w, o = paths[dj]
-                    events.append((w / 2.0, di, dj, o, False))
+        if self._dist_matrix is not None:
+            # Ultra-fast O(1) lookup path
+            for i, di in enumerate(defects_int):
+                wb = float(self._dist_matrix[di, boundary])
+                if np.isfinite(wb):
+                    events.append((wb, di, boundary, int(self._obs_matrix[di, boundary]), True))
+                for dj in defects_int[i + 1:]:
+                    wd = float(self._dist_matrix[di, dj])
+                    if np.isfinite(wd):
+                        events.append((wd / 2.0, di, dj, int(self._obs_matrix[di, dj]), False))
+        else:
+            # On-demand Dijkstra fallback for large codes
+            for i, di in enumerate(defects_int):
+                targets_for_di = set(defects_int[i + 1:]) | {boundary}
+                paths = _dijkstra_to_targets(self._graph, di, targets_for_di)
+                if boundary in paths:
+                    wb, ob = paths[boundary]
+                    events.append((wb, di, boundary, ob, True))
+                for j in range(i + 1, len(defects_int)):
+                    dj = defects_int[j]
+                    if dj in paths:
+                        w, o = paths[dj]
+                        events.append((w / 2.0, di, dj, o, False))
 
         events.sort(key=lambda x: x[0])
 

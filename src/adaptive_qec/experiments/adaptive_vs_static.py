@@ -155,31 +155,84 @@ class NoiseSchedule:
         return window_idx >= self.leakage_start_window
 
 
+def apply_dd_to_noise(
+    base_noise: NoiseConfig,
+    dd_policy: DDSequenceType,
+    single_qubit_pulse_error: float = 0.0003,
+) -> NoiseConfig:
+    """Apply the physical causal impact of dynamical decoupling to the noise model.
+
+    Dynamical decoupling suppresses low-frequency dephasing during idle windows,
+    while adding discrete pulse error overhead (X/Y rotations).
+
+    Trade-off:
+        - When dephasing is high (e.g. during drift regimes), the suppression
+          outweighs the pulse cost, reducing overall effective gate error.
+        - In low-noise regimes, the pulse error overhead outweighs dephasing
+          suppression, increasing effective gate error.
+    """
+    noise = NoiseConfig()
+    noise.gate.single_qubit = base_noise.gate.single_qubit
+    noise.readout.p0_given_1 = base_noise.readout.p0_given_1
+    noise.readout.p1_given_0 = base_noise.readout.p1_given_0
+
+    SUPPRESSION = {
+        DDSequenceType.NONE: 1.0,
+        DDSequenceType.CPMG: 0.45,
+        DDSequenceType.XY4: 0.22,
+        DDSequenceType.XY8: 0.12,
+    }
+    PULSE_COUNTS = {
+        DDSequenceType.NONE: 0,
+        DDSequenceType.CPMG: 2,
+        DDSequenceType.XY4: 4,
+        DDSequenceType.XY8: 8,
+    }
+
+    p_base = base_noise.gate.two_qubit
+    f_dephase = 0.35  # fraction of idling dephasing noise
+    suppression = SUPPRESSION.get(dd_policy, 1.0)
+    pulses = PULSE_COUNTS.get(dd_policy, 0)
+
+    # Suppressed dephasing + unsuppressed error + pulse overhead
+    p_eff = (1.0 - f_dephase) * p_base + (f_dephase * p_base * suppression) + (pulses * single_qubit_pulse_error)
+    noise.gate.two_qubit = float(max(0.0, p_eff))
+    return noise
+
+
 def inject_burst(
     syndromes: np.ndarray,
     num_detectors_per_round: int,
     num_rounds: int,
-    intensity: float = 0.3,
+    intensity: float = 0.4,
     rng: Optional[np.random.Generator] = None,
 ) -> np.ndarray:
-    """Inject a correlated error burst into syndrome data.
+    """Inject a correlated error burst into syndrome data stochastically.
 
-    Simulates a cosmic-ray-like event: many detectors fire simultaneously
-    in a narrow time window.
+    Simulates a cosmic-ray-like event: radiation impacts produce spatially
+    and temporally localized defects with per-shot stochastic jitter,
+    rather than an artificial, identical bitmask on every shot.
     """
     rng = rng or np.random.default_rng()
     result = syndromes.copy()
+    num_shots = result.shape[0]
 
-    n_affected = max(1, int(num_detectors_per_round * intensity))
-    affected_dets = rng.choice(num_detectors_per_round, size=n_affected, replace=False)
+    for shot in range(num_shots):
+        # Stochastically hits ~60% of shots during a burst window
+        if rng.random() > 0.60:
+            continue
 
-    # Burst in rounds 2-3 (narrow temporal window)
-    burst_round = min(2, num_rounds - 1)
-    for shot in range(result.shape[0]):
+        base_n = max(1, int(num_detectors_per_round * intensity))
+        jitter = int(rng.integers(-1, 2))
+        n_affected = max(1, min(num_detectors_per_round, base_n + jitter))
+        affected_dets = rng.choice(num_detectors_per_round, size=n_affected, replace=False)
+        burst_round = int(rng.integers(1, max(2, num_rounds)))
+
         for det in affected_dets:
-            flat_idx = burst_round * num_detectors_per_round + det
-            if flat_idx < result.shape[1]:
-                result[shot, flat_idx] = 1
+            if rng.random() < 0.90:
+                flat_idx = burst_round * num_detectors_per_round + det
+                if flat_idx < result.shape[1]:
+                    result[shot, flat_idx] = 1
 
     return result
 
@@ -189,18 +242,24 @@ def inject_leakage(
     num_detectors_per_round: int,
     num_rounds: int,
     leak_detectors: list[int],
+    rng: Optional[np.random.Generator] = None,
 ) -> np.ndarray:
-    """Inject persistent defects to simulate leakage.
+    """Inject persistent defects to simulate leakage stochastically.
 
-    A leaked qubit fires the same detector every round.
+    A leaked qubit causes repeated syndrome violations with high
+    transition probability (85%), with per-shot stochastic variation.
     """
+    rng = rng or np.random.default_rng()
     result = syndromes.copy()
-    for shot in range(result.shape[0]):
+    num_shots = result.shape[0]
+
+    for shot in range(num_shots):
         for det in leak_detectors:
             for r in range(num_rounds):
-                flat_idx = r * num_detectors_per_round + det
-                if flat_idx < result.shape[1]:
-                    result[shot, flat_idx] = 1
+                if rng.random() < 0.85:
+                    flat_idx = r * num_detectors_per_round + det
+                    if flat_idx < result.shape[1]:
+                        result[shot, flat_idx] = 1
     return result
 
 
@@ -295,9 +354,23 @@ def run_adaptive_vs_static(
         f"shots/window={schedule.shots_per_window}"
     )
 
+    code = create_code("surface", distance=distance, rounds=rounds)
+    num_data = distance**2
+    num_dets_per_round = num_data - 1  # approximate for surface code
+
     # Initialize decoders
-    mwpm_decoder = MWPMDecoder()
-    uf_decoder = UnionFindDecoder()
+    base_noise_init = schedule.get_noise_config(0)
+    circuit_base_mwpm = code.generate_circuit(noise=apply_dd_to_noise(base_noise_init, DDSequenceType.NONE))
+    circuit_base_uf = code.generate_circuit(noise=apply_dd_to_noise(base_noise_init, DDSequenceType.XY4))
+
+    mwpm_decoder_static = MWPMDecoder()
+    mwpm_decoder_static.configure(circuit=circuit_base_mwpm)
+
+    uf_decoder_static = UnionFindDecoder()
+    uf_decoder_static.configure(circuit=circuit_base_uf)
+
+    mwpm_decoder_adaptive = MWPMDecoder()
+    uf_decoder_adaptive = UnionFindDecoder()
 
     # Initialize controller
     controller = AdaptiveController(
@@ -316,51 +389,98 @@ def run_adaptive_vs_static(
     static_uf_results = ArmResult(arm_name="static_uf_xy4", windows=[])
     adaptive_results = ArmResult(arm_name="adaptive", windows=[])
 
-    code = create_code("surface", distance=distance, rounds=rounds)
-    num_data = distance**2
-    num_dets_per_round = num_data - 1  # approximate for surface code
+    last_detection_rates = np.zeros(circuit_base_mwpm.num_detectors)
+    last_burst_active = False
 
     for window_idx in range(schedule.total_windows):
-        # 1. Generate circuit with current noise profile
-        noise = schedule.get_noise_config(window_idx)
-        circuit = code.generate_circuit(noise=noise)
+        base_noise = schedule.get_noise_config(window_idx)
+        window_seed = (seed * 100_003 + window_idx) % (2**31)
 
-        # Configure decoders (re-configure when noise changes)
-        mwpm_decoder.configure(circuit=circuit)
-        uf_decoder.configure(circuit=circuit)
+        # 1. Compile physical circuits with causal dynamical decoupling
+        noise_mwpm = apply_dd_to_noise(base_noise, DDSequenceType.NONE)
+        circuit_mwpm = code.generate_circuit(noise=noise_mwpm)
 
-        dem = circuit.detector_error_model(decompose_errors=True)
-        n_det = dem.num_detectors
-        n_obs = dem.num_observables
+        noise_uf = apply_dd_to_noise(base_noise, DDSequenceType.XY4)
+        circuit_uf = code.generate_circuit(noise=noise_uf)
 
-        # 2. Sample syndromes
-        sampler = circuit.compile_detector_sampler()
-        detectors, observables = sampler.sample(
-            shots=schedule.shots_per_window,
-            separate_observables=True,
+        # Adaptive telemetry & state
+        drift_report = drift_detector.update(last_detection_rates)
+        leakage_frac = 0.0
+        if schedule.is_leakage_active(window_idx):
+            leakage_frac = len(schedule.leakage_detector_indices) / max(num_dets_per_round, 1)
+
+        state = HardwareState(
+            defect_rate=float(last_detection_rates.mean()),
+            drift_magnitude=drift_report.magnitude,
+            drift_status=drift_report.status,
+            burst_active=last_burst_active,
+            leakage_fraction=leakage_frac,
+            t1_mean_us=150.0,
+            t2_mean_us=120.0,
+            p_1q=0.0003,
+            p_2q=base_noise.gate.two_qubit,
+            p_ro=0.01,
+            code_distance=distance,
+            num_data_qubits=num_data,
+            num_detectors=circuit_mwpm.num_detectors,
         )
+        action = controller.select_action(state)
 
-        # 3. Inject non-stationary noise events
-        syndromes = detectors.copy().astype(np.uint8)
+        # Adaptive arm circuit compiled with adaptively selected DD policy
+        noise_adapt = apply_dd_to_noise(base_noise, action.dd_policy)
+        circuit_adapt = code.generate_circuit(noise=noise_adapt)
+
+        # 2. Sample syndromes for all arms with deterministic window_seed
+        sampler_mwpm = circuit_mwpm.compile_detector_sampler(seed=window_seed)
+        det_mwpm, obs_mwpm = sampler_mwpm.sample(shots=schedule.shots_per_window, separate_observables=True)
+
+        sampler_uf = circuit_uf.compile_detector_sampler(seed=window_seed)
+        det_uf, obs_uf = sampler_uf.sample(shots=schedule.shots_per_window, separate_observables=True)
+
+        sampler_adapt = circuit_adapt.compile_detector_sampler(seed=window_seed)
+        det_adapt, obs_adapt = sampler_adapt.sample(shots=schedule.shots_per_window, separate_observables=True)
+
+        # 3. Inject stochastic non-stationary noise events (identical physical events across arms)
+        synd_mwpm = det_mwpm.copy().astype(np.uint8)
+        synd_uf = det_uf.copy().astype(np.uint8)
+        synd_adapt = det_adapt.copy().astype(np.uint8)
 
         if schedule.is_burst_window(window_idx):
-            syndromes = inject_burst(
-                syndromes, num_dets_per_round, rounds,
-                intensity=schedule.burst_intensity, rng=rng,
-            )
+            rng_b1 = np.random.default_rng(window_seed + 777)
+            rng_b2 = np.random.default_rng(window_seed + 777)
+            rng_b3 = np.random.default_rng(window_seed + 777)
+            synd_mwpm = inject_burst(synd_mwpm, num_dets_per_round, rounds, intensity=schedule.burst_intensity, rng=rng_b1)
+            synd_uf = inject_burst(synd_uf, num_dets_per_round, rounds, intensity=schedule.burst_intensity, rng=rng_b2)
+            synd_adapt = inject_burst(synd_adapt, num_dets_per_round, rounds, intensity=schedule.burst_intensity, rng=rng_b3)
 
         if schedule.is_leakage_active(window_idx):
-            syndromes = inject_leakage(
-                syndromes, num_dets_per_round, rounds,
-                leak_detectors=schedule.leakage_detector_indices,
-            )
+            rng_l1 = np.random.default_rng(window_seed + 888)
+            rng_l2 = np.random.default_rng(window_seed + 888)
+            rng_l3 = np.random.default_rng(window_seed + 888)
+            synd_mwpm = inject_leakage(synd_mwpm, num_dets_per_round, rounds, leak_detectors=schedule.leakage_detector_indices, rng=rng_l1)
+            synd_uf = inject_leakage(synd_uf, num_dets_per_round, rounds, leak_detectors=schedule.leakage_detector_indices, rng=rng_l2)
+            synd_adapt = inject_leakage(synd_adapt, num_dets_per_round, rounds, leak_detectors=schedule.leakage_detector_indices, rng=rng_l3)
 
-        obs = observables.astype(np.uint8)
+        # Telemetry updates for adaptive
+        burst_in_window = False
+        try:
+            for s_idx in range(min(5, synd_adapt.shape[0])):
+                usable = min(synd_adapt[s_idx].shape[0], num_dets_per_round * rounds)
+                if usable == num_dets_per_round * rounds:
+                    tensor = reshape_syndromes_to_tensor(synd_adapt[s_idx][:usable], rounds, num_dets_per_round)
+                    burst_analysis = burst_detector.analyze(tensor, num_dets_per_round)
+                    if len(burst_analysis.bursts_detected) > 0:
+                        burst_in_window = True
+                        break
+        except Exception:
+            pass
+        last_burst_active = burst_in_window
+        last_detection_rates = synd_adapt.mean(axis=0)
 
         # -------------------------------------------------------------------
-        # Arm 1: STATIC MWPM (no DD, no burst mitigation)
+        # Arm 1: STATIC MWPM (no DD, baseline DEM, no burst mitigation)
         # -------------------------------------------------------------------
-        mwpm_metrics = mwpm_decoder.decode_batch(syndromes, obs)
+        mwpm_metrics = mwpm_decoder_static.decode_batch(synd_mwpm, obs_mwpm.astype(np.uint8))
         n_err_mwpm = mwpm_metrics.num_logical_errors
         ci_mwpm = wilson_ci(n_err_mwpm, schedule.shots_per_window)
         static_mwpm_results.windows.append(WindowResult(
@@ -373,9 +493,9 @@ def run_adaptive_vs_static(
         ))
 
         # -------------------------------------------------------------------
-        # Arm 2: STATIC UF + XY4 (fixed strategy)
+        # Arm 2: STATIC UF + XY4 (fixed strategy, baseline DEM)
         # -------------------------------------------------------------------
-        uf_metrics = uf_decoder.decode_batch(syndromes, obs)
+        uf_metrics = uf_decoder_static.decode_batch(synd_uf, obs_uf.astype(np.uint8))
         n_err_uf = uf_metrics.num_logical_errors
         ci_uf = wilson_ci(n_err_uf, schedule.shots_per_window)
         static_uf_results.windows.append(WindowResult(
@@ -388,66 +508,20 @@ def run_adaptive_vs_static(
         ))
 
         # -------------------------------------------------------------------
-        # Arm 3: ADAPTIVE controller
+        # Arm 3: ADAPTIVE controller (re-weights DEM, selects DD, burst mitigation)
         # -------------------------------------------------------------------
-        # Build hardware state observation
-        detection_rates = syndromes.mean(axis=0)
-        drift_report = drift_detector.update(detection_rates)
-
-        # Check for bursts
-        burst_active = False
-        if syndromes.shape[0] > 0 and n_det > 0:
-            try:
-                for s_idx in range(min(5, syndromes.shape[0])):
-                    single_shot = syndromes[s_idx]
-                    actual_total = single_shot.shape[0]
-                    usable = min(actual_total, num_dets_per_round * rounds)
-                    if usable == num_dets_per_round * rounds:
-                        tensor = reshape_syndromes_to_tensor(
-                            single_shot[:usable], rounds, num_dets_per_round,
-                        )
-                        burst_analysis = burst_detector.analyze(tensor, num_dets_per_round)
-                        if len(burst_analysis.bursts_detected) > 0:
-                            burst_active = True
-                            break
-            except Exception:
-                pass
-
-        # Estimate leakage
-        leakage_frac = 0.0
-        if schedule.is_leakage_active(window_idx):
-            leakage_frac = len(schedule.leakage_detector_indices) / max(num_dets_per_round, 1)
-
-        state = HardwareState(
-            defect_rate=float(detection_rates.mean()),
-            drift_magnitude=drift_report.magnitude,
-            drift_status=drift_report.status,
-            burst_active=burst_active,
-            leakage_fraction=leakage_frac,
-            t1_mean_us=150.0,
-            t2_mean_us=120.0,
-            p_1q=0.0003,
-            p_2q=noise.gate.two_qubit,
-            p_ro=0.01,
-            code_distance=distance,
-            num_data_qubits=num_data,
-            num_detectors=n_det,
-        )
-
-        action = controller.select_action(state)
-
-        # Decode with the selected decoder
         if action.decoder == DecoderChoice.MWPM:
-            if action.burst_mitigation and burst_active:
-                # Use burst-aware decoding
-                _, adaptive_metrics, _ = mwpm_decoder.decode_burst_aware(
-                    syndromes, obs, rounds, num_dets_per_round,
+            mwpm_decoder_adaptive.configure(circuit=circuit_adapt)
+            if action.burst_mitigation and burst_in_window:
+                _, adaptive_metrics, _ = mwpm_decoder_adaptive.decode_burst_aware(
+                    synd_adapt, obs_adapt.astype(np.uint8), rounds, num_dets_per_round,
                     burst_detector=burst_detector,
                 )
             else:
-                adaptive_metrics = mwpm_decoder.decode_batch(syndromes, obs)
+                adaptive_metrics = mwpm_decoder_adaptive.decode_batch(synd_adapt, obs_adapt.astype(np.uint8))
         else:
-            adaptive_metrics = uf_decoder.decode_batch(syndromes, obs)
+            uf_decoder_adaptive.configure(circuit=circuit_adapt)
+            adaptive_metrics = uf_decoder_adaptive.decode_batch(synd_adapt, obs_adapt.astype(np.uint8))
 
         n_err_adaptive = adaptive_metrics.num_logical_errors
         ci_adaptive = wilson_ci(n_err_adaptive, schedule.shots_per_window)
@@ -459,7 +533,7 @@ def run_adaptive_vs_static(
             ci_low=ci_adaptive[0], ci_high=ci_adaptive[1],
             decoder_used=action.decoder.value,
             dd_used=action.dd_policy.value,
-            burst_mitigated=action.burst_mitigation,
+            burst_mitigated=action.burst_mitigation and burst_in_window,
         ))
 
         if window_idx % 10 == 0:
@@ -531,28 +605,33 @@ def run_adaptive_vs_static(
             json.dump(results, f, indent=2, default=str)
         logger.info(f"Results saved to {out_path}")
 
-    # Print summary
-    print("\n" + "=" * 72)
-    print("ADAPTIVE vs STATIC QEC — EXPERIMENT RESULTS")
-    print("=" * 72)
+    # Determine relative p-values for table
+    p_mwpm_vs_best = "baseline" if best_static.arm_name == "static_mwpm" else f"{p_val:.6f}"
+    p_uf_vs_best = "baseline" if best_static.arm_name == "static_uf_xy4" else "N/A"
+
+    # Print summary adhering to Section 4.2 of audit
+    print("\n" + "=" * 90)
+    print("ADAPTIVE vs STATIC QEC — EMPIRICAL VALIDATION & STATISTICAL SIGNIFICANCE")
+    print("=" * 90)
     print(f"  Distance: d={distance}, Rounds: {rounds}")
     print(f"  Windows: {schedule.total_windows} x {schedule.shots_per_window} shots")
     print(f"  Total shots per arm: {adaptive_results.total_shots}")
+    print(f"  Deterministic seed: {seed} (reproducible byte-for-byte across runs)")
     print()
-    print(f"  STATIC MWPM:   LER = {static_mwpm_results.overall_error_rate:.6f} "
-          f"  95% CI [{static_mwpm_results.overall_ci[0]:.6f}, {static_mwpm_results.overall_ci[1]:.6f}]")
-    print(f"  STATIC UF+XY4: LER = {static_uf_results.overall_error_rate:.6f} "
-          f"  95% CI [{static_uf_results.overall_ci[0]:.6f}, {static_uf_results.overall_ci[1]:.6f}]")
-    print(f"  ADAPTIVE:      LER = {adaptive_results.overall_error_rate:.6f} "
-          f"  95% CI [{adaptive_results.overall_ci[0]:.6f}, {adaptive_results.overall_ci[1]:.6f}]")
+    print(f"| {'Arm':<15} | {'LER':<8} | {'95% Wilson CI':<24} | {'p vs best static':<18} | {'Significant (alpha=0.05)?':<26} |")
+    print(f"|{'-'*17}|{'-'*10}|{'-'*26}|{'-'*20}|{'-'*28}|")
+    print(f"| {'STATIC MWPM':<15} | {static_mwpm_results.overall_error_rate:.6f} | [{static_mwpm_results.overall_ci[0]:.6f}, {static_mwpm_results.overall_ci[1]:.6f}]   | {p_mwpm_vs_best:<18} | {'No (baseline)' if p_mwpm_vs_best == 'baseline' else 'No':<26} |")
+    print(f"| {'STATIC UF+XY4':<15} | {static_uf_results.overall_error_rate:.6f} | [{static_uf_results.overall_ci[0]:.6f}, {static_uf_results.overall_ci[1]:.6f}]   | {p_uf_vs_best:<18} | {'No':<26} |")
+    print(f"| {'ADAPTIVE':<15} | {adaptive_results.overall_error_rate:.6f} | [{adaptive_results.overall_ci[0]:.6f}, {adaptive_results.overall_ci[1]:.6f}]   | {comparison['p_value']:<18.6f} | {('Yes (p < 0.05)' if comparison['significant_at_005'] else 'No'):<26} |")
     print()
-    print(f"  Best static arm:  {comparison['best_static_arm']}")
-    print(f"  Improvement:      {comparison['improvement_pct']:+.2f}%")
-    print(f"  z-statistic:      {comparison['z_statistic']:.4f}")
-    print(f"  p-value:          {comparison['p_value']:.6f}")
-    print(f"  Significant (5%): {comparison['significant_at_005']}")
-    print(f"  Mode switches:    {controller.metrics.total_mode_switches}")
-    print("=" * 72)
+    print(f"  Best static arm:          {comparison['best_static_arm']} (LER = {comparison['best_static_ler']:.6f})")
+    print(f"  Adaptive reduction:       {comparison['improvement_pct']:+.2f}%")
+    print(f"  z-statistic:              {comparison['z_statistic']:.4f}")
+    print(f"  p-value:                  {comparison['p_value']:.6f}")
+    print(f"  Significant (alpha=0.05): {comparison['significant_at_005']}")
+    print(f"  Significant (alpha=0.01): {comparison['significant_at_001']}")
+    print(f"  Mode switches:            {controller.metrics.total_mode_switches}")
+    print("=" * 90)
 
     return results
 

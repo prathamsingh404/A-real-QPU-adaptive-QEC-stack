@@ -7,7 +7,7 @@
 [![Stim](https://img.shields.io/badge/Stim-1.15+-blueviolet.svg)](https://github.com/quantumlib/Stim)
 [![PyMatching](https://img.shields.io/badge/PyMatching-2.2+-orange.svg)](https://github.com/oscarhiggott/PyMatching)
 
-AdaptiveQEC is an open-source, hardware-aware, adaptive Quantum Error Correction (QEC) stack designed to bridge low-level transmon physics and high-level fault-tolerant algorithms. Targeted directly at IBM Quantum's 156-qubit Heron revision 2 processors (`ibm_marrakesh`, heavy-hexagonal lattice), this system implements real-time drift detection, spatiotemporal burst mitigation (cosmic ray and quasiparticle avalanches), syndrome-based transmon leakage tracking, selective dynamical decoupling (CPMG/XY4/XY8), on-demand sparse Union-Find decoding, and an **interpretable, hardware-state-conditioned closed-loop controller** that adaptively selects decoding and mitigation strategies under non-stationary noise.
+AdaptiveQEC is an open-source, hardware-aware, adaptive Quantum Error Correction (QEC) stack designed to bridge low-level transmon physics and high-level fault-tolerant algorithms. Targeted directly at IBM Quantum's 156-qubit Heron revision 2 processors (`ibm_marrakesh`, heavy-hexagonal lattice), this system implements macro-timescale drift adaptation, inter-batch session orchestration, spatiotemporal burst mitigation (cosmic ray and quasiparticle avalanches), syndrome-based transmon leakage tracking, selective dynamical decoupling (CPMG/XY4/XY8), on-demand sparse Union-Find decoding, and an **interpretable, hardware-state-conditioned closed-loop controller** that adaptively selects decoding and mitigation strategies under non-stationary noise.
 
 ---
 
@@ -42,10 +42,10 @@ graph TD
     subgraph QECBlock ["3. Fault-Tolerant Circuit Synthesis"]
         StimCirc["Stim Fault-Tolerant Circuit\n(Rotated Surface Code d=3, 5, 7)"]:::qec
         DEM["Detector Error Model (DEM)\n(Separators ^, Boundary Edges)"]:::qec
-        SyndromeStream["Real-Time Syndrome Stream\ns in {0, 1}^(R x Nd)"]:::qec
+        SyndromeStream["Syndrome Stream (Inter-Batch)\ns in {0, 1}^(R x Nd)"]:::qec
     end
 
-    subgraph NoiseDetect ["4. Real-Time Noise & Correlation Engines"]
+    subgraph NoiseDetect ["4. Inter-Batch Noise & Correlation Engines"]
         CompositeDrift["CompositeDriftDetector\n(EWMA + CUSUM + Burst)"]:::noise
         BurstDet["Poisson Burst Detector\n(P-value < 10^-3, Spatiotemporal)"]:::noise
         LeakageDet["Syndrome Leakage Detector\n(Lag-1 Autocorrelation R(1) + Streaks)"]:::noise
@@ -59,7 +59,7 @@ graph TD
 
     subgraph Decoders ["6. Dual Low-Latency Decoders"]
         MWPM["MWPMDecoder (PyMatching v2)\nSparse Blossom ~Linear Baseline"]:::decoder
-        UF["UnionFindDecoder (Delfosse & Nickerson)\nO(N alpha(N)) On-Demand Sparse Dijkstra"]:::decoder
+        UF["UnionFindDecoder (Distance-Weighted)\nO(k |E| log |V|) On-Demand Sparse Dijkstra"]:::decoder
         BurstAware["decode_burst_aware\n(Defect masking during burst events)"]:::decoder
     end
 
@@ -142,9 +142,9 @@ graph TD
   $$\Delta p = p_{\text{dephase}}(q, t_{\text{idle}}) - p_{\text{dephase}}^{\text{DD}}(q, t_{\text{idle}}) > N_{\text{pulse}} \cdot \epsilon_{\text{pulse}}$$
   `AdaptiveDDPlanner` inserts discrete, tick-aligned $X$ and $Y$ pulse trains (`CPMG`, `XY4`, `XY8`) with explicit per-pulse depolarization errors only on transmons where net coherence increases.
 
-### 5. On-Demand Sparse Union-Find Decoder (`adaptive_qec.decoders.union_find`)
-* **Algorithmic Architecture**: Replaces traditional dense all-pairs shortest path matrices ($O(N^2)$ memory, $O(N^3)$ initialization) with on-demand Dijkstra exploration on sparse adjacency graphs. Active clusters grow outward at unit velocity, meeting at radius $r = D(d_i, d_j)/2$ while boundaries remain static at $r = D(d_i, \text{boundary})$.
-* **Empirical Speed**: Achieves **14,137 shots/s** on $d=3$ surface codes, operating in guaranteed $O(N \alpha(N))$ time.
+### 5. Distance-Weighted Cluster Growth Decoder (`adaptive_qec.decoders.union_find`)
+* **Algorithmic Architecture**: Uses on-demand Dijkstra exploration on sparse detector adjacency graphs rather than dense precomputed all-pairs shortest path matrices. Merges defect clusters via distance-weighted greedy union-find operations with complexity $O(k \cdot |E| \log |V|)$ per shot (where $k$ is the number of defects).
+* **Empirical Speed**: Achieves **14,137 shots/s** on $d=3$ surface codes, providing an independent, low-latency verification path alongside MWPM.
 
 ### 6. Closed-Loop Adaptive Controller (`adaptive_qec.controller`)
 * **Paper's Primary Contribution**: Instead of relying on a static decoding or mitigation strategy, `AdaptiveController` observes the estimated hardware state vector $s_t = (\text{defect\_rate}, \text{drift\_magnitude}, \text{burst\_active}, \text{leakage\_frac}, T_1, T_2, p_{1q}, p_{2q})$ and selects the optimal action $a_t^* = (\text{decoder}, \text{dd\_policy}, \text{burst\_mitigation})$ minimizing a formal multi-objective cost function:
@@ -156,18 +156,21 @@ graph TD
 ## 3. Empirical Experimental Verification
 
 ### Experiment 1: Adaptive vs Static QEC Under Non-Stationary Noise
-Evaluated on identical non-stationary noise schedules across 50 observation windows (200 shots/window = 10,000 shots per arm) incorporating linear gate noise drift ($p_{2q} \in [0.005, 0.015]$), correlated burst spikes, and persistent transmon leakage defects:
+Evaluated on identical non-stationary noise schedules across 50 observation windows (200 shots/window = 10,000 shots per arm) incorporating linear gate noise drift ($p_{2q} \in [0.005, 0.015]$), physical dynamical decoupling modeling (XY4 pulse insertion vs dephasing suppression), stochastic correlated burst spikes, and persistent transmon leakage defects:
 
-| Arm | Decoding Strategy | Mitigation Applied | Total Errors / 10k Shots | Logical Error Rate (LER) | 95% Wilson Score CI |
-| :--- | :--- | :--- | :---: | :---: | :---: |
-| **Static Arm 1** | Fixed MWPM (PyMatching v2) | None | 1,112 | `0.111200` | $[0.105187, 0.117512]$ |
-| **Static Arm 2** | Fixed Union-Find | Fixed XY4 DD | 1,100 | `0.110000` | $[0.104016, 0.116283]$ |
-| **Adaptive** | **`AdaptiveController`** | **Dynamic Selection** | **1,081** | **`0.108100`** | **$[0.102164, 0.114337]$** |
+| Arm | Decoding Strategy | Mitigation Applied | Total Errors / 10k Shots | Logical Error Rate (LER) | 95% Wilson Score CI | $p$-value vs Best Static | Significant ($\alpha=0.05$)? |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| **Static Arm 1** | Fixed MWPM (PyMatching v2) | None | 1,661 | `0.166100` | $[0.158934, 0.173522]$ | — | — |
+| **Static Arm 2** | Fixed Union-Find | Fixed XY4 DD | 2,254 | `0.225400` | $[0.217317, 0.233694]$ | $< 10^{-15}$ | Yes (worse) |
+| **Adaptive** | **`AdaptiveController`** | **Dynamic Selection** | **1,645** | **`0.164500`** | **$[0.157363, 0.171895]$** | **$0.7607$** | **No ($p = 0.76 > 0.05$)** |
 
-#### Why Adaptive Beats Both Static Baselines:
-1. **Clean Regimes (Windows 0–25):** The controller selects MWPM, achieving near-optimal matching accuracy (5 errors vs 11 errors per window under Static UF).
-2. **Correlated Burst Spikes (Windows 20, 35):** The controller activates `burst_mitigation=True`, isolating anomalous multi-defect clusters and preventing burst-induced logical failures.
-3. **Leakage & Drift Regimes (Windows 26–50):** The controller executes an intentional mode switch to Union-Find + XY8 (`total_mode_switches = 1`). Under persistent leakage lines, MWPM's global minimum-weight pairing creates spurious long-range chains (34 errors/window), whereas Union-Find's local cluster growth neutralizes static defects cleanly (21 errors/window).
+> **Statistical Note & Power Analysis**:
+> In this deterministic, reproducible benchmark (`seed=42`), the adaptive controller achieves a nominally lower point-estimate error count than Static MWPM (1,645 vs 1,661 errors, $\Delta \text{LER} = -0.0016$). However, a two-proportion $z$-test yields $z = -0.3046, p = 0.7607$, confirming the difference is **not statistically significant** at $N = 10,000$ shots ($\alpha = 0.05$). Because detecting an effect size of $\Delta \approx 0.002$ with $80\%$ statistical power requires on the order of $\sim 300,000$ shots per arm, this result is reported transparently as exploratory proof of operational feasibility rather than a statistically significant advantage under mild drift.
+
+#### Operational Trade-Offs Observed:
+1. **Decoder Baseline (Windows 0–25):** Under standard Pauli depolarizing noise, MWPM achieves the lowest logical error rate, outperforming Union-Find due to optimal global matching on surface codes.
+2. **Dynamical Decoupling Trade-Off:** Applying XY4 unconditionally (Static Arm 2) introduces $4 \times \epsilon_{\text{pulse}}$ gate overhead per sequence. In regimes where dephasing is modest, pulse overhead outweighs dephasing reduction, elevating LER to `0.2254`. The adaptive controller selectively avoids disadvantageous DD activations.
+3. **Correlated Burst Spikes & Leakage (Windows 20, 35):** The controller activates `burst_mitigation=True` during detected Poisson bursts, selectively isolating anomalous multi-defect clusters without corrupting global syndrome extraction.
 
 ---
 
@@ -212,7 +215,7 @@ A real-QPU adaptive QEC stack/
 │       ├── qec/                       # Stim surface code circuit synthesis with embeddings
 │       ├── qpu/                       # IBM Quantum (Qiskit Runtime), mock, and base backends
 │       └── topology/                  # HeavyHexTopology and EmbeddingFinder
-└── tests/                             # 136 unit and integration tests (100% passing)
+└── tests/                             # 239 unit and integration tests (100% passing)
 ```
 
 ---
@@ -233,7 +236,7 @@ pip install -e .
 ### Run the Full Verification Suite
 ```bash
 pytest -q
-# Output: 136 passed in ~3.6s (100% pass rate)
+# Output: 239 passed in ~2.5s (100% pass rate)
 ```
 
 ### Run the 3-Arm Adaptive vs Static Experiment
@@ -249,8 +252,12 @@ Navigate to `http://localhost:8000` to inspect real-time detector graphs, CUSUM 
 
 ---
 
-## 6. Live IBM Quantum Execution
-To run on physical hardware (`ibm_marrakesh`):
+## 6. IBM Quantum Hardware Scaffolding
+The repository includes a production-grade Qiskit Runtime session execution harness (`src/adaptive_qec/qpu/ibm.py`) targeting Heron r2 (`ibm_marrakesh`):
+* **Execution Architecture**: Integrates Qiskit Runtime Service, Sampler V2, and automated heavy-hex coupling map extraction.
+* **Validation Mode**: Currently validated in dry-run and simulation mode with hardware-calibrated digital twins derived from `data/calibration/ibm_marrakesh_snapshot.json`. Physical execution requires valid IBM Quantum Cloud credentials (`IBM_QUANTUM_TOKEN`, `IBM_QUANTUM_INSTANCE`).
+
+To run with live credentials:
 1. Copy `.env.example` to `.env` and supply credentials:
    ```bash
    IBM_QUANTUM_CHANNEL=ibm_cloud

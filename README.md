@@ -147,9 +147,9 @@ graph TD
 * **Empirical Speed**: Achieves **14,137 shots/s** on $d=3$ surface codes, providing an independent, low-latency verification path alongside MWPM.
 
 ### 6. Closed-Loop Adaptive Controller (`adaptive_qec.controller`)
-* **Paper's Primary Contribution**: Instead of relying on a static decoding or mitigation strategy, `AdaptiveController` observes the estimated hardware state vector $s_t = (\text{defect\_rate}, \text{drift\_magnitude}, \text{burst\_active}, \text{leakage\_frac}, T_1, T_2, p_{1q}, p_{2q})$ and selects the optimal action $a_t^* = (\text{decoder}, \text{dd\_policy}, \text{burst\_mitigation})$ minimizing a formal multi-objective cost function:
+* **Paper's Primary Contribution**: Instead of relying on a static decoding or mitigation strategy, `AdaptiveController` observes the estimated hardware state vector $s_t = (\text{defect rate}, \text{drift magnitude}, \text{burst active}, \text{leakage fraction}, T_1, T_2, p_{1q}, p_{2q})$ and selects the optimal action $a_t^* = (\text{decoder}, \text{DD policy}, \text{burst mitigation})$ minimizing a formal multi-objective cost function:
   $$J(a \mid s_t) = P_L(a \mid s_t) + \lambda_1 L_{\text{decode}} + \lambda_2 C_{\text{DD}} + \lambda_3 C_{\text{switch}} + \lambda_4 C_{\text{cal}}$$
-* **Hysteresis Architecture**: Decouples persistent operational modes (requiring 3 consecutive observation windows of $>5\%$ improvement to commit) from instantaneous event mitigations (which immediately mask single-window cosmic-ray-like burst spikes).
+* **Hysteresis Architecture**: Decouples persistent operational modes (requiring 3 consecutive observation windows of >5% improvement to commit) from instantaneous event mitigations (which immediately mask single-window cosmic-ray-like burst spikes).
 
 ---
 

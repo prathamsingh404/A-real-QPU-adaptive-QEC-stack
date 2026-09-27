@@ -10,6 +10,7 @@ This document tracks every scientific, algorithmic, and architectural claim made
 | Status | Definition |
 | :--- | :--- |
 | **VALIDATED** | Direct empirical evidence exists via automated regression tests (`pytest`), Stim Monte Carlo sampling, or closed-loop experimental runs. |
+| **EXPLORATORY** | Feasibility verified under simulation, but statistical significance not established at tested sample sizes; requires scaled power sizing. |
 | **PARTIAL** | Core mechanism is implemented and validated in simulation, but requires physical QPU calibration or multi-distance hardware runs. |
 | **UNVALIDATED** | Theoretical concept or parameter derived from literature without local empirical measurement; requires dedicated calibration experiment. |
 | **CORRECTED** | Prior erroneous claim or architectural anti-pattern that was identified during audit and re-engineered. |
@@ -22,7 +23,7 @@ This document tracks every scientific, algorithmic, and architectural claim made
 
 | # | Claim | Status | Technical Details & Empirical Evidence |
 | :---: | :--- | :---: | :--- |
-| **1** | **Union-Find runs with almost-linear per-shot complexity without dense matrices** | **VALIDATED** | **Previous implementation relied on dense all-pairs shortest paths (APSP via `scipy.sparse.csgraph.dijkstra`), which required $O(N^2)$ memory and $O(N^3)$ initialization.** We re-architected `src/adaptive_qec/decoders/union_find.py` to use on-demand Dijkstra per defect cluster on a sparse adjacency graph. At $d=3$ surface codes (24 detectors, 78 edges), UF reaches **14,137 shots/s** throughput. Full batch decoding verified in `tests/test_union_find.py::TestUnionFindDecoder`. |
+| **1** | **Union-Find runs with distance-weighted cluster growth on sparse detector graphs** | **VALIDATED** | **Previous implementation relied on dense all-pairs shortest paths (APSP via `scipy.sparse.csgraph.dijkstra`), which required $O(N^2)$ memory and $O(N^3)$ initialization.** We re-architected `src/adaptive_qec/decoders/union_find.py` to use on-demand Dijkstra per defect cluster on a sparse adjacency graph, merging defect clusters via distance-weighted greedy union-find operations with complexity $O(k \cdot |E| \log |V|)$ per shot (where $k$ is the number of defects). At $d=3$ surface codes (24 detectors, 78 edges), UF reaches **14,137 shots/s** throughput. Full batch decoding verified in `tests/test_union_find.py::TestUnionFindDecoder`. |
 | **2** | ~~**MWPM has $O(N^3)$ complexity via Edmonds' blossom**~~ | **CORRECTED** | **Corrected.** PyMatching v2 does *not* run Edmonds' dense $O(N^3)$ blossom algorithm. It implements Higgott & Gidney's sparse blossom algorithm (arXiv:2105.13082), scaling roughly linear with the number of defects in practice. All docstrings, paper drafts, and README references were corrected to accurately reflect sparse blossom mechanics. |
 | **3** | **Union-Find achieves comparable accuracy to MWPM on uncorrelated Pauli noise** | **VALIDATED** | Evaluated on 2,000 Stim shots ($d=3$, $R=3$, depolarizing noise $p_{2q}=0.01$):<br>• MWPM: $\text{LER} = 0.0590$ (118 logical errors)<br>• Union-Find: $\text{LER} = 0.0875$ (175 logical errors)<br>UF error rate is $\sim 1.48\times$ MWPM, consistent with Delfosse & Nickerson (Quantum 2021) theoretical predictions ($\le 2\times$). |
 | **4** | **Union-Find outperforms MWPM under persistent leakage and severe clustering** | **VALIDATED** | Tested on 2,000 Stim shots with injected persistent leakage on detectors 2 and 5 ($p_{2q}=0.01$):<br>• MWPM: $\text{LER} = 0.2615$ (523 errors) — global matching mispairs persistent leakage chains across distant temporal boundaries.<br>• Union-Find: $\text{LER} = 0.2100$ in post-ramp regimes — local cluster growth neutralizes static defects before they corrupt global observables. |
@@ -55,7 +56,7 @@ This document tracks every scientific, algorithmic, and architectural claim made
 
 | # | Claim | Status | Technical Details & Empirical Evidence |
 | :---: | :--- | :---: | :--- |
-| **13** | **Hardware-state-conditioned controller adaptively beats static QEC strategies** | **VALIDATED** | Executed 50-window non-stationary experiment (10,000 shots per arm) in `src/adaptive_qec/experiments/adaptive_vs_static.py`.<br>• **Static MWPM:** $\text{LER} = 0.111200$<br>• **Static UF + XY4:** $\text{LER} = 0.110000$<br>• **Adaptive Controller:** $\mathbf{\text{LER} = 0.108100}$ (outperforms both static arms).<br>The controller retained MWPM during clean windows, activated burst masking on burst spikes, and executed a mode switch to UF when leakage emerged. |
+| **13** | **Hardware-state-conditioned controller adaptively selects decoding and mitigation actions** | **EXPLORATORY** | Executed 50-window non-stationary experiment (10,000 shots per arm, deterministic `seed=42`) in `src/adaptive_qec/experiments/adaptive_vs_static.py` with physical dynamical decoupling modeling (XY4 pulse insertion vs dephasing suppression) and stochastic burst injection:<br>• **Static MWPM:** $\text{LER} = 0.166100$ (1,661 errors), 95% CI $[0.158934, 0.173522]$<br>• **Static UF + XY4:** $\text{LER} = 0.225400$ (2,254 errors), 95% CI $[0.217317, 0.233694]$<br>• **Adaptive Controller:** $\text{LER} = 0.164500$ (1,645 errors), 95% CI $[0.157363, 0.171895]$<br>• **Statistical Significance:** Two-proportion $z$-test yields $z = -0.3046, p = 0.760685$.<br>**Candid Evaluation:** While the adaptive controller avoids disadvantageous unconditional DD activations and selectively isolates burst spikes, the nominal $\Delta \text{LER} = -0.0016$ advantage over Static MWPM is **not statistically significant** at $N = 10,000$ shots ($p = 0.76 > 0.05$). Detecting this small effect size with $80\%$ statistical power requires $\sim 300,000$ shots per arm. The prior claim of statistically validated superiority under mild drift is retracted; the result is maintained as an exploratory feasibility demonstration. |
 | **14** | **Cost function $J(a \mid s_t)$ is mathematically rigorous and transparent** | **VALIDATED** | Formulated as $J = P_L(a \mid s_t) + \lambda_1 L_{\text{decode}} + \lambda_2 C_{\text{DD}} + \lambda_3 C_{\text{switch}} + \lambda_4 C_{\text{cal}}$. Monotonicity and sensitivity verified across weight sweeps in `tests/test_controller.py::TestCostFunction`. |
 | **15** | **Two-stage hysteresis tracker separates persistent modes from instantaneous events** | **VALIDATED** | The controller requires 3 consecutive windows of $>5\%$ improvement before committing a decoder or DD policy switch, preventing ping-pong oscillation. Instantaneous burst mitigation bypasses hysteresis to immediately protect single-window cosmic-ray-like spikes. Verified in `tests/test_controller.py::TestHysteresisTracker`. |
 
@@ -65,7 +66,7 @@ This document tracks every scientific, algorithmic, and architectural claim made
 
 | # | Claim | Status | Technical Details & Empirical Evidence |
 | :---: | :--- | :---: | :--- |
-| **16** | **Stack runs natively on IBM Heron r2 (`ibm_marrakesh`, 156 transmons)** | **PARTIAL** | Full hardware integration module (`src/adaptive_qec/qpu/ibm.py`) implements Qiskit Runtime Service, Sampler V2, and automated heavy-hex coupling map parsing. However, live execution requires an active user IBM Quantum API token and CRN instance. Validated via `MockQPUBackend` and Stim digital twin. |
+| **16** | **Stack runs natively on IBM Heron r2 (`ibm_marrakesh`, 156 transmons)** | **PARTIAL** | Full hardware integration module (`src/adaptive_qec/qpu/ibm.py`) implements Qiskit Runtime Service, Sampler V2, and automated heavy-hex coupling map parsing for 156-transmon Heron r2 processors. Verified in simulation and dry-run execution with hardware digital twins; live QPU execution requires active IBM Quantum Cloud credentials (`IBM_QUANTUM_TOKEN`, `IBM_QUANTUM_INSTANCE`). |
 | **17** | **Heavy-hex topology routing computes accurate SWAP overhead for surface codes** | **VALIDATED** | `src/adaptive_qec/topology/heavy_hex.py` models exact degree $\le 3$ connectivity of 156-qubit Heron r2. Shortest-path routing, SWAP distance, and degree distribution verified in `tests/test_topology.py`. |
 | **18** | **Lambda ratio $\Lambda > 1.0$ confirms operation below fault-tolerant threshold** | **VALIDATED** | Distance sweep executed at $d=3$ and $d=5$ on planar surface codes ($R=3$, depolarizing noise $p_{2q}=0.005$, 500 shots per distance):<br>• $d=3$: $\text{LER} = 0.0500$<br>• $d=5$: $\text{LER} = 0.0100$<br>• **$\Lambda(3 \to 5) = \frac{0.0500}{0.0100} = \mathbf{5.0 > 1.0}$** (exponential error suppression with distance). |
 | **19** | **Phenomenological model $p_L = A \cdot (p / p_{\text{th}})^{(d+1)/2}$ fits experimental scaling** | **VALIDATED** | Least-squares fitting in `src/adaptive_qec/analysis/threshold.py` fits experimental scaling curves and extracts effective threshold and prefactor. Verified in `tests/test_threshold.py`. |
@@ -77,7 +78,7 @@ This document tracks every scientific, algorithmic, and architectural claim made
 Every physical parameter and constant in this repository is cataloged with its origin:
 
 ```
-[MEASURED]   Derived directly from hardware runs or Stim simulation output.
+[SNAPSHOT]   Derived from saved hardware calibration snapshot artifact (data/calibration/ibm_marrakesh_snapshot.json).
 [INFERRED]   Calculated mathematically from measured intermediate variables.
 [ASSUMED]    Heuristic or literature baseline used in the absence of live physical calibrations.
 ```
@@ -86,14 +87,14 @@ Every physical parameter and constant in this repository is cataloged with its o
 
 | Parameter | Value | Provenance | Source / Justification |
 | :--- | :---: | :---: | :--- |
-| Single-qubit gate error ($p_{1q}$) | $4.54 \times 10^{-4}$ | `MEASURED` | IBM Marrakesh daily calibration snapshot |
-| Two-qubit gate error ($p_{2q}$) | $3.021 \times 10^{-3}$ | `MEASURED` | IBM Marrakesh daily calibration snapshot (ECR/CZ) |
-| Readout error ($p_{\text{ro}}$) | $1.208 \times 10^{-2}$ | `MEASURED` | IBM Marrakesh daily calibration snapshot |
-| Mean $T_1$ relaxation time | $188.5\ \mu\text{s}$ | `MEASURED` | IBM Marrakesh daily calibration snapshot |
-| Mean $T_2$ dephasing time | $130.4\ \mu\text{s}$ | `MEASURED` | IBM Marrakesh daily calibration snapshot |
-| CPMG dephasing suppression factor | $0.45$ | `ASSUMED` | IBM Orbit Dynamical Decoupling literature |
-| XY4 dephasing suppression factor | $0.22$ | `ASSUMED` | IBM Orbit Dynamical Decoupling literature |
-| XY8 dephasing suppression factor | $0.12$ | `ASSUMED` | IBM Orbit Dynamical Decoupling literature |
+| Single-qubit gate error ($p_{1q}$) | $4.54 \times 10^{-4}$ | `SNAPSHOT` | `data/calibration/ibm_marrakesh_snapshot.json` (IBM Marrakesh Heron r2 daily snapshot) |
+| Two-qubit gate error ($p_{2q}$) | $3.021 \times 10^{-3}$ | `SNAPSHOT` | `data/calibration/ibm_marrakesh_snapshot.json` (IBM Marrakesh Heron r2 ECR/CZ) |
+| Readout error ($p_{\text{ro}}$) | $1.208 \times 10^{-2}$ | `SNAPSHOT` | `data/calibration/ibm_marrakesh_snapshot.json` (IBM Marrakesh Heron r2 readout) |
+| Mean $T_1$ relaxation time | $188.5\ \mu\text{s}$ | `SNAPSHOT` | `data/calibration/ibm_marrakesh_snapshot.json` (IBM Marrakesh Heron r2 T1) |
+| Mean $T_2$ dephasing time | $130.4\ \mu\text{s}$ | `SNAPSHOT` | `data/calibration/ibm_marrakesh_snapshot.json` (IBM Marrakesh Heron r2 T2) |
+| CPMG dephasing suppression factor | $0.45$ | `ASSUMED` | IBM Orbit Dynamical Decoupling literature (Pokharel et al. 2023) |
+| XY4 dephasing suppression factor | $0.22$ | `ASSUMED` | IBM Orbit Dynamical Decoupling literature (Pokharel et al. 2023) |
+| XY8 dephasing suppression factor | $0.12$ | `ASSUMED` | IBM Orbit Dynamical Decoupling literature (Pokharel et al. 2023) |
 | Phenomenological threshold $p_{\text{th}}$ | $0.010$ | `INFERRED` | Standard surface code literature (Fowler et al. 2012) |
 | Controller weights ($\lambda_1, \lambda_2, \lambda_3, \lambda_4$) | $(0.01, 0.005, 0.02, 0.05)$ | `ASSUMED` | Tuned to penalize latency and rapid oscillation while prioritizing LER |
 
@@ -104,7 +105,7 @@ Every physical parameter and constant in this repository is cataloged with its o
 To independently reproduce all validation benchmarks:
 
 ```bash
-# 1. Run complete test suite (136 unit and integration tests)
+# 1. Run complete test suite (239 unit and integration tests)
 .venv/Scripts/pytest -v
 
 # 2. Run the 3-arm Adaptive vs Static experiment (50 windows, 10,000 shots/arm)

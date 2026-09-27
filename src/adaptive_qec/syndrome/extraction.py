@@ -94,7 +94,11 @@ class SyndromeExtractor:
 
         return specs
 
-    def sample_detectors(self, shots: int) -> tuple[np.ndarray, np.ndarray]:
+    def sample_detectors(
+        self,
+        shots: int,
+        seed: Optional[int] = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Sample detection events directly from Stim (benchmark mode).
 
@@ -103,17 +107,23 @@ class SyndromeExtractor:
 
         Args:
             shots: Number of shots to sample.
+            seed: Optional deterministic random seed.
 
         Returns:
             Tuple of (detection_events, observable_flips):
             - detection_events: shape (shots, num_detectors), dtype uint8
             - observable_flips: shape (shots, num_observables), dtype uint8
         """
-        if self._compiled_sampler is None:
-            self._compiled_sampler = self._circuit.compile_detector_sampler()
+        if seed is not None:
+            sampler = self._circuit.compile_detector_sampler(seed=seed)
+        elif self._compiled_sampler is None:
+            self._compiled_sampler = self._circuit.compile_detector_sampler(seed=42)
+            sampler = self._compiled_sampler
+        else:
+            sampler = self._compiled_sampler
 
         # Sample detection events and observable flips together
-        result = self._compiled_sampler.sample(
+        result = sampler.sample(
             shots=shots,
             separate_observables=True,
         )

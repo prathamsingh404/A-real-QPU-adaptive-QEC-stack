@@ -152,8 +152,9 @@ class DistanceSweep:
             code = create_code(self.code_type, distance=d, rounds=rounds)
             circuit = code.generate_circuit(noise=self.noise)
 
-            # Sample syndrome data (shared across decoders)
-            sampler = circuit.compile_detector_sampler()
+            # Sample syndrome data (shared across decoders with deterministic seed)
+            d_seed = (42 * 100_003 + d * 1009) % (2**31)
+            sampler = circuit.compile_detector_sampler(seed=d_seed)
             detectors, observables = sampler.sample(
                 shots=self.shots, separate_observables=True
             )

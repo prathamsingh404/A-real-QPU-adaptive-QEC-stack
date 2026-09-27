@@ -1,36 +1,36 @@
 """
-Union-Find decoder for surface codes.
+Distance-weighted cluster growth decoder with Union-Find disjoint-set forest.
 
-Implements the weighted Union-Find decoder from:
+Implements a distance-weighted cluster growth and greedy matching decoder
+inspired by the cluster-merging principles of topological decoders:
     Delfosse & Nickerson, "Almost-linear time decoding of topological codes"
     Quantum 5, 595 (2021). arXiv:2104.09539
 
-Algorithmic complexity: O(N · α(N)) per shot, where N = number of detectors
-and α is the inverse Ackermann function (effectively constant ≤ 4).
+Algorithmic architecture:
+    Rather than uniform discrete bucket-growth on the full decoding lattice,
+    this implementation uses on-demand Dijkstra shortest-path queries between
+    active defect targets, constructs candidate merge events, and performs
+    greedy Union-Find merging with lazy observable XOR tracking.
+    Complexity per shot is O(k · |E| log |V|) where k is the number of defect
+    vertices, |E| is the number of error hyperedges, and |V| is the number
+    of detector vertices.
 
-Compared to the PyMatching v2 MWPM decoder (which uses sparse blossom and
-achieves roughly linear practical scaling), Union-Find trades a small
-accuracy penalty (~8-15% higher logical error rate at d=3-7) for
-predictable worst-case latency and simpler implementation.
+Compared to PyMatching v2 MWPM:
+    - Provides fast greedy cluster merging with observable path tracking
+    - Trades a small accuracy gap (~8-15% higher logical error rate at d=3-7)
+      for simpler heuristic cluster resolution
+    - Operates directly from Stim DetectorErrorModel graphs
 
 Algorithm:
     1. Build a detector graph from the Stim DetectorErrorModel
     2. For each syndrome shot:
        a. Identify defect vertices (detectors that fired)
-       b. Grow clusters by processing edges in weight order (cheapest first)
-       c. Merge clusters via union-find, tracking observable XOR along
+       b. Compute on-demand shortest paths to neighboring defects and boundary
+       c. Sort candidate merge events by distance/weight
+       d. Merge clusters via union-find, tracking observable XOR along
           merge paths using lazy accumulation with path compression
-       d. When two odd-parity clusters merge (or odd meets boundary),
-          compute the correction from the accumulated observable XOR
-    3. Observable tracking uses lazy XOR: each node stores the XOR from
-       itself to its parent, and find() compresses while accumulating
-
-Key data structures:
-    - Union-Find forest with path compression, union by rank, and
-      per-node observable-XOR-to-parent tracking
-    - Pre-sorted edge list by weight for growth phase
-    - On-demand Dijkstra for shortest-path distance and observable tracking
-      between defect pairs (avoids O(N^2) APSP precomputation)
+       e. When odd-parity clusters merge (or connect to boundary),
+          resolve parity and accumulate predicted observable flips
 """
 
 from __future__ import annotations
@@ -346,17 +346,13 @@ def _dijkstra_to_targets(
 
 class UnionFindDecoder(Decoder):
     """
-    Union-Find decoder for topological codes.
+    Distance-weighted cluster growth decoder with Union-Find disjoint-set forest.
 
-    Almost-linear time decoder based on Delfosse & Nickerson (2021).
+    Uses on-demand Dijkstra shortest-path queries between defect vertices
+    and greedy union-find merging with observable XOR tracking.
 
-    Uses observable-tracking union-find: each node maintains the XOR of
-    observables along the path to its root. When two odd-parity clusters
-    merge, the correction is computed from the representative defects'
-    accumulated observable XOR to root.
-
-    Compared to PyMatching MWPM (sparse blossom, roughly linear in practice):
-        - Worst-case: O(N * alpha(N)) vs O(N * polylog(N)) amortized
+    Compared to PyMatching MWPM (sparse blossom):
+        - Complexity: O(k · |E| log |V|) where k is the defect count
         - Accuracy: ~8-15% higher logical error rate (typical at d=3-7)
         - Memory: Lower; no dense matrix precomputation
     """

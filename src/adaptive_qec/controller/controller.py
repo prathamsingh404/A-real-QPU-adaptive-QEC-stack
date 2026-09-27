@@ -243,23 +243,31 @@ def estimate_logical_error_rate(
     # Add leakage contribution
     p_eff += state.leakage_fraction * 0.1
 
-    # DD suppression
+    # DD trade-off: suppression of idle dephasing vs pulse error overhead
+    PULSE_COUNTS = {
+        DDSequenceType.NONE: 0,
+        DDSequenceType.CPMG: 2,
+        DDSequenceType.XY4: 4,
+        DDSequenceType.XY8: 8,
+    }
+    pulses = PULSE_COUNTS.get(dd, 0)
+    pulse_penalty = pulses * state.p_1q
+
     DD_SUPPRESSION = {
         DDSequenceType.NONE: 1.0,
-        DDSequenceType.CPMG: 0.85,
-        DDSequenceType.XY4: 0.70,
-        DDSequenceType.XY8: 0.60,
+        DDSequenceType.CPMG: 0.45,
+        DDSequenceType.XY4: 0.22,
+        DDSequenceType.XY8: 0.12,
     }
-    p_eff *= DD_SUPPRESSION.get(dd, 1.0)
+    f_dephase = 0.35
+    suppression = DD_SUPPRESSION.get(dd, 1.0)
+    p_eff = (1.0 - f_dephase) * p_eff + (f_dephase * p_eff * suppression) + pulse_penalty
 
-    # Decoder accuracy: MWPM is near-optimal for low uncorrelated Pauli noise.
-    # However, under persistent leakage or severe defect clustering, Union-Find's
-    # local cluster growth is more robust than global minimum-weight pairing.
+    # Decoder accuracy: MWPM is near-optimal for surface codes.
+    # Union-Find trades ~10-15% higher logical error rate for lower latency
+    # and linear complexity scaling.
     if decoder == DecoderChoice.UNION_FIND:
-        if state.leakage_fraction > 0.05 or state.drift_magnitude > 4.0:
-            p_eff *= 0.85  # UF local clustering outperforms MWPM on correlated/leakage defects
-        else:
-            p_eff *= 1.10  # MWPM is ~10% more accurate under standard uncorrelated noise
+        p_eff *= 1.12
 
     # Phenomenological model
     p_th = 0.01  # approximate threshold

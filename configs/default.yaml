@@ -30,11 +30,11 @@ qec:
 noise:
   readout:
     enabled: true
-    p0_given_1: 0.01208           # P(measure 0 | state 1) — ibm_marrakesh calibration
-    p1_given_0: 0.01208           # P(measure 1 | state 0) — ibm_marrakesh calibration
+    p0_given_1: 0.01208           # P(measure 0 | state 1) — modeled from data/calibration/ibm_marrakesh_snapshot.json
+    p1_given_0: 0.01208           # P(measure 1 | state 0) — modeled from data/calibration/ibm_marrakesh_snapshot.json
   gate:
-    single_qubit: 0.000454        # SX gate error — ibm_marrakesh calibration
-    two_qubit: 0.003021           # ECR/CZ gate error — ibm_marrakesh calibration
+    single_qubit: 0.000454        # SX gate error — modeled from data/calibration/ibm_marrakesh_snapshot.json
+    two_qubit: 0.003021           # ECR/CZ gate error — modeled from data/calibration/ibm_marrakesh_snapshot.json
     model: depolarizing           # depolarizing | pauli | custom
   correlated:
     enabled: false

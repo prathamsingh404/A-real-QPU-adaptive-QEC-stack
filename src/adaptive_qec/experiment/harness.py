@@ -316,7 +316,7 @@ class ExperimentHarness:
             source="IBM QPU calibration",
         ))
 
-    def _sample_syndromes(self, shots: int) -> tuple[np.ndarray, np.ndarray]:
+    def _sample_syndromes(self, shots: int, seed: Optional[int] = None) -> tuple[np.ndarray, np.ndarray]:
         """Sample detection events and observable flips from the circuit.
 
         In Stim-benchmark mode, this uses the compiled sampler.
@@ -325,7 +325,7 @@ class ExperimentHarness:
         if self._circuit is None:
             raise RuntimeError("Circuit not initialized — call _setup_circuit first")
 
-        sampler = self._circuit.compile_detector_sampler()
+        sampler = self._circuit.compile_detector_sampler(seed=seed if seed is not None else 42)
         detection_events, observable_flips = sampler.sample(
             shots, separate_observables=True
         )

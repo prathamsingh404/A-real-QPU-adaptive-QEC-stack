@@ -255,8 +255,9 @@ class BanditVsStaticExperiment:
             # Build noise-injected circuit for this window
             noisy_circuit = self._inject_noise(circuit, noise)
 
-            # Sample syndromes and observables
-            sampler = noisy_circuit.compile_detector_sampler()
+            # Sample syndromes and observables with deterministic seed
+            window_seed = (cfg.seed * 100_003 + window_idx) % (2**31)
+            sampler = noisy_circuit.compile_detector_sampler(seed=window_seed)
             detection_events, observable_flips = sampler.sample(
                 shots=cfg.shots_per_window,
                 separate_observables=True,

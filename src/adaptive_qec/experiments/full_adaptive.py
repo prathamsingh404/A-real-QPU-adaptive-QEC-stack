@@ -247,8 +247,9 @@ class FullAdaptiveExperiment:
                 after_reset_flip_probability=noise.gate_error_2q * 0.5,
             )
 
-            # Sample identical syndrome data for all arms
-            sampler = noisy_circuit.compile_detector_sampler()
+            # Sample identical syndrome data for all arms with deterministic seed
+            window_seed = (cfg.seed * 100_003 + window_idx) % (2**31)
+            sampler = noisy_circuit.compile_detector_sampler(seed=window_seed)
             detection_events, observable_flips = sampler.sample(
                 shots=cfg.shots_per_window,
                 separate_observables=True,

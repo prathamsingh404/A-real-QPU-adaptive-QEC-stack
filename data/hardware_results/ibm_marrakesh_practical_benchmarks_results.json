@@ -1,0 +1,117 @@
+{
+  "timestamp": "2026-09-28 06:43:22 UTC",
+  "backend": "ibm_marrakesh",
+  "experiments": {
+    "part1_molecular_iqpe": {
+      "job_id_raw": "dat0p3ahcrkc73dtfesg",
+      "job_id_dd": "dat0p3rojkfs738pvjcg",
+      "raw_results": {
+        "r_angstrom": 0.7414,
+        "most_likely_bitstring": "111",
+        "bitstring_probability": 0.385,
+        "total_shots": 1000,
+        "extracted_phase": 0.875,
+        "qpu_ground_energy_hartree": -6.20693315011745,
+        "exact_ground_energy_hartree": -1.1372813237292403,
+        "error_hartree": 5.06965182638821,
+        "error_kcal_per_mol": 3181.252147925039,
+        "chemical_accuracy_achieved": false,
+        "counts": {
+          "100": 97,
+          "111": 385,
+          "101": 40,
+          "000": 318,
+          "001": 21,
+          "010": 31,
+          "110": 55,
+          "011": 53
+        }
+      },
+      "mitigated_results": {
+        "r_angstrom": 0.7414,
+        "most_likely_bitstring": "111",
+        "bitstring_probability": 0.363,
+        "total_shots": 1000,
+        "extracted_phase": 0.875,
+        "qpu_ground_energy_hartree": -6.20693315011745,
+        "exact_ground_energy_hartree": -1.1372813237292403,
+        "error_hartree": 5.06965182638821,
+        "error_kcal_per_mol": 3181.252147925039,
+        "chemical_accuracy_achieved": false,
+        "counts": {
+          "000": 362,
+          "111": 363,
+          "100": 111,
+          "101": 22,
+          "011": 47,
+          "010": 30,
+          "110": 42,
+          "001": 23
+        }
+      }
+    },
+    "part2_teleportation": {
+      "job_id": "dat0p45vr3kc73ekooo0",
+      "dynamic_feedforward": {
+        "target_state": "|+>",
+        "regime": "dynamic",
+        "measured_bloch_vector": [
+          0.838,
+          0.022,
+          0.018
+        ],
+        "ideal_bloch_vector": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "state_fidelity": 0.919,
+        "classical_bound": 0.6666666666666666,
+        "surpasses_classical_limit": true,
+        "deterministic_yield_rate": 1.0,
+        "valid_shots": 3000,
+        "total_submitted_shots": 3000
+      },
+      "post_selected": {
+        "target_state": "|+>",
+        "regime": "post_selected",
+        "measured_bloch_vector": [
+          0.8612244897959184,
+          -0.04680851063829787,
+          -0.056768558951965066
+        ],
+        "ideal_bloch_vector": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "state_fidelity": 0.9306122448979592,
+        "classical_bound": 0.6666666666666666,
+        "surpasses_classical_limit": true,
+        "deterministic_yield_rate": 0.23633333333333334,
+        "valid_shots": 709,
+        "total_submitted_shots": 3000
+      },
+      "swap_network": {
+        "target_state": "|+>",
+        "regime": "swap_network",
+        "measured_bloch_vector": [
+          0.958,
+          0.038,
+          -0.01
+        ],
+        "ideal_bloch_vector": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "state_fidelity": 0.979,
+        "classical_bound": 0.6666666666666666,
+        "surpasses_classical_limit": true,
+        "deterministic_yield_rate": 1.0,
+        "valid_shots": 3000,
+        "total_submitted_shots": 3000
+      }
+    }
+  }
+}

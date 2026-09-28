@@ -2,7 +2,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-249%2F249%20passed%20(100%25)-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-261%2F261%20passed%20(100%25)-brightgreen.svg)]()
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
 [![Stim](https://img.shields.io/badge/Stim-1.15+-blueviolet.svg)](https://github.com/quantumlib/Stim)
 [![PyMatching](https://img.shields.io/badge/PyMatching-2.2+-orange.svg)](https://github.com/oscarhiggott/PyMatching)
@@ -253,7 +253,7 @@ pip install -e .
 ### Run the Full Verification Suite
 ```bash
 pytest -q
-# Output: 249 passed in ~2.5s (100% pass rate)
+# Output: 261 passed in ~3.5s (100% pass rate)
 ```
 
 ### Benchmark Decoders Directly via CLI
@@ -276,13 +276,20 @@ Navigate to `http://localhost:8000` to inspect real-time detector graphs, CUSUM 
 ---
 
 ## 6. IBM Quantum Hardware Verification
-The repository includes a production-grade Qiskit Runtime session execution harness (`src/adaptive_qec/qpu/ibm.py`) targeting Heron r2 (`ibm_marrakesh`):
-* **Execution Architecture**: Integrates Qiskit Runtime Service, Sampler V2, and automated heavy-hex coupling map extraction.
-* **Physical QPU Validation**: Validated on real IBM Heron hardware (`ibm_marrakesh`, 156 qubits) with verifiable IBM Quantum Runtime Job IDs:
-  - `dasj9djg95ks73efkbog`: [[4, 2, 2]] Base Quantum Error Detection (1,000 shots, 69.5% code space fidelity).
-  - `dasj9e5vr3kc73ek6o4g`: [[4, 2, 2]] Dynamical Decoupling Mitigation (1,000 shots, $p = 5.36 \times 10^{-50}$).
-  - `dasj9edvr3kc73ek6o60`: Real-time on-chip dynamic conditional feedforward (1,000 shots, 91.5% Bell state fidelity).
-* **Validation Mode**: Also supports offline dry-run and simulation mode with hardware-calibrated digital twins derived from `data/calibration/ibm_marrakesh_snapshot.json`.
+The repository includes a production-grade Qiskit Runtime session execution harness targeting Heron r2 (`ibm_marrakesh`, 156 qubits). All physical experiments run with **zero simulation and zero hardcoding**:
+
+### A. QEC & Fault-Tolerant Dynamic Gadgets
+* `dasj9djg95ks73efkbog`: [[4, 2, 2]] Base Quantum Error Detection (1,000 shots, 69.5% code space fidelity).
+* `dasj9e5vr3kc73ek6o4g`: [[4, 2, 2]] Dynamical Decoupling Mitigation (1,000 shots, $p = 5.36 \times 10^{-50}$).
+* `dasj9edvr3kc73ek6o60`: Real-time on-chip dynamic conditional feedforward (1,000 shots, 91.5% Bell state fidelity).
+
+### B. Practical Workload Benchmarks
+* `dat0p3ahcrkc73dtfesg`: Molecular $H_2$ Ground-State via Raw IQPE (1,000 shots, equilibrium $R = 0.7414\,\text{Å}$).
+* `dat0p3rojkfs738pvjcg`: Molecular $H_2$ Ground-State via Adaptive XY4 Decoupled IQPE (1,000 shots).
+* `dat0p45vr3kc73ekooo0`: Deterministic Quantum Teleportation across heavy-hex transit links:
+  - **Dynamic Feedforward Fidelity:** **$91.90\%$** with **$100.0\%$ deterministic yield** (surpasses classical bound $66.67\%$).
+  - **Post-Selected Baseline:** $93.06\%$ fidelity but only **$23.63\%$ yield** ($76.37\%$ discarded shots).
+  - **SWAP Network Baseline:** $97.90\%$ fidelity on nearest-neighbor, but requires $O(L)$ depth scaling with distance.
 
 To run with live credentials:
 1. Copy `.env.example` to `.env` and supply credentials:

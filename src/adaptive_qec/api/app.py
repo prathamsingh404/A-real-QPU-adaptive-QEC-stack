@@ -13,6 +13,7 @@ Provides REST API endpoints and web interface for:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -769,4 +770,122 @@ async def get_experiment_history() -> dict[str, Any]:
     return {
         "history": _EXPERIMENT_HISTORY,
         "count": len(_EXPERIMENT_HISTORY),
+    }
+
+
+# ---- Real Hardware Data & Practical Benchmark Endpoints (Zero Mock Data) ----
+
+@app.get("/api/hardware/practical-results")
+async def get_practical_hardware_results() -> dict[str, Any]:
+    """Return real empirical results from IBM Heron practical benchmarks (IQPE & Teleportation)."""
+    path = Path("data/hardware_results/ibm_marrakesh_practical_benchmarks_results.json")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Practical hardware results file not found.")
+    with open(path) as f:
+        return json.load(f)
+
+
+@app.get("/api/hardware/quantum-results")
+async def get_true_quantum_hardware_results() -> dict[str, Any]:
+    """Return real empirical results from IBM Heron [[4, 2, 2]] code and dynamic feedforward."""
+    path = Path("data/hardware_results/ibm_marrakesh_true_quantum_and_dynamic_results.json")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Quantum hardware results file not found.")
+    with open(path) as f:
+        return json.load(f)
+
+
+@app.get("/api/hardware/qec-results")
+async def get_qec_hardware_results() -> dict[str, Any]:
+    """Return real empirical results from IBM Heron repetition code QEC experiment."""
+    path = Path("data/hardware_results/ibm_marrakesh_qec_results.json")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="QEC hardware results file not found.")
+    with open(path) as f:
+        return json.load(f)
+
+
+@app.get("/api/hardware/calibration-live")
+async def get_live_calibration_snapshot() -> dict[str, Any]:
+    """Return the complete 156-qubit physical calibration snapshot from ibm_marrakesh."""
+    path = Path("data/calibration/ibm_marrakesh_live_snapshot.json")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Live calibration snapshot not found.")
+    with open(path) as f:
+        return json.load(f)
+
+
+@app.get("/api/hardware/high-stats-50k")
+async def get_high_stats_validation() -> dict[str, Any]:
+    """Return the 50,000-shot adaptive vs static power validation experiment."""
+    path = Path("experiments/results/adaptive_vs_static_high_stats_50k.json")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="High stats validation file not found.")
+    with open(path) as f:
+        return json.load(f)
+
+
+class LivePipelineRunRequest(BaseModel):
+    shots: int = 5000
+    distance: int = 3
+    rounds: int = 3
+    physical_error_rate: float = 0.01
+
+
+@app.post("/api/hardware/run-live-benchmark")
+async def run_live_pipeline_benchmark(req: LivePipelineRunRequest) -> dict[str, Any]:
+    """
+    Run a live on-demand QEC pipeline comparing Accelerated Union-Find vs PyMatching MWPM.
+    Zero hardcoded values: generates Stim circuit, samples physical syndromes, and decodes.
+    """
+    import stim
+    circuit = stim.Circuit.generated(
+        "repetition_code:memory",
+        distance=req.distance,
+        rounds=req.rounds,
+        after_clifford_depolarization=req.physical_error_rate,
+    )
+    dem = circuit.detector_error_model()
+    sampler = circuit.compile_detector_sampler()
+    syndromes, observables = sampler.sample(shots=req.shots, separate_observables=True)
+
+    # 1. Accelerated Union-Find
+    uf = UnionFindDecoder()
+    uf.configure(circuit=circuit, dem=dem)
+    t0 = time.perf_counter()
+    uf_preds = uf.decode_batch(syndromes)
+    t_uf = time.perf_counter() - t0
+    uf_errors = int(np.sum(uf_preds.flatten() != observables.flatten()))
+
+    # 2. MWPM
+    mwpm = MWPMDecoder()
+    mwpm.configure(circuit=circuit, dem=dem)
+    t0 = time.perf_counter()
+    mwpm_corr = mwpm.decode(syndromes)
+    t_mwpm = time.perf_counter() - t0
+    mwpm_preds = mwpm_corr.observable_corrections
+    mwpm_errors = int(np.sum(mwpm_preds.flatten() != observables.flatten()))
+
+    speedup = t_mwpm / t_uf if t_uf > 0 else 1.0
+
+    return {
+        "shots": req.shots,
+        "distance": req.distance,
+        "rounds": req.rounds,
+        "physical_error_rate": req.physical_error_rate,
+        "union_find": {
+            "name": "Accelerated Union-Find",
+            "logical_error_rate": round(uf_errors / req.shots, 5),
+            "logical_errors": uf_errors,
+            "latency_us_per_shot": round((t_uf / req.shots) * 1e6, 2),
+            "throughput_shots_per_s": round(req.shots / t_uf, 1) if t_uf > 0 else 0,
+        },
+        "mwpm": {
+            "name": "PyMatching (MWPM)",
+            "logical_error_rate": round(mwpm_errors / req.shots, 5),
+            "logical_errors": mwpm_errors,
+            "latency_us_per_shot": round((t_mwpm / req.shots) * 1e6, 2),
+            "throughput_shots_per_s": round(req.shots / t_mwpm, 1) if t_mwpm > 0 else 0,
+        },
+        "speedup_factor": round(speedup, 2),
     }

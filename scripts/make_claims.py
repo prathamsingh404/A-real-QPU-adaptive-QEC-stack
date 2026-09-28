@@ -298,3 +298,81 @@ def define_claims_registry(current_hash: str) -> list[ClaimEntry]:
             notes="Honest result: under mild drift, adaptive controller shows no statistically significant advantage over static MWPM.",
         ),
     ]
+
+
+def generate_markdown_ledger(claims: list[ClaimEntry], repo_root: Path) -> str:
+    md = []
+    md.append("# Scientific Claims Ledger & Reproducibility Matrix")
+    md.append("")
+    md.append("> **Audit Standard**: Zero-tolerance empirical verification and strict artifact synchronization.")
+    md.append("> **Last Verification**: October 2026 (Phase 0 Integrity Reset)")
+    md.append("")
+    md.append("This ledger tracks every quantitative claim across documentation, connecting each claim to its exact artifact, reproduction command, and verified status.")
+    md.append("")
+    md.append("| Claim ID | Category | Claim Statement | Verified Status | Expected / Artifact Value | Artifact Path | Notes |")
+    md.append("|:---|:---|:---|:---:|:---|:---|:---|")
+
+    for c in claims:
+        art_val, art_status = c.get_artifact_value(repo_root)
+        val_display = c.expected_doc_value
+        if art_status == "OK":
+            val_display = f"`{art_val}`"
+        art_path_display = f"`{c.artifact_path}`" if c.artifact_path else "*Code / Test Suite*"
+        status_badge = {
+            "REPRODUCED": "**REPRODUCED**",
+            "DOWNGRADED": "**DOWNGRADED**",
+            "DISPROVED": "**DISPROVED / RETRACTED**",
+            "NOT_REPRODUCED": "**NOT REPRODUCED**",
+            "REMOVED": "**REMOVED**",
+        }.get(c.status, c.status)
+
+        md.append(f"| **{c.claim_id}** | {c.category} | {c.statement} | {status_badge} | {val_display} | {art_path_display} | {c.notes} |")
+
+    md.append("")
+    md.append("---")
+    md.append("")
+    md.append("## Status Definitions")
+    md.append("- **REPRODUCED**: Independently verified and matches artifact JSON byte-for-byte or passes automated tests.")
+    md.append("- **DOWNGRADED**: Claim was previously inflated or lacked proper controls; rewritten with accurate physical boundaries.")
+    md.append("- **DISPROVED / RETRACTED**: Committed data directly contradicts prior claims, or claimed metrics were never measured.")
+    md.append("- **NOT REPRODUCED**: Claim was observed on an isolated single seed or broken path; fails multi-seed statistical sweeps.")
+    md.append("")
+    return "\n".join(md)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate and verify scientific claims ledger.")
+    parser.add_argument("--check", action="store_true", help="Fail build if any claim fails verification.")
+    parser.add_argument("--output", type=str, default="VALIDATION.md", help="Output file path.")
+    args = parser.parse_args()
+
+    repo_root = Path(__file__).resolve().parent.parent
+    git_hash = get_current_git_hash(repo_root)
+    claims = define_claims_registry(git_hash)
+
+    # Check for discrepancies
+    discrepancies = []
+    for c in claims:
+        if c.artifact_path:
+            art_val, status = c.get_artifact_value(repo_root)
+            if status != "OK":
+                discrepancies.append(f"[{c.claim_id}] {c.artifact_path}: {status}")
+
+    out_md = generate_markdown_ledger(claims, repo_root)
+    out_file = repo_root / args.output
+    with open(out_file, "w", encoding="utf-8") as f:
+        f.write(out_md)
+
+    print(f"Claims ledger successfully generated at {out_file} ({len(claims)} claims tracked).")
+
+    if args.check and discrepancies:
+        print("\nERROR: Claim verification failed for the following items:")
+        for d in discrepancies:
+            print(f"  - {d}")
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

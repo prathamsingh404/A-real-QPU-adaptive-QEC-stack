@@ -67,6 +67,32 @@ All experiments were executed live on `ibm_marrakesh` (IBM Quantum Heron r2 arch
 
 ---
 
+### 1.4 Experiment D: Molecular Quantum Chemistry via IQPE ($H_2$ Ground State)
+- **Physical Problem:** Dissociation energy of molecular Hydrogen in minimal STO-3G basis ($R = 0.7414\,\text{Å}$, exact Full-CI energy: $-1.137281\,\text{Hartree}$).
+- **Circuit Architecture:** 1 ancilla transmon + 1 system transmon. 3-bit binary phase extraction via mid-circuit measurement, feedforward phase kickback, and active reset.
+- **Job Submissions:**
+  - **Raw Dynamic IQPE:** IBM Runtime Job ID [`dat0p3ahcrkc73dtfesg`](https://quantum.ibm.com) (1,000 shots)
+  - **Adaptive Mitigated IQPE (XY4 DD):** IBM Runtime Job ID [`dat0p3rojkfs738pvjcg`](https://quantum.ibm.com) (1,000 shots)
+- **Empirical Findings:**
+  - Raw IQPE equilibrium state yield: 318 / 1,000 shots ($31.8\%$).
+  - Mitigated IQPE equilibrium state yield: 362 / 1,000 shots ($36.2\%$, **$+13.8\%$ relative yield improvement** via XY4 dephasing suppression).
+  - Chemical accuracy ($1.6 \times 10^{-3}\,\text{Hartree}$) was **not** achieved due to 3-bit phase discretization and transmon phase wrapping.
+
+---
+
+### 1.5 Experiment E: Deterministic Quantum Teleportation Across Heavy-Hex Links
+- **Physical Problem:** Deterministic non-local transfer of superposition state $|\psi\rangle = |+\rangle$ across heavy-hex transit links.
+- **Dynamic Control Flow:** Mid-circuit Bell measurement + on-chip sub-microsecond FPGA conditional Pauli $X$ and $Z$ corrections.
+- **Job Submission:** IBM Runtime Job ID [`dat0p45vr3kc73ekooo0`](https://quantum.ibm.com) (3,000 total shots across $X, Y, Z$ tomography bases).
+- **Empirical Findings:**
+  - **Dynamic Feedforward Teleportation:** **$\mathcal{F} = 91.90\%$** with **$100.0\%$ deterministic yield** ($3,000 / 3,000$ shots retained).
+  - **Classical Bound Test:** Decisively beats the classical entanglement limit ($\mathcal{F}_{\text{classical}} = 66.67\%$) by **$+25.23\%$**.
+  - **Post-Selected Baseline:** Achieves $93.06\%$ fidelity but discards **$76.37\%$ of all shots** (only $23.63\%$ valid yield).
+  - **SWAP Network Baseline:** Achieves $97.90\%$ on adjacent transmons, but scales with $O(L)$ depth overhead with link distance.
+- **Raw Data Artifact:** [`data/hardware_results/ibm_marrakesh_practical_benchmarks_results.json`](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/data/hardware_results/ibm_marrakesh_practical_benchmarks_results.json)
+
+---
+
 ## 2. Headline Simulation Benchmark: Adaptive vs. Static Strategies
 
 To evaluate our central hypothesis—*"An interpretable, hardware-state-conditioned controller adaptively selecting (decoder, DD policy, burst mitigation) outperforms fixed static strategies under non-stationary noise"*—we conducted both standard (10,000-shot) and high-statistics (50,000-shot) controlled experiments.
@@ -150,9 +176,11 @@ We accelerated the core `UnionFindDecoder` by introducing a precomputed All-Pair
 | :--- | :--- | :--- |
 | **[[4, 2, 2]] Code Live Data** | [`data/hardware_results/ibm_marrakesh_true_quantum_and_dynamic_results.json`](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/data/hardware_results/ibm_marrakesh_true_quantum_and_dynamic_results.json) | Real QPU execution on `ibm_marrakesh` (Heron r2) |
 | **Dynamic Feedforward Live Data** | [`data/hardware_results/ibm_marrakesh_true_quantum_and_dynamic_results.json`](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/data/hardware_results/ibm_marrakesh_true_quantum_and_dynamic_results.json) | Real QPU execution on `ibm_marrakesh` (Heron r2) |
+| **Molecular Chemistry IQPE Live Data** | [`data/hardware_results/ibm_marrakesh_practical_benchmarks_results.json`](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/data/hardware_results/ibm_marrakesh_practical_benchmarks_results.json) | Real QPU execution on `ibm_marrakesh` (Heron r2) |
+| **Deterministic Teleportation Live Data** | [`data/hardware_results/ibm_marrakesh_practical_benchmarks_results.json`](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/data/hardware_results/ibm_marrakesh_practical_benchmarks_results.json) | Real QPU execution on `ibm_marrakesh` (Heron r2) |
 | **Repetition Code Live Data** | [`data/hardware_results/ibm_marrakesh_qec_results.json`](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/data/hardware_results/ibm_marrakesh_qec_results.json) | Real QPU execution on `ibm_marrakesh` (Heron r2) |
 | **50,000-Shot Benchmark JSON** | [`experiments/results/adaptive_vs_static_high_stats_50k.json`](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/experiments/results/adaptive_vs_static_high_stats_50k.json) | Reproducible Stim simulation (seed 42) |
 | **10,000-Shot Benchmark JSON** | [`experiments/results/adaptive_vs_static_d3_20260927_195622.json`](file:///d:/Antigravity%20IDE/A%20real-QPU%20adaptive%20QEC%20stack/experiments/results/adaptive_vs_static_d3_20260927_195622.json) | Reproducible Stim simulation (seed 42) |
 
 ---
-*Report verified against repository state: 244 unit tests passing, deterministic seed 42 reproduction verified.*
+*Report verified against repository state: 261 unit tests passing, deterministic seed 42 reproduction verified.*

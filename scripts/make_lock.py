@@ -56,3 +56,34 @@ def generate_lock(lock_path: Path = Path("paper.lock")) -> None:
     """Generate paper.lock with genuine SHA-256 digests."""
     git_commit = get_git_commit()
     file_hashes: Dict[str, str] = {}
+
+    missing_files = []
+    for f in TRACKED_FILES:
+        if not f.exists():
+            missing_files.append(str(f))
+        else:
+            file_hashes[str(f).replace("\\", "/")] = compute_sha256(f)
+
+    if missing_files:
+        logger.warning("Some tracked files do not exist yet: %s", missing_files)
+
+    lock_payload = {
+        "metadata": {
+            "version": "2.0.0",
+            "git_commit": git_commit,
+            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "hash_algorithm": "SHA-256",
+            "provenance": "simulation",
+            "total_tracked_files": len(file_hashes),
+        },
+        "files": file_hashes,
+    }
+
+    with open(lock_path, "w", encoding="utf-8") as f:
+        json.dump(lock_payload, f, indent=2)
+
+    logger.info("Successfully generated %s with %d file hashes (commit: %s)", lock_path, len(file_hashes), git_commit[:8])
+
+
+if __name__ == "__main__":
+    generate_lock()

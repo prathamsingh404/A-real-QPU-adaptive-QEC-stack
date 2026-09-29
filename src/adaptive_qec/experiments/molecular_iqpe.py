@@ -193,9 +193,12 @@ class MolecularIQPE:
             if bit_char == '1':
                 phase += 2.0 ** -(i + 1)
 
-        # Ground state energy: E = -2*pi*phase / tau + g0 + E_nuc
-        # We unwrap into principal interval
-        eigenvalue = -2.0 * math.pi * phase / self.tau + self.coeffs.g0
+        # IQPE measures phase modulo 1 (eigenvalues determined modulo 2*pi/tau).
+        # Unwrap phase into principal interval [-0.5, 0.5) (branch nearest zero).
+        unwrapped_phase = phase - 1.0 if phase >= 0.5 else phase
+
+        # Ground state energy: E = -2*pi*unwrapped_phase / tau + g0 + E_nuc
+        eigenvalue = -2.0 * math.pi * unwrapped_phase / self.tau + self.coeffs.g0
         total_energy = eigenvalue + self.coeffs.nuclear_repulsion
 
         error_hartree = abs(total_energy - self.coeffs.exact_ground_energy)
@@ -207,6 +210,8 @@ class MolecularIQPE:
             "bitstring_probability": best_count / total_shots,
             "total_shots": total_shots,
             "extracted_phase": phase,
+            "unwrapped_phase": unwrapped_phase,
+            "qpu_eigenvalue_hartree": eigenvalue,
             "qpu_ground_energy_hartree": total_energy,
             "exact_ground_energy_hartree": self.coeffs.exact_ground_energy,
             "error_hartree": error_hartree,

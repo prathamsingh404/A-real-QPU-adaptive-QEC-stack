@@ -4,18 +4,18 @@
    ══════════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --bg-main: #ffffff;
-  --bg-subtle: #f8fafc;
+  --bg-main: #f8fafc;
+  --bg-subtle: #f1f5f9;
   --bg-card: #ffffff;
   --bg-card-hover: #fcfdfe;
-  --bg-muted: #f1f5f9;
+  --bg-muted: #e2e8f0;
   
   --border-subtle: #e2e8f0;
   --border-medium: #cbd5e1;
   --border-focus: #3b82f6;
   
   --text-primary: #0f172a;
-  --text-secondary: #475569;
+  --text-secondary: #334155;
   --text-muted: #64748b;
   --text-faint: #94a3b8;
   
@@ -189,10 +189,22 @@ p {
   border: 1px solid var(--emerald-border);
 }
 
+.badge-emerald::before {
+  content: "●";
+  color: var(--emerald);
+  margin-right: 4px;
+}
+
 .badge-primary {
   background: var(--primary-light);
   color: var(--primary);
   border: 1px solid var(--primary-border);
+}
+
+.badge-primary::before {
+  content: "●";
+  color: var(--primary);
+  margin-right: 4px;
 }
 
 .badge-amber {
@@ -201,16 +213,28 @@ p {
   border: 1px solid var(--amber-border);
 }
 
+.badge-amber::before {
+  content: "●";
+  color: var(--amber);
+  margin-right: 4px;
+}
+
 .badge-violet {
   background: var(--violet-light);
   color: var(--violet);
   border: 1px solid var(--violet-border);
 }
 
+.badge-violet::before {
+  content: "●";
+  color: var(--violet);
+  margin-right: 4px;
+}
+
 .badge-muted {
-  background: var(--bg-muted);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #cbd5e1;
 }
 
 .pulse-dot {
@@ -434,6 +458,18 @@ p {
   margin-bottom: 10px;
 }
 
+.badge-rose {
+  background: var(--rose-light);
+  color: var(--rose);
+  border: 1px solid var(--rose-border);
+}
+
+.badge-rose::before {
+  content: "●";
+  color: var(--rose);
+  margin-right: 4px;
+}
+
 /* Before / After Comparison Styles */
 .comparison-card {
   background: #ffffff;
@@ -528,7 +564,7 @@ p {
 .progress-bar-fill.rose { background: var(--rose); }
 .progress-bar-fill.primary { background: var(--primary); }
 
-/* Lattice Map Canvas */
+/* Lattice Map Canvas & Workstation */
 .lattice-wrapper {
   background: #ffffff;
   border: 1px solid var(--border-subtle);
@@ -542,7 +578,7 @@ p {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -553,6 +589,7 @@ p {
   padding: 4px;
   border-radius: var(--radius-md);
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .lattice-tab {
@@ -573,12 +610,57 @@ p {
   box-shadow: var(--shadow-sm);
 }
 
+.lattice-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-pill {
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.15s ease;
+}
+
+.filter-pill:hover, .filter-pill.active {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+}
+
+.lattice-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1060px) {
+  .lattice-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lattice-canvas-container {
+  position: relative;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #fafbfc;
+}
+
 #qubitCanvas {
   width: 100%;
-  height: 480px;
+  height: 520px;
   display: block;
-  border-radius: var(--radius-md);
-  background: #fafbfc;
   cursor: crosshair;
 }
 
@@ -594,7 +676,200 @@ p {
   box-shadow: var(--shadow-xl);
   z-index: 50;
   display: none;
-  max-width: 240px;
+  max-width: 250px;
+}
+
+/* Transmon Inspector Sidebar */
+.inspector-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inspector-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: var(--shadow-xs);
+}
+
+.inspector-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.inspector-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inspector-meter {
+  margin-bottom: 12px;
+}
+
+.inspector-meter:last-child {
+  margin-bottom: 0;
+}
+
+.inspector-meter-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+}
+
+.inspector-meter-val {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.coupler-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.coupler-chip {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Comparison Charts Container */
+.comparison-chart-container {
+  height: 220px;
+  margin: 14px 0 10px;
+  position: relative;
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  padding: 8px;
+  border: 1px solid var(--border-subtle);
+}
+
+/* Scientific Gallery */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 24px;
+}
+
+.figure-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.figure-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-medium);
+}
+
+.figure-img-wrap {
+  width: 100%;
+  height: 240px;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+  position: relative;
+}
+
+.figure-img-wrap img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.25s ease;
+}
+
+.figure-img-wrap:hover img {
+  transform: scale(1.03);
+}
+
+.figure-body {
+  padding: 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.figure-body h4 {
+  font-size: 16px;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.figure-body p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* Lightbox Modal */
+.lightbox-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.lightbox-modal.active {
+  display: flex;
+}
+
+.lightbox-content {
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  max-width: 1000px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+  position: relative;
+  padding: 24px;
+  box-shadow: var(--shadow-xl);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: var(--bg-muted);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
 }
 
 /* Interactive Pipeline Tester */

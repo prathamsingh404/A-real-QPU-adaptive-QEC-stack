@@ -34,5 +34,8 @@ scratch/
 # Credentials — NEVER commit
 .env
 
-# Experiment data and outputs (root level only)
-/experiments/
+# Ephemeral experiment runs (ignore un-cited scratch runs, whitelist canonical benchmark artifacts)
+experiments/results/*
+!experiments/results/adaptive_vs_static_high_stats_50k.json
+!experiments/results/adaptive_vs_static_d3_20260929_040419.json
+!experiments/results/adaptive_vs_static_d3_20260927_195622.json

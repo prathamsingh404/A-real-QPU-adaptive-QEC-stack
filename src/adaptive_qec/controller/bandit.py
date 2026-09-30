@@ -20,3 +20,18 @@ class DriftAdaptiveBandit:
         self.drift_count = 0
         self.cumulative_regret = 0.0
         self.last_selected_arm = 0
+
+def select_arm(self) -> int:
+        active_indices = np.where(self.active_arms)[0]
+        if len(active_indices) == 0:
+            self.active_arms[:] = True
+            active_indices = np.where(self.active_arms)[0]
+        for arm in active_indices:
+            if len(self.arm_rewards[arm]) == 0:
+                self.last_selected_arm = arm
+                return arm
+        means = np.array([np.mean(self.arm_rewards[arm][-self.window_size:]) for arm in active_indices])
+        best_idx = np.argmax(means)
+        chosen_arm = int(active_indices[best_idx])
+        self.last_selected_arm = chosen_arm
+        return chosen_arm

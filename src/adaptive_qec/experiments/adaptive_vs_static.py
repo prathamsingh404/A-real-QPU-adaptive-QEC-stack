@@ -571,11 +571,22 @@ def run_adaptive_vs_static(
         / max(best_static.overall_error_rate, 1e-10)
     )
 
+    regret_per_window = []
+    for w in range(schedule.total_windows):
+        mwpm_err = static_mwpm_results.windows[w].error_rate
+        uf_err = static_uf_results.windows[w].error_rate
+        adapt_err = adaptive_results.windows[w].error_rate
+        oracle_err = min(mwpm_err, uf_err)
+        regret_per_window.append(max(0.0, adapt_err - oracle_err))
+    
+    cumulative_regret = float(np.sum(regret_per_window))
+
     comparison = {
         "best_static_arm": best_static.arm_name,
         "best_static_ler": round(best_static.overall_error_rate, 6),
         "adaptive_ler": round(adaptive_results.overall_error_rate, 6),
         "improvement_pct": round(improvement * 100, 2),
+        "cumulative_regret": round(cumulative_regret, 6),
         "z_statistic": round(z_stat, 4),
         "p_value": round(p_val, 6),
         "significant_at_005": p_val < 0.05,
@@ -631,6 +642,7 @@ def run_adaptive_vs_static(
     print()
     print(f"  Best static arm:          {comparison['best_static_arm']} (LER = {comparison['best_static_ler']:.6f})")
     print(f"  Adaptive reduction:       {comparison['improvement_pct']:+.2f}%")
+    print(f"  Cumulative Regret:        {comparison['cumulative_regret']:.6f}")
     print(f"  z-statistic:              {comparison['z_statistic']:.4f}")
     print(f"  p-value:                  {comparison['p_value']:.6f}")
     print(f"  Significant (alpha=0.05): {comparison['significant_at_005']}")

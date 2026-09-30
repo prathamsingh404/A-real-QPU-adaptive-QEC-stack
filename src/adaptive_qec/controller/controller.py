@@ -57,3 +57,7 @@ if telemetry.burst_detected:
             self.fast_path_count += 1
             self.current_action = ControllerAction(decoder=DecoderChoice.MWPM, dd_pattern=DDPattern.XY4, recalibrate_dem=True, reason='physics_gated_burst_mitigation')
             return self.current_action
+
+if telemetry.drift_magnitude > 2.0:
+            self.current_action = ControllerAction(decoder=DecoderChoice.MWPM, dd_pattern=DDPattern.CPMG, recalibrate_dem=True, reason='drift_cpmg_mitigation')
+            return self.current_action

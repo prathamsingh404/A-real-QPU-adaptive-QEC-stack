@@ -42,3 +42,11 @@ def test_bandit_reset_regret():
     bandit.update(0, 0.5, oracle_best_reward=1.0)
     bandit.reset_regret()
     assert bandit.cumulative_regret == 0.0
+
+def test_bandit_round_robin_exploration():
+    bandit = DriftAdaptiveBandit(num_arms=3)
+    assert bandit.select_arm() == 0
+    bandit.update(0, 1.0)
+    assert bandit.select_arm() == 1
+    bandit.update(1, 1.0)
+    assert bandit.select_arm() == 2

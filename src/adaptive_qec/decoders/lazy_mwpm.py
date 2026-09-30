@@ -24,3 +24,9 @@ class LazyMWPMDecoder(Decoder):
 @property
     def name(self) -> str:
         return "lazy_mwpm"
+
+def configure(self, **kwargs: Any) -> None:
+        self._mwpm.configure(**kwargs)
+        self._uf.configure(**kwargs)
+        self._num_detectors = self._mwpm._num_detectors
+        self._num_observables = self._mwpm._num_observables

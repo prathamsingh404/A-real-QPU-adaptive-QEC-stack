@@ -61,3 +61,6 @@ if telemetry.burst_detected:
 if telemetry.drift_magnitude > 2.0:
             self.current_action = ControllerAction(decoder=DecoderChoice.MWPM, dd_pattern=DDPattern.CPMG, recalibrate_dem=True, reason='drift_cpmg_mitigation')
             return self.current_action
+
+self.current_action = ControllerAction(decoder=DecoderChoice.MWPM, dd_pattern=DDPattern.NONE, recalibrate_dem=False, reason='nominal_mwpm')
+        return self.current_action

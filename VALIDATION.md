@@ -16,3 +16,6 @@
 | **Claim 8** | CPMG / XY4 Dynamical Decoupling | **PROVEN** | Coherence boost 1.4x | [Pokharel et al., PRL 2023] |
 | **Claim 9** | SPRT Drift Detection Sensitivity | **PROVEN** | False positive rate < 0.01 | `test_sprt.py` |
 | **Claim 10** | Cosmic Ray Burst Rapid Mitigation | **PROVEN** | Trigger latency < 2 windows | `test_burst_detector.py` |
+
+| **Claim 11** | 3-bit Molecular IQPE Demonstration | **PROVEN** | Yield improvement +13.8% | `ibm_marrakesh_practical_benchmarks_results.json` |
+| **Claim 12** | Deterministic Teleportation Verification | **PROVEN** | Fidelity = 96.2% | `ibm_marrakesh_practical_benchmarks_results.json` |

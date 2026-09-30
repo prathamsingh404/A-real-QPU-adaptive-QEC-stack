@@ -11,3 +11,10 @@ def test_cumulative_regret_monotonicity():
     assert np.all(cum_regret >= 0)
     assert np.all(np.diff(cum_regret) >= 0)
     assert cum_regret[-1] == 0
+
+def test_cumulative_regret_sublinearity():
+    T = 100
+    regrets = np.random.exponential(scale=0.1, size=T)
+    cum_reg = np.cumsum(regrets)
+    avg_reg = cum_reg / np.arange(1, T + 1)
+    assert np.all(avg_reg < 1.0)

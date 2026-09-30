@@ -62,3 +62,6 @@ def get_active_arm_count(self) -> int:
 
 def reset_regret(self) -> None:
         self.cumulative_regret = 0.0
+
+def set_arm_window(self, arm: int, rewards: list[float]) -> None:
+        self.arm_rewards[arm] = list(rewards)

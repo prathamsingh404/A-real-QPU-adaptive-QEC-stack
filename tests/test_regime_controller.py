@@ -50,7 +50,7 @@ def test_controller_reset():
     ctrl.select_action(telem)
     ctrl.reset()
     assert ctrl.fast_path_count == 0
-    assert ctrl.current_action.reason == 'reset'
+    assert ctrl.current_action is None
 
 def test_telemetry_defaults():
     telem = HardwareTelemetry()

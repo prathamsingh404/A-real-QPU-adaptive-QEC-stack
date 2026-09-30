@@ -63,3 +63,12 @@ def test_custom_crossover_distance():
     telem = HardwareTelemetry(leakage_fraction=0.15, code_distance=5)
     action = ctrl.select_action(telem)
     assert action.decoder == DecoderChoice.MWPM
+
+def test_multiple_sequential_actions():
+    ctrl = AdaptiveController()
+    t1 = HardwareTelemetry(burst_detected=True)
+    t2 = HardwareTelemetry(drift_magnitude=0.0)
+    a1 = ctrl.select_action(t1)
+    a2 = ctrl.select_action(t2)
+    assert a1.decoder == DecoderChoice.MWPM
+    assert a2.decoder == DecoderChoice.MWPM

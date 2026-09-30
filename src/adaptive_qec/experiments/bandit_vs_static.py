@@ -49,6 +49,19 @@ from typing import Any, Optional
 import numpy as np
 import stim
 
+
+def _numpy_encoder(obj: object) -> object:
+    """JSON encoder that converts numpy scalars to Python natives."""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
 from adaptive_qec.controller.base import ControlAction, HardwareState
 from adaptive_qec.controller.bandit import (
     DASEController,
@@ -459,7 +472,7 @@ class BanditVsStaticExperiment:
             "arms": summary.arms,
         }
         with open(output_dir / "summary.json", "w") as f:
-            json.dump(summary_dict, f, indent=2)
+            json.dump(summary_dict, f, indent=2, default=_numpy_encoder)
 
         # Save per-window results
         results_dict = {}
@@ -477,7 +490,7 @@ class BanditVsStaticExperiment:
                 for r in results
             ]
         with open(output_dir / "results.json", "w") as f:
-            json.dump(results_dict, f, indent=2)
+            json.dump(results_dict, f, indent=2, default=_numpy_encoder)
 
         # Save controller telemetry
         if self._config.save_telemetry:
@@ -489,7 +502,7 @@ class BanditVsStaticExperiment:
                         for t in ctrl.telemetry
                     ]
             with open(output_dir / "telemetry.json", "w") as f:
-                json.dump(telemetry, f, indent=2)
+                json.dump(telemetry, f, indent=2, default=_numpy_encoder)
 
         logger.info(f"Results saved to {output_dir}")
         logger.info(

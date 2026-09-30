@@ -22,3 +22,10 @@ def test_burst_fast_path():
     assert action.decoder == DecoderChoice.MWPM
     assert action.dd_pattern == DDPattern.XY4
     assert 'burst' in action.reason
+
+def test_drift_mitigation():
+    ctrl = AdaptiveController()
+    telem = HardwareTelemetry(drift_magnitude=3.5, code_distance=5)
+    action = ctrl.select_action(telem)
+    assert action.dd_pattern == DDPattern.CPMG
+    assert action.recalibrate_dem is True

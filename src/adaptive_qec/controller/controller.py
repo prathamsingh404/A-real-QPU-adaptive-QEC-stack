@@ -67,6 +67,7 @@ class HardwareState:
     drift_magnitude: float = 0.0     # EWMA z-score magnitude
     drift_status: DriftStatus = DriftStatus.STABLE  # categorical drift classification
     burst_active: bool = False       # True if BurstDetector flagged a burst
+    burst_detected: bool = False     # Alias for burst_active
     leakage_fraction: float = 0.0    # estimated fraction of leaked qubits
 
     # Calibration-derived metrics (updated less frequently)
@@ -114,6 +115,11 @@ class HardwareState:
         elif self.p_2q > 0.0 and self.gate_error_2q == 0.0:
             object.__setattr__(self, "gate_error_2q", self.p_2q)
 
+        if self.burst_detected and not self.burst_active:
+            object.__setattr__(self, "burst_active", True)
+        elif self.burst_active and not self.burst_detected:
+            object.__setattr__(self, "burst_detected", True)
+
         if self.readout_error > 0.0 and self.p_ro == 0.0:
             object.__setattr__(self, "p_ro", self.readout_error)
         elif self.p_ro > 0.0 and self.readout_error == 0.0:
@@ -153,6 +159,18 @@ class ControlAction:
         if self.dd_sequence is None:
             val = self.dd_policy.value if hasattr(self.dd_policy, "value") else str(self.dd_policy)
             object.__setattr__(self, "dd_sequence", val)
+
+    @property
+    def dd_pattern(self) -> Any:
+        return self.dd_policy
+
+    @property
+    def reason(self) -> str:
+        return self.notes
+
+    @property
+    def recalibrate_dem(self) -> bool:
+        return self.request_recalibration
 
 
 @dataclass
@@ -307,8 +325,8 @@ def compute_cost(
         state, action.decoder, action.dd_policy, action.burst_mitigation
     )
 
-    # 2. Decoder latency cost (normalized: UF ~= 1.0, MWPM ~= 1.5 for small d)
-    latency_cost = 1.5 if action.decoder == DecoderChoice.MWPM else 1.0
+    # 2. Decoder latency cost (calibrated: C++ MWPM ~= 1.0, Python UF ~= 2.5)
+    latency_cost = 1.0 if action.decoder == DecoderChoice.MWPM else 2.5
 
     # 3. DD pulse cost (number of pulses normalized)
     DD_PULSE_COUNTS = {
@@ -414,6 +432,8 @@ class AdaptiveController:
         weights: Optional[CostWeights] = None,
         hysteresis_patience: int = 3,
         hysteresis_margin: float = 0.05,
+        leakage_threshold: float = 0.15,
+        distance_crossover: int = 5,
     ) -> None:
         self.weights = weights or CostWeights()
         self.hysteresis = HysteresisTracker(
@@ -421,6 +441,9 @@ class AdaptiveController:
             margin=hysteresis_margin,
         )
         self.metrics = ControllerMetrics()
+        self.leakage_threshold = leakage_threshold
+        self.distance_crossover = distance_crossover
+        self.fast_path_count = 0
 
         self._current_action: Optional[ControlAction] = None
         self._action_history: list[ControlAction] = []
@@ -475,6 +498,73 @@ class AdaptiveController:
         Returns:
             The selected ControlAction.
         """
+        # Fast-path 1: Under persistent leakage at scaled distances d >= distance_crossover, directly force UF + XY4
+        if getattr(state, "leakage_fraction", 0.0) >= self.leakage_threshold and getattr(state, "code_distance", 3) >= self.distance_crossover:
+            self.fast_path_count += 1
+            fast_action = ControlAction(
+                decoder=DecoderChoice.UNION_FIND,
+                dd_policy=DDSequenceType.XY4,
+                request_recalibration=True,
+                notes="physics_gated_leakage_clustering",
+            )
+            if self._current_action is not None and self._current_action.decoder != fast_action.decoder:
+                self.metrics.total_mode_switches += 1
+            self._current_action = fast_action
+            self._action_history.append(fast_action)
+            self.metrics.total_windows += 1
+            self.metrics.decoder_usage[fast_action.decoder.value] = (
+                self.metrics.decoder_usage.get(fast_action.decoder.value, 0) + 1
+            )
+            self.metrics.dd_usage[fast_action.dd_policy.value] = (
+                self.metrics.dd_usage.get(fast_action.dd_policy.value, 0) + 1
+            )
+            return fast_action
+
+        # Fast-path 2: Cosmic ray or burst event
+        if getattr(state, "burst_active", False) or getattr(state, "burst_detected", False):
+            self.fast_path_count += 1
+            fast_action = ControlAction(
+                decoder=DecoderChoice.MWPM,
+                dd_policy=DDSequenceType.XY4,
+                burst_mitigation=True,
+                request_recalibration=True,
+                notes="physics_gated_burst_mitigation",
+            )
+            if self._current_action is not None and self._current_action.decoder != fast_action.decoder:
+                self.metrics.total_mode_switches += 1
+            self._current_action = fast_action
+            self._action_history.append(fast_action)
+            self.metrics.total_windows += 1
+            self.metrics.decoder_usage[fast_action.decoder.value] = (
+                self.metrics.decoder_usage.get(fast_action.decoder.value, 0) + 1
+            )
+            self.metrics.dd_usage[fast_action.dd_policy.value] = (
+                self.metrics.dd_usage.get(fast_action.dd_policy.value, 0) + 1
+            )
+            return fast_action
+
+        # Fast-path 3: Severe coherent drift
+        if getattr(state, "drift_magnitude", 0.0) > 2.0:
+            self.fast_path_count += 1
+            fast_action = ControlAction(
+                decoder=DecoderChoice.MWPM,
+                dd_policy=DDSequenceType.CPMG,
+                request_recalibration=True,
+                notes="drift_cpmg_mitigation",
+            )
+            if self._current_action is not None and self._current_action.decoder != fast_action.decoder:
+                self.metrics.total_mode_switches += 1
+            self._current_action = fast_action
+            self._action_history.append(fast_action)
+            self.metrics.total_windows += 1
+            self.metrics.decoder_usage[fast_action.decoder.value] = (
+                self.metrics.decoder_usage.get(fast_action.decoder.value, 0) + 1
+            )
+            self.metrics.dd_usage[fast_action.dd_policy.value] = (
+                self.metrics.dd_usage.get(fast_action.dd_policy.value, 0) + 1
+            )
+            return fast_action
+
         candidates = self._enumerate_candidates(state)
 
         # Compute cost for each candidate
@@ -553,6 +643,7 @@ class AdaptiveController:
         self._cost_history.clear()
         self.hysteresis.reset()
         self.metrics = ControllerMetrics()
+        self.fast_path_count = 0
 
     def summary(self) -> dict[str, Any]:
         """Return a summary of controller performance."""
@@ -564,3 +655,9 @@ class AdaptiveController:
                 "margin": self.hysteresis.margin,
             },
         }
+
+
+# Backward-compatible aliases for telemetry and mitigation patterns
+HardwareTelemetry = HardwareState
+DDPattern = DDSequenceType
+

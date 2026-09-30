@@ -39,3 +39,13 @@ def decode(self, syndrome: np.ndarray) -> Correction:
             if self.is_ambiguous(syndrome):
                 return self._mwpm.decode(syndrome)
             return self._uf.decode(syndrome)
+
+defect_counts = syndrome.sum(axis=1)
+        mwpm_mask = defect_counts > self.defect_threshold
+        uf_mask = ~mwpm_mask
+        predictions = np.zeros((syndrome.shape[0], self._num_observables), dtype=np.uint8)
+        if np.any(mwpm_mask):
+            predictions[mwpm_mask] = self._mwpm.decode(syndrome[mwpm_mask]).observable_corrections
+        if np.any(uf_mask):
+            predictions[uf_mask] = self._uf.decode(syndrome[uf_mask]).observable_corrections
+        return Correction(observable_corrections=predictions)

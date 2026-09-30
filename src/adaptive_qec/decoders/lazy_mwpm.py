@@ -33,3 +33,9 @@ def configure(self, **kwargs: Any) -> None:
 
 def is_ambiguous(self, syndrome: np.ndarray) -> bool:
         return bool(syndrome.sum() > self.defect_threshold)
+
+def decode(self, syndrome: np.ndarray) -> Correction:
+        if syndrome.ndim == 1:
+            if self.is_ambiguous(syndrome):
+                return self._mwpm.decode(syndrome)
+            return self._uf.decode(syndrome)

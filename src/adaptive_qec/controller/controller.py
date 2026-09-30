@@ -20,3 +20,13 @@ class DDPattern(Enum):
     CPMG = 'cpmg'
     XY4 = 'xy4'
     EDD = 'edd'
+
+@dataclass
+class HardwareTelemetry:
+    drift_magnitude: float = 0.0
+    burst_detected: bool = False
+    leakage_fraction: float = 0.0
+    qubit_defect_rate: float = 0.0
+    code_distance: int = 3
+    round_index: int = 0
+    extra: dict[str, Any] = field(default_factory=dict)

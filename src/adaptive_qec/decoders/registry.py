@@ -18,5 +18,8 @@ DECODER_REGISTRY: dict[str, Type[Decoder]] = {
 def get_decoder(name: str, **kwargs) -> Decoder:
     name_clean = name.lower().strip()
     if name_clean not in DECODER_REGISTRY:
-        raise KeyError(f"Unknown decoder: {name}. Available: {list(DECODER_REGISTRY.keys())}")
+        raise ValueError(f"Unknown decoder: {name}. Available: {list(DECODER_REGISTRY.keys())}")
     return DECODER_REGISTRY[name_clean](**kwargs)
+
+def list_decoders() -> list[str]:
+    return sorted(list(DECODER_REGISTRY.keys()))

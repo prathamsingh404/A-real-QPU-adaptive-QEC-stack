@@ -59,3 +59,6 @@ def get_arm_means(self) -> np.ndarray:
 
 def get_active_arm_count(self) -> int:
         return int(np.sum(self.active_arms))
+
+def reset_regret(self) -> None:
+        self.cumulative_regret = 0.0

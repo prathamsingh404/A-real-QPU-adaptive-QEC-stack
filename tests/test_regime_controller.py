@@ -29,3 +29,11 @@ def test_drift_mitigation():
     action = ctrl.select_action(telem)
     assert action.dd_pattern == DDPattern.CPMG
     assert action.recalibrate_dem is True
+
+def test_nominal_state():
+    ctrl = AdaptiveController()
+    telem = HardwareTelemetry(drift_magnitude=0.1, code_distance=5)
+    action = ctrl.select_action(telem)
+    assert action.decoder == DecoderChoice.MWPM
+    assert action.dd_pattern == DDPattern.NONE
+    assert action.recalibrate_dem is False

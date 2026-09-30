@@ -37,3 +37,12 @@ class ControllerAction:
     dd_pattern: DDPattern
     recalibrate_dem: bool = False
     reason: str = 'nominal'
+
+class AdaptiveController:
+    """Physics-Gated Adaptive Controller for Real-Time QEC Runtime."""
+    def __init__(self, hysteresis_margin: float = 0.05, leakage_threshold: float = 0.15, distance_crossover: int = 5) -> None:
+        self.hysteresis_margin = hysteresis_margin
+        self.leakage_threshold = leakage_threshold
+        self.distance_crossover = distance_crossover
+        self.current_action = ControllerAction(decoder=DecoderChoice.MWPM, dd_pattern=DDPattern.NONE, reason='initial')
+        self.fast_path_count = 0

@@ -30,3 +30,10 @@ class HardwareTelemetry:
     code_distance: int = 3
     round_index: int = 0
     extra: dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class ControllerAction:
+    decoder: DecoderChoice
+    dd_pattern: DDPattern
+    recalibrate_dem: bool = False
+    reason: str = 'nominal'

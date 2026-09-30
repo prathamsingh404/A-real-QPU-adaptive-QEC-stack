@@ -53,3 +53,6 @@ def on_drift_detected(self) -> None:
             if eliminated[arm]:
                 self.arm_rewards[arm] = []
         logger.info('DASE drift detected: reactivated eliminated arms while preserving winner history.')
+
+def get_arm_means(self) -> np.ndarray:
+        return np.array([np.mean(r[-self.window_size:]) if len(r) > 0 else 0.0 for r in self.arm_rewards])

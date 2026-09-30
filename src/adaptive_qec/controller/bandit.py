@@ -35,3 +35,12 @@ def select_arm(self) -> int:
         chosen_arm = int(active_indices[best_idx])
         self.last_selected_arm = chosen_arm
         return chosen_arm
+
+def update(self, arm: int, reward: float, oracle_best_reward: Optional[float] = None) -> None:
+        self.arm_rewards[arm].append(float(reward))
+        self.pull_counts[arm] += 1
+        if len(self.arm_rewards[arm]) > self.window_size * 2:
+            self.arm_rewards[arm] = self.arm_rewards[arm][-self.window_size:]
+        if oracle_best_reward is not None:
+            regret = max(0.0, oracle_best_reward - reward)
+            self.cumulative_regret += regret

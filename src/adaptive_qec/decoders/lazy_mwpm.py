@@ -30,3 +30,6 @@ def configure(self, **kwargs: Any) -> None:
         self._uf.configure(**kwargs)
         self._num_detectors = self._mwpm._num_detectors
         self._num_observables = self._mwpm._num_observables
+
+def is_ambiguous(self, syndrome: np.ndarray) -> bool:
+        return bool(syndrome.sum() > self.defect_threshold)

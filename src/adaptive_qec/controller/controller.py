@@ -64,3 +64,7 @@ if telemetry.drift_magnitude > 2.0:
 
 self.current_action = ControllerAction(decoder=DecoderChoice.MWPM, dd_pattern=DDPattern.NONE, recalibrate_dem=False, reason='nominal_mwpm')
         return self.current_action
+
+def reset(self) -> None:
+        self.fast_path_count = 0
+        self.current_action = ControllerAction(decoder=DecoderChoice.MWPM, dd_pattern=DDPattern.NONE, reason='reset')

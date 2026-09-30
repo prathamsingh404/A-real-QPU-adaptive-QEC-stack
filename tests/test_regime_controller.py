@@ -14,3 +14,11 @@ def test_leakage_ignored_at_d3():
     telem = HardwareTelemetry(leakage_fraction=0.18, code_distance=3)
     action = ctrl.select_action(telem)
     assert action.decoder == DecoderChoice.MWPM
+
+def test_burst_fast_path():
+    ctrl = AdaptiveController()
+    telem = HardwareTelemetry(burst_detected=True, code_distance=5)
+    action = ctrl.select_action(telem)
+    assert action.decoder == DecoderChoice.MWPM
+    assert action.dd_pattern == DDPattern.XY4
+    assert 'burst' in action.reason

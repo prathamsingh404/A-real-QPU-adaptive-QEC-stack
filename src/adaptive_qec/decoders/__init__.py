@@ -1,18 +1,19 @@
-"""Decoder framework — plugin-based decoder architecture."""
-
+"""
+Decoders module initialization.
+"""
 from adaptive_qec.decoders.base import Correction, Decoder, DecoderMetrics
 from adaptive_qec.decoders.mwpm import MWPMDecoder
-from adaptive_qec.decoders.union_find import UnionFindDecoder, UnionFindForest
-from adaptive_qec.decoders.registry import get_decoder, list_decoders, register_decoder
+from adaptive_qec.decoders.union_find import UnionFindDecoder
+from adaptive_qec.decoders.lazy_mwpm import LazyMWPMDecoder
+from adaptive_qec.decoders.registry import DECODER_REGISTRY, get_decoder
 
 __all__ = [
-    "Correction",
     "Decoder",
+    "Correction",
     "DecoderMetrics",
     "MWPMDecoder",
     "UnionFindDecoder",
-    "UnionFindForest",
+    "LazyMWPMDecoder",
+    "DECODER_REGISTRY",
     "get_decoder",
-    "list_decoders",
-    "register_decoder",
 ]

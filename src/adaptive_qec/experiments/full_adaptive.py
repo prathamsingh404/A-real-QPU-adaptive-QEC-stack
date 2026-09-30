@@ -43,6 +43,19 @@ from typing import Any, Optional
 import numpy as np
 import stim
 
+
+def _numpy_encoder(obj: object) -> object:
+    """JSON encoder that converts numpy scalars to Python natives."""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
 from adaptive_qec.controller.bandit import (
     DASEController,
     Exp3Controller,
@@ -446,7 +459,7 @@ class FullAdaptiveExperiment:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         with open(output_dir / "results.json", "w") as f:
-            json.dump(results, f, indent=2, default=str)
+            json.dump(results, f, indent=2, default=_numpy_encoder)
 
         if self._config.save_telemetry:
             telemetry = {
@@ -460,7 +473,7 @@ class FullAdaptiveExperiment:
                 ),
             }
             with open(output_dir / "telemetry.json", "w") as f:
-                json.dump(telemetry, f, indent=2, default=str)
+                json.dump(telemetry, f, indent=2, default=_numpy_encoder)
 
         logger.info(f"Results saved to {output_dir}")
 

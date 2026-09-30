@@ -63,3 +63,8 @@ def test_bandit_window_trimming():
     for i in range(20):
         bandit.update(0, float(i))
     assert len(bandit.arm_rewards[0]) <= 10
+
+def test_bandit_set_arm_window():
+    bandit = DriftAdaptiveBandit(num_arms=2)
+    bandit.set_arm_window(1, [0.5, 0.8])
+    assert len(bandit.arm_rewards[1]) == 2

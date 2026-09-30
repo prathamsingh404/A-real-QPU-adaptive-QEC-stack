@@ -69,3 +69,21 @@ if np.any(mwpm_mask):
             num_errors += u.num_logical_errors
             if u.per_shot_latency_us is not None:
                 latencies.extend(u.per_shot_latency_us)
+
+t_total = time.perf_counter() - t_start
+        latency_us = np.array(latencies) if latencies else np.zeros(shots)
+        return DecoderMetrics(
+            total_shots=shots,
+            num_logical_errors=num_errors,
+            logical_error_rate=num_errors / max(1, shots),
+            decode_time_s=t_total,
+            per_shot_latency_us=latency_us,
+            latency_mean_us=float(latency_us.mean()) if len(latency_us) > 0 else 0.0,
+            latency_p50_us=float(np.percentile(latency_us, 50)) if len(latency_us) > 0 else 0.0,
+            latency_p95_us=float(np.percentile(latency_us, 95)) if len(latency_us) > 0 else 0.0,
+            latency_p99_us=float(np.percentile(latency_us, 99)) if len(latency_us) > 0 else 0.0,
+            latency_p999_us=float(np.percentile(latency_us, 99.9)) if len(latency_us) > 0 else 0.0,
+            throughput_shots_per_s=shots / t_total if t_total > 0 else 0.0,
+            peak_memory_mb=0.0,
+            extra={"mwpm_fraction": float(np.mean(mwpm_mask))}
+        )

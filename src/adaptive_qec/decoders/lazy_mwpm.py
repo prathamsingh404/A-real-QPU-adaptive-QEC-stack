@@ -58,3 +58,14 @@ def decode_batch(self, syndromes: np.ndarray, observable_flips: np.ndarray) -> D
         uf_mask = ~mwpm_mask
         num_errors = 0
         latencies = []
+
+if np.any(mwpm_mask):
+            m = self._mwpm.decode_batch(syndromes[mwpm_mask], observable_flips[mwpm_mask])
+            num_errors += m.num_logical_errors
+            if m.per_shot_latency_us is not None:
+                latencies.extend(m.per_shot_latency_us)
+        if np.any(uf_mask):
+            u = self._uf.decode_batch(syndromes[uf_mask], observable_flips[uf_mask])
+            num_errors += u.num_logical_errors
+            if u.per_shot_latency_us is not None:
+                latencies.extend(u.per_shot_latency_us)

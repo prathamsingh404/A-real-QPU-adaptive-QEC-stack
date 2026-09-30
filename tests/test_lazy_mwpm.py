@@ -84,3 +84,11 @@ def test_lazy_mwpm_mwpm_fraction_diagnostic():
     m = dec.decode_batch(det_data, obs_data)
     assert 'mwpm_fraction' in m.extra
     assert 0.0 <= m.extra['mwpm_fraction'] <= 1.0
+
+def test_lazy_mwpm_empty_syndrome_batch():
+    dec = LazyMWPMDecoder()
+    det = np.zeros((0, 8), dtype=np.uint8)
+    obs = np.zeros((0, 1), dtype=np.uint8)
+    m = dec.decode_batch(det, obs)
+    assert m.total_shots == 0
+    assert m.num_logical_errors == 0

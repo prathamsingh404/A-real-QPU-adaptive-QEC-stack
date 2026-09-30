@@ -43,3 +43,11 @@ def test_fast_path_counter():
     telem = HardwareTelemetry(leakage_fraction=0.20, code_distance=3)
     ctrl.select_action(telem)
     assert ctrl.fast_path_count == 1
+
+def test_controller_reset():
+    ctrl = AdaptiveController(leakage_threshold=0.10, distance_crossover=3)
+    telem = HardwareTelemetry(leakage_fraction=0.20, code_distance=3)
+    ctrl.select_action(telem)
+    ctrl.reset()
+    assert ctrl.fast_path_count == 0
+    assert ctrl.current_action.reason == 'reset'

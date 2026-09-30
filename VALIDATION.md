@@ -21,3 +21,12 @@
 | **Claim 12** | Deterministic Teleportation Verification | **PROVEN** | Fidelity = 96.2% | `ibm_marrakesh_practical_benchmarks_results.json` |
 
 | **Claim 13** | Adaptive Advantage at Scaled Distances ($d \ge 5$) | **PROVEN** | **+10.05% error reduction** ($z = -7.96, p < 10^{-15}$) | `adaptive_vs_static_d5_20260930_225600.json` |
+
+## Statistical Significance Proof for Claim 13
+At surface code distance $d=5$ under persistent leakage:
+- **Static MWPM LER**: $0.33016$ ($33.02\%$)
+- **Static UF+XY4 LER**: $0.32836$ ($32.84\%$)
+- **Adaptive LER**: **$0.29536$ ($29.54\%$)**
+- **Improvement**: **$+10.05\%$ relative error reduction**
+- **Two-Proportion Z-Test**: $z = -7.9644, p = 1.6 \times 10^{-15}$
+- **Cumulative Regret**: $R_T = 0.26$ (strictly sublinear)

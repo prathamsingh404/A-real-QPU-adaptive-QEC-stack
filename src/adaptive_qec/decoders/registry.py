@@ -1,58 +1,22 @@
 """
-Decoder plugin registry.
-
-Register and instantiate decoders by name. Add new decoders without
-modifying core code.
+Decoder Registry with Lazy MWPM Hybrid Support
 """
-
 from __future__ import annotations
-
-import logging
 from typing import Type
-
 from adaptive_qec.decoders.base import Decoder
+from adaptive_qec.decoders.mwpm import MWPMDecoder
+from adaptive_qec.decoders.union_find import UnionFindDecoder
+from adaptive_qec.decoders.lazy_mwpm import LazyMWPMDecoder
 
-logger = logging.getLogger(__name__)
+DECODER_REGISTRY: dict[str, Type[Decoder]] = {
+    "mwpm": MWPMDecoder,
+    "union_find": UnionFindDecoder,
+    "uf": UnionFindDecoder,
+    "lazy_mwpm": LazyMWPMDecoder,
+}
 
-_DECODERS: dict[str, Type[Decoder]] = {}
-
-
-def register_decoder(name: str, decoder_class: Type[Decoder]) -> None:
-    """Register a decoder class."""
-    _DECODERS[name.lower()] = decoder_class
-    logger.debug(f"Registered decoder: {name} → {decoder_class.__name__}")
-
-
-def get_decoder(name: str) -> Decoder:
-    """
-    Instantiate a decoder by name.
-
-    Built-in decoders are lazy-loaded.
-    """
-    name_lower = name.lower()
-
-    # Lazy-register built-in decoders
-    if name_lower == "mwpm" and name_lower not in _DECODERS:
-        from adaptive_qec.decoders.mwpm import MWPMDecoder
-        register_decoder("mwpm", MWPMDecoder)
-
-    if name_lower == "union_find" and name_lower not in _DECODERS:
-        from adaptive_qec.decoders.union_find import UnionFindDecoder
-        register_decoder("union_find", UnionFindDecoder)
-
-    if name_lower not in _DECODERS:
-        available = list(_DECODERS.keys()) or ["none registered"]
-        raise ValueError(
-            f"Unknown decoder '{name}'. "
-            f"Available: {', '.join(available)}. "
-            f"Register new decoders with register_decoder()."
-        )
-
-    decoder = _DECODERS[name_lower]()
-    logger.info(f"Created decoder: {decoder.name}")
-    return decoder
-
-
-def list_decoders() -> list[str]:
-    """List all registered decoder names."""
-    return list(_DECODERS.keys())
+def get_decoder(name: str, **kwargs) -> Decoder:
+    name_clean = name.lower().strip()
+    if name_clean not in DECODER_REGISTRY:
+        raise KeyError(f"Unknown decoder: {name}. Available: {list(DECODER_REGISTRY.keys())}")
+    return DECODER_REGISTRY[name_clean](**kwargs)

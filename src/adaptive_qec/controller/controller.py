@@ -46,3 +46,9 @@ class AdaptiveController:
         self.distance_crossover = distance_crossover
         self.current_action = ControllerAction(decoder=DecoderChoice.MWPM, dd_pattern=DDPattern.NONE, reason='initial')
         self.fast_path_count = 0
+
+def select_action(self, telemetry: HardwareTelemetry) -> ControllerAction:
+        if telemetry.leakage_fraction >= self.leakage_threshold and telemetry.code_distance >= self.distance_crossover:
+            self.fast_path_count += 1
+            self.current_action = ControllerAction(decoder=DecoderChoice.UNION_FIND, dd_pattern=DDPattern.XY4, recalibrate_dem=True, reason='physics_gated_leakage_clustering')
+            return self.current_action

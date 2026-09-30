@@ -36,3 +36,9 @@ def test_bandit_arm_means_calculation():
     means = bandit.get_arm_means()
     assert means[0] == pytest.approx(0.6)
     assert means[1] == 0.0
+
+def test_bandit_reset_regret():
+    bandit = DriftAdaptiveBandit(num_arms=2)
+    bandit.update(0, 0.5, oracle_best_reward=1.0)
+    bandit.reset_regret()
+    assert bandit.cumulative_regret == 0.0

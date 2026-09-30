@@ -87,3 +87,5 @@ t_total = time.perf_counter() - t_start
             peak_memory_mb=0.0,
             extra={"mwpm_fraction": float(np.mean(mwpm_mask))}
         )
+
+# Interface validation marker

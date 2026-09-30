@@ -20,3 +20,7 @@ class LazyMWPMDecoder(Decoder):
         self._uf = UnionFindDecoder()
         self._num_detectors = 0
         self._num_observables = 0
+
+@property
+    def name(self) -> str:
+        return "lazy_mwpm"

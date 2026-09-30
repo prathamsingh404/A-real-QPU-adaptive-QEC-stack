@@ -57,3 +57,9 @@ def test_bandit_empty_active_recovery():
     arm = bandit.select_arm()
     assert arm in [0, 1]
     assert np.all(bandit.active_arms)
+
+def test_bandit_window_trimming():
+    bandit = DriftAdaptiveBandit(num_arms=1, window_size=5)
+    for i in range(20):
+        bandit.update(0, float(i))
+    assert len(bandit.arm_rewards[0]) <= 10

@@ -44,3 +44,12 @@ def update(self, arm: int, reward: float, oracle_best_reward: Optional[float] = 
         if oracle_best_reward is not None:
             regret = max(0.0, oracle_best_reward - reward)
             self.cumulative_regret += regret
+
+def on_drift_detected(self) -> None:
+        self.drift_count += 1
+        eliminated = ~self.active_arms
+        self.active_arms[eliminated] = True
+        for arm in range(self.num_arms):
+            if eliminated[arm]:
+                self.arm_rewards[arm] = []
+        logger.info('DASE drift detected: reactivated eliminated arms while preserving winner history.')

@@ -57,3 +57,9 @@ def test_telemetry_defaults():
     assert telem.drift_magnitude == 0.0
     assert telem.burst_detected is False
     assert telem.code_distance == 3
+
+def test_custom_crossover_distance():
+    ctrl = AdaptiveController(leakage_threshold=0.10, distance_crossover=7)
+    telem = HardwareTelemetry(leakage_fraction=0.15, code_distance=5)
+    action = ctrl.select_action(telem)
+    assert action.decoder == DecoderChoice.MWPM

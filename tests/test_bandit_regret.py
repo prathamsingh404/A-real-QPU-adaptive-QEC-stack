@@ -28,3 +28,11 @@ def test_bandit_cumulative_regret_tracking():
     assert bandit.cumulative_regret == pytest.approx(0.2)
     bandit.update(1, reward=1.0, oracle_best_reward=1.0)
     assert bandit.cumulative_regret == pytest.approx(0.2)
+
+def test_bandit_arm_means_calculation():
+    bandit = DriftAdaptiveBandit(num_arms=2)
+    bandit.update(0, 0.5)
+    bandit.update(0, 0.7)
+    means = bandit.get_arm_means()
+    assert means[0] == pytest.approx(0.6)
+    assert means[1] == 0.0

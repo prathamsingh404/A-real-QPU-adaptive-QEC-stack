@@ -56,3 +56,6 @@ def on_drift_detected(self) -> None:
 
 def get_arm_means(self) -> np.ndarray:
         return np.array([np.mean(r[-self.window_size:]) if len(r) > 0 else 0.0 for r in self.arm_rewards])
+
+def get_active_arm_count(self) -> int:
+        return int(np.sum(self.active_arms))

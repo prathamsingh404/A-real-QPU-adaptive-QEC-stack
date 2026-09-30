@@ -83,3 +83,51 @@ def pull_live_calibration() -> Path:
         for q_tuple, prop in sx_map.items():
             if prop and prop.error is not None and not np.isnan(prop.error):
                 gate_1q_errors.append(float(prop.error))
+                
+    two_q_err_vals = [g["error"] for g in gate_2q_errors if g["error"] > 0]
+    one_q_err_vals = [e for e in gate_1q_errors if e > 0]
+    
+    now_str = datetime.now(timezone.utc).isoformat()
+    calibration_doc = {
+        "metadata": {
+            "source": "IBM Quantum Platform (Live QPU Query)",
+            "backend": backend.name,
+            "processor_type": "Heron r2",
+            "num_qubits": backend.num_qubits,
+            "query_timestamp_utc": now_str,
+            "backend_last_update_date": str(getattr(props, "last_update_date", "")),
+            "status": "OPERATIONAL / MEASURED_LIVE",
+        },
+        "summary_statistics": {
+            "mean_t1_us": round(float(np.mean(t1_list)), 2),
+            "median_t1_us": round(float(np.median(t1_list)), 2),
+            "std_t1_us": round(float(np.std(t1_list)), 2),
+            "mean_t2_us": round(float(np.mean(t2_list)), 2),
+            "median_t2_us": round(float(np.median(t2_list)), 2),
+            "std_t2_us": round(float(np.std(t2_list)), 2),
+            "mean_readout_error": round(float(np.mean(ro_list)), 6),
+            "median_readout_error": round(float(np.median(ro_list)), 6),
+            "mean_1q_gate_error": round(float(np.mean(one_q_err_vals)), 6) if one_q_err_vals else None,
+            "median_1q_gate_error": round(float(np.median(one_q_err_vals)), 6) if one_q_err_vals else None,
+            "mean_2q_gate_error": round(float(np.mean(two_q_err_vals)), 6) if two_q_err_vals else None,
+            "median_2q_gate_error": round(float(np.median(two_q_err_vals)), 6) if two_q_err_vals else None,
+            "num_2q_couplings_measured": len(gate_2q_errors),
+        },
+        "qubits": qubits_data,
+        "gates_2q_sample": gate_2q_errors[:20],
+    }
+    
+    out_dir = Path("data/calibration")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / "ibm_marrakesh_live_snapshot.json"
+    with open(out_file, "w") as f:
+        json.dump(calibration_doc, f, indent=2)
+        
+    print(f"Saved live calibration snapshot to {out_file}")
+    print("Summary:")
+    for k, v in calibration_doc["summary_statistics"].items():
+        print(f"  {k}: {v}")
+    return out_file
+
+if __name__ == "__main__":
+    pull_live_calibration()

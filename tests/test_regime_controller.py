@@ -51,3 +51,9 @@ def test_controller_reset():
     ctrl.reset()
     assert ctrl.fast_path_count == 0
     assert ctrl.current_action.reason == 'reset'
+
+def test_telemetry_defaults():
+    telem = HardwareTelemetry()
+    assert telem.drift_magnitude == 0.0
+    assert telem.burst_detected is False
+    assert telem.code_distance == 3

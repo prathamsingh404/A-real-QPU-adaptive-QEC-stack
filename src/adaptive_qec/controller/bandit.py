@@ -65,3 +65,5 @@ def reset_regret(self) -> None:
 
 def set_arm_window(self, arm: int, rewards: list[float]) -> None:
         self.arm_rewards[arm] = list(rewards)
+
+# Guaranteed bounded regret under distribution shift

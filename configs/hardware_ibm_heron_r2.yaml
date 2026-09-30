@@ -1,0 +1,13 @@
+backend:
+  name: ibm_marrakesh
+  processor_type: Heron r2
+  num_qubits: 156
+  median_t1_us: 142.5
+  median_t2_us: 118.0
+  single_qubit_gate_fidelity: 0.9996
+  two_qubit_gate_fidelity: 0.9962
+  readout_fidelity: 0.9910
+controller:
+  leakage_threshold: 0.15
+  distance_crossover: 5
+  hysteresis_margin: 0.05

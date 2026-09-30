@@ -1,245 +1,158 @@
-# AdaptiveQEC: A Real-QPU Adaptive Quantum Error Correction Stack 
+# AdaptiveQEC: An Adaptive Quantum Error Correction Framework
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-261%2F261%20passed%20(100%25)-brightgreen.svg)]()
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
 [![Stim](https://img.shields.io/badge/Stim-1.15+-blueviolet.svg)](https://github.com/quantumlib/Stim)
 [![PyMatching](https://img.shields.io/badge/PyMatching-2.2+-orange.svg)](https://github.com/oscarhiggott/PyMatching)
+[![Status: Under Audit](https://img.shields.io/badge/Status-Under%20Academic%20Audit-red.svg)]()
 
-AdaptiveQEC is an open-source, hardware-aware, adaptive Quantum Error Correction (QEC) stack designed to bridge low-level transmon physics and high-level fault-tolerant algorithms. Targeted directly at IBM Quantum's 156-qubit Heron revision 2 processors (`ibm_marrakesh`, heavy-hexagonal lattice), this system implements macro-timescale drift adaptation, inter-batch session orchestration, spatiotemporal burst mitigation (cosmic ray and quasiparticle avalanches), syndrome-based transmon leakage tracking, selective dynamical decoupling (CPMG/XY4/XY8), on-demand sparse Union-Find decoding, and an **interpretable, hardware-state-conditioned closed-loop controller** that adaptively selects decoding and mitigation strategies under non-stationary noise.
+> **Project Status (October 2026)**:  
+> This repository is undergoing a rigorous scientific restructuring (Phase 0 Integrity Reset).  
+> **Key Honest Summary**: Across synthetic non-stationary noise scenarios evaluated to date, **adaptive policy selection does not reliably outperform strong static baselines (such as factory MWPM or fixed strategies)**. Simulation runs show either statistically null results ($p > 0.05$) or negative margins (adaptive performing worse due to switching penalties and sub-optimal heuristics). Prior claims of a "+10.05% breakthrough at $d=5$" and "+23.5% at $d=3$" were single-seed or misreported artifacts and have been retracted. See [VALIDATION.md](VALIDATION.md) for the verified claims ledger.
 
 ---
 
-## 1. Multi-Scale System Architecture
+## 1. System Overview
+
+AdaptiveQEC is an open-source research testbed designed to investigate whether closed-loop, macro-timescale adaptation can mitigate non-stationary and non-Markovian noise processes on superconducting quantum processors (such as IBM Quantum Heron heavy-hex architectures).
+
+The framework models and implements:
+1. **Lattice Geometry & Routing**: Heavy-hexagonal layout mapping (`adaptive_qec.topology`) for rotated surface and repetition codes.
+2. **Noise Telemetry**: Syndrome-based drift monitoring (CUSUM / SPRT), spatial burst detection, and transmon leakage tracking (`adaptive_qec.noise`).
+3. **Decoders**: Sparse-blossom minimum-weight perfect matching (MWPM via PyMatching v2) and cluster-growth Union-Find (`adaptive_qec.decoders`).
+4. **Error Mitigation Scheduling**: Selective insertion of dynamical decoupling sequences (CPMG, XY4, XY8) based on idle duration trade-offs (`adaptive_qec.mitigation`).
+5. **Adaptive Control Policies**: State-conditioned selection of decoders, DD sequences, and mitigation modes (`adaptive_qec.controller`).
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': { 'fontSize': '13px', 'fontFamily': 'Fira Code, monospace'}}}%%
 graph TD
-    classDef hardware fill:#1e1e2e,stroke:#89b4fa,stroke-width:2px,color:#cdd6f4;
-    classDef physics fill:#181825,stroke:#f38ba8,stroke-width:2px,color:#cdd6f4;
-    classDef qec fill:#1e1e2e,stroke:#a6e3a1,stroke-width:2px,color:#cdd6f4;
-    classDef noise fill:#181825,stroke:#fab387,stroke-width:2px,color:#cdd6f4;
-    classDef decoder fill:#1e1e2e,stroke:#cba6f7,stroke-width:2px,color:#cdd6f4;
-    classDef controller fill:#1e1e2e,stroke:#f5c2e7,stroke-width:2px,color:#cdd6f4;
-    classDef mitigation fill:#181825,stroke:#94e2d5,stroke-width:2px,color:#cdd6f4;
-    classDef analysis fill:#1e1e2e,stroke:#f9e2af,stroke-width:2px,color:#cdd6f4;
+    classDef comp fill:#1e1e2e,stroke:#89b4fa,stroke-width:1px,color:#cdd6f4;
+    classDef status fill:#181825,stroke:#f38ba8,stroke-width:1px,color:#cdd6f4;
 
-    subgraph HW ["1. Physical Hardware & Topology"]
-        IBM["IBM Heron r2 (ibm_marrakesh)\n156 Transmons | Degree <= 3"]:::hardware
-        HH["Heavy-Hex Coupling Map\n(hex cells + flag edge qubits)"]:::hardware
-        Twin["Hardware Digital Twin\n(Per-Qubit T1, T2, Readout, CX)"]:::hardware
-        Embedding["Surface Code EmbeddingFinder\n(Greedy BFS / SWAP Distance)"]:::hardware
-    end
+    Sub["QPU Hardware / Stim Simulation"]:::comp --> Syn["Syndrome Measurement Stream"]:::comp
+    Syn --> Drift["Drift Detector (SPRT / CUSUM)"]:::comp
+    Syn --> Burst["Burst Detector (Poisson Anomaly)"]:::comp
+    Syn --> Leak["Leakage Estimator"]:::comp
+    
+    Drift --> Controller["Adaptive Controller\n(Cost Minimization / Bandits)"]:::comp
+    Burst --> Controller
+    Leak --> Controller
 
-    subgraph Phys ["2. Transmon Physics & Non-Markovian Noise"]
-        FluxNoise["1/f Magnetic Flux & Charge Noise\n(Low-frequency dephasing)"]:::physics
-        Cosmic["High-Energy Ionizing Radiation\n(Muon impacts & phonon cascades)"]:::physics
-        QP["Quasiparticle Poisoning\n(Cooper pair breaking / T1 decay)"]:::physics
-        LeakagePhys["Transmon Anharmonicity & Drive\n(|0>, |1> -> |2> non-computational)"]:::physics
-    end
+    Controller --> Decision{"Policy Selection"}:::comp
+    Decision -->|"Decoder"| Dec["MWPM vs Union-Find"]:::comp
+    Decision -->|"Mitigation"| DD["Dynamical Decoupling (XY4/CPMG)"]:::comp
+    Decision -->|"Mitigation"| Mask["Burst Syndrome Masking"]:::comp
 
-    subgraph QECBlock ["3. Fault-Tolerant Circuit Synthesis"]
-        StimCirc["Stim Fault-Tolerant Circuit\n(Rotated Surface Code d=3, 5, 7)"]:::qec
-        DEM["Detector Error Model (DEM)\n(Separators ^, Boundary Edges)"]:::qec
-        SyndromeStream["Syndrome Stream (Inter-Batch)\ns in {0, 1}^(R x Nd)"]:::qec
-    end
-
-    subgraph NoiseDetect ["4. Inter-Batch Noise & Correlation Engines"]
-        CompositeDrift["CompositeDriftDetector\n(EWMA + CUSUM + Burst)"]:::noise
-        BurstDet["Poisson Burst Detector\n(P-value < 10^-3, Spatiotemporal)"]:::noise
-        LeakageDet["Syndrome Leakage Detector\n(Lag-1 Autocorrelation R(1) + Streaks)"]:::noise
-    end
-
-    subgraph ControllerBlock ["5. Adaptive Closed-Loop Controller"]
-        Controller["AdaptiveController\na*_t = argmin J(a | s_t)"]:::controller
-        CostFn["Multi-Objective Cost J\nP_L + lambda1*L + lambda2*DD + lambda3*Switch"]:::controller
-        Hysteresis["2-Stage Hysteresis Tracker\n(Patience=3, Margin=5%, Instant Burst)"]:::controller
-    end
-
-    subgraph Decoders ["6. Dual Low-Latency Decoders"]
-        MWPM["MWPMDecoder (PyMatching v2)\nSparse Blossom ~Linear Baseline"]:::decoder
-        UF["UnionFindDecoder (Distance-Weighted)\nO(k |E| log |V|) On-Demand Sparse Dijkstra"]:::decoder
-        BurstAware["decode_burst_aware\n(Defect masking during burst events)"]:::decoder
-    end
-
-    subgraph Mitigate ["7. Selective Error Mitigation"]
-        DDPlanner["AdaptiveDDPlanner\n(CPMG, XY4, XY8 Sequences)"]:::mitigation
-        IdleEst["Circuit Idle Window Profiler\n(Tick-layer spectator qubit inspection)"]:::mitigation
-    end
-
-    subgraph AnalysisBlock ["8. Threshold & Scaling Verification"]
-        DistSweep["DistanceSweep Orchestrator\n(d in [3, 5], 500+ Shots)"]:::analysis
-        Threshold["ThresholdAnalyzer\nLambda = p_L(d) / p_L(d+2) = 5.0"]:::analysis
-        WilsonCI["Wilson Score 95% Confidence Intervals"]:::analysis
-    end
-
-    %% Wiring
-    IBM --> HH
-    HH --> Embedding
-    Embedding --> StimCirc
-    Twin --> StimCirc
-
-    FluxNoise --> Twin
-    Cosmic --> QP
-    QP --> BurstDet
-    LeakagePhys --> LeakageDet
-
-    StimCirc --> DEM
-    StimCirc --> SyndromeStream
-
-    SyndromeStream --> CompositeDrift
-    SyndromeStream --> BurstDet
-    SyndromeStream --> LeakageDet
-
-    CompositeDrift --> Controller
-    BurstDet --> Controller
-    LeakageDet --> Controller
-    Twin --> Controller
-
-    Controller --> CostFn
-    CostFn --> Hysteresis
-    Hysteresis --> MWPM
-    Hysteresis --> UF
-    Hysteresis --> DDPlanner
-
-    BurstDet --> BurstAware
-    BurstAware --> MWPM
-
-    DDPlanner --> StimCirc
-    IdleEst --> DDPlanner
-
-    DEM --> MWPM
-    DEM --> UF
-    SyndromeStream --> MWPM
-    SyndromeStream --> UF
-
-    MWPM --> DistSweep
-    UF --> DistSweep
-    DistSweep --> Threshold
-    Threshold --> WilsonCI
+    Dec --> Eval["Status: Null / Negative vs Strong Baselines"]:::status
 ```
 
 ---
 
-## 2. Core Engineering & Physics Modules
+## 2. Current Empirical Findings & Status
 
-### 1. Heavy-Hex Lattice Embedding (`adaptive_qec.topology`)
-* **Hardware Geometry**: Planar and rotated surface codes natively require a 4-regular square lattice. IBM Heron r2 processors implement a heavy-hexagonal lattice where degree $\le 3$ across all 156 transmons.
-* **Algorithmic Solution**: `HeavyHexTopology` and `EmbeddingFinder` model coupling graphs, perform shortest-path routing, and execute greedy BFS patch embedding to minimize SWAP gate overhead and circuit depth expansion.
+### A. Simulation Studies: Adaptive vs. Static Baselines
 
-### 2. Spatiotemporal Burst Isolation (`adaptive_qec.noise.burst_detector`)
-* **Physical Mechanism**: Ionizing radiation (cosmic ray muons, substrate radioactivity) deposits energy into the silicon substrate, generating acoustic phonon avalanches that break Cooper pairs into excess quasiparticles. This degrades $T_1$ across dozens of neighboring qubits simultaneously.
-* **Detection Engine**: Evaluates syndrome defect counts in sliding temporal windows against a Poisson null hypothesis $H_0 \sim \text{Poisson}(\lambda = w \cdot N_d \cdot p_{\text{base}})$. Events with $p < 10^{-3}$ are categorized morphologically as `COSMIC_RAY_LIKE` (broad spatial radius), `QP_POISONING_LIKE` (localized temporal persistence), or `CROSSTALK_LIKE`.
+#### 1. 10,000-Shot Benchmark ($d=3$, 50 windows $\times$ 200 shots, `seed=42`)
+Under linear two-qubit gate noise drift ($p_{2q} \in [0.005, 0.015]$) and synthetic burst spikes:
+- **Static MWPM (Factory DEM, No DD)**: LER = **0.1661** (1,661 / 10,000 errors; 95% CI: $[0.1589, 0.1735]$)
+- **Static UF + Fixed XY4**: LER = **0.2254** (2,254 / 10,000 errors; 95% CI: $[0.2173, 0.2337]$)
+- **Adaptive Controller**: LER = **0.1645** (1,645 / 10,000 errors; 95% CI: $[0.1574, 0.1719]$)
+- **Outcome**: The difference between Adaptive and Static MWPM is $\Delta \text{LER} = -0.0016$ ($z = -0.30, p = 0.7607$). **This result is not statistically significant**. The adaptive controller does not show an advantage over static MWPM under standard drift.
 
-### 3. Syndrome-Based Leakage Tracking (`adaptive_qec.noise.leakage`)
-* **Physical Mechanism**: Weak transmon anharmonicity ($\alpha \approx -300\ \text{MHz}$) means strong control pulses can drive transitions outside the computational subspace $\{|0\rangle, |1\rangle\}$ into $|2\rangle$. A leaked transmon does not participate in stabilizer projections and causes persistent repeat defects.
-* **Estimator**: Measures lag-1 temporal autocorrelation $R(1)$ and consecutive detector defect streaks to estimate leakage ($\gamma_L$) and seepage ($\gamma_S$) rates.
+#### 2. 50,000-Shot High-Statistics Benchmark (`adaptive_vs_static_high_stats_50k.json`)
+Across 50 windows $\times$ 1,000 shots ($d=3$):
+- **Static MWPM**: LER = **0.170320** (8,516 errors / 50,000 shots)
+- **Adaptive Controller**: LER = **0.217560** (10,878 errors / 50,000 shots)
+- **Outcome**: The adaptive controller was **27.74% worse** than static MWPM ($z = 18.89, p < 10^{-15}$). Switching into Union-Find and invoking suboptimal mitigations under non-stationary noise caused significant performance degradation.
 
-### 4. Selective Dynamical Decoupling (`adaptive_qec.mitigation.dynamical_decoupling`)
-* **Physical Mechanism**: Idle transmons accumulate dephasing from low-frequency $1/f$ flux noise and stray ZZ coupling: $p_{\text{dephase}}(t) = 1 - e^{-t / T_2}$. Microwave inversion sequences refocus this drift, but imperfect pulses inject additional gate error $\epsilon_{\text{pulse}}$.
-* **Selective Decision Rule**:
-  $$\Delta p = p_{\text{dephase}}(q, t_{\text{idle}}) - p_{\text{dephase}}^{\text{DD}}(q, t_{\text{idle}}) > N_{\text{pulse}} \cdot \epsilon_{\text{pulse}}$$
-  `AdaptiveDDPlanner` inserts discrete, tick-aligned $X$ and $Y$ pulse trains (`CPMG`, `XY4`, `XY8`) with explicit per-pulse depolarization errors only on transmons where net coherence increases.
-
-### 5. Distance-Weighted Cluster Growth Decoder (`adaptive_qec.decoders.union_find`)
-* **Algorithmic Architecture**: Uses on-demand Dijkstra exploration on sparse detector adjacency graphs rather than dense precomputed all-pairs shortest path matrices. Merges defect clusters via distance-weighted greedy union-find operations with complexity $O(k \cdot |E| \log |V|)$ per shot (where $k$ is the number of defects).
-* **Empirical Speed**: Achieves **14,137 shots/s** on $d=3$ surface codes, providing an independent, low-latency verification path alongside MWPM.
-
-### 6. Closed-Loop Adaptive Controller (`adaptive_qec.controller`)
-* **Paper's Primary Contribution**: Instead of relying on a static decoding or mitigation strategy, `AdaptiveController` observes the estimated hardware state vector $s_t = (\text{defect rate}, \text{drift magnitude}, \text{burst active}, \text{leakage fraction}, T_1, T_2, p_{1q}, p_{2q})$ and selects the optimal action $a_t^* = (\text{decoder}, \text{DD policy}, \text{burst mitigation})$ minimizing a formal multi-objective cost function:
-  $$J(a \mid s_t) = P_L(a \mid s_t) + \lambda_1 L_{\text{decode}} + \lambda_2 C_{\text{DD}} + \lambda_3 C_{\text{switch}} + \lambda_4 C_{\text{cal}}$$
-* **Hysteresis Architecture**: Decouples persistent operational modes (requiring 3 consecutive observation windows of >5% improvement to commit) from instantaneous event mitigations (which immediately mask single-window cosmic-ray-like burst spikes).
+#### 3. Scaled Distance ($d=5$) Retraction Notice
+A previous report cited an apparent +10.05% error reduction at distance $d=5$ (`seed=47`). Multi-seed evaluation revealed:
+- Across 6 independent random seeds, the adaptive controller performed **12% to 14% worse** than static MWPM.
+- The simulation injected leakage by artificially setting detector bits without modifying the logical observable, while the controller peeked at the oracle noise schedule.
+- **Verdict**: The claim has been retracted. No scalable adaptive advantage has been established in this regime.
 
 ---
 
-## 3. Empirical Experimental Verification
+## 3. IBM Quantum Hardware Exploration (`ibm_marrakesh`, Heron r2)
 
-### Experiment 1: Adaptive vs Static QEC Under Non-Stationary Noise
-Evaluated on identical non-stationary noise schedules across 50 observation windows (200 shots/window = 10,000 shots per arm) incorporating linear gate noise drift ($p_{2q} \in [0.005, 0.015]$), physical dynamical decoupling modeling (XY4 pulse insertion vs dephasing suppression), stochastic correlated burst spikes, and persistent transmon leakage defects:
+Preliminary jobs were executed on IBM Quantum's 156-qubit Heron r2 processor (`ibm_marrakesh`) via Qiskit Runtime SamplerV2:
 
-| Arm | Decoding Strategy | Mitigation Applied | Total Errors / 10k Shots | Logical Error Rate (LER) | 95% Wilson Score CI | $p$-value vs Best Static | Significant ($\alpha=0.05$)? |
-| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Static Arm 1** | Fixed MWPM (PyMatching v2) | None | 1,661 | `0.166100` | $[0.158934, 0.173522]$ | — | — |
-| **Static Arm 2** | Fixed Union-Find | Fixed XY4 DD | 2,254 | `0.225400` | $[0.217317, 0.233694]$ | $< 10^{-15}$ | Yes (worse) |
-| **Adaptive** | **`AdaptiveController`** | **Dynamic Selection** | **1,645** | **`0.164500`** | **$[0.157363, 0.171895]$** | **$0.7607$** | **No ($p = 0.76 > 0.05$)** |
-
-> **Statistical Note & Power Analysis**:
-> In this deterministic, reproducible benchmark (`seed=42`), the adaptive controller achieves a nominally lower point-estimate error count than Static MWPM (1,645 vs 1,661 errors, $\Delta \text{LER} = -0.0016$). However, a two-proportion $z$-test yields $z = -0.3046, p = 0.7607$, confirming the difference is **not statistically significant** at $N = 10,000$ shots ($\alpha = 0.05$). Because detecting an effect size of $\Delta \approx 0.002$ with $80\%$ statistical power requires on the order of $\sim 300,000$ shots per arm, this result is reported transparently as exploratory proof of operational feasibility rather than a statistically significant advantage under mild drift.
-
-#### Operational Trade-Offs Observed:
-1. **Decoder Baseline (Windows 0–25):** Under standard Pauli depolarizing noise, MWPM achieves the lowest logical error rate, outperforming Union-Find due to optimal global matching on surface codes.
-2. **Dynamical Decoupling Trade-Off:** Applying XY4 unconditionally (Static Arm 2) introduces $4 \times \epsilon_{\text{pulse}}$ gate overhead per sequence. In regimes where dephasing is modest, pulse overhead outweighs dephasing reduction, elevating LER to `0.2254`. The adaptive controller selectively avoids disadvantageous DD activations.
-3. **Correlated Burst Spikes & Leakage (Windows 20, 35):** The controller activates `burst_mitigation=True` during detected Poisson bursts, selectively isolating anomalous multi-defect clusters without corrupting global syndrome extraction.
+1. **[[4, 2, 2]] Quantum Error-Detecting Code (1,000 shots)**:
+   - *Unmitigated Baseline* (`dasj9djg95ks73efkbog`): Error detection rate = **17.50%** (175 errors detected); code space fidelity = **69.50%**.
+   - *With XY4 Decoupling* (`dasj9e5vr3kc73ek6o4g`): Error detection rate = **48.80%** (488 errors detected); code space fidelity = **72.00%**.
+   - *Physical Caveat*: Applying XY4 caused X-stabilizer defects to surge from 83 to 404 (a 4.8x increase), indicating that the dynamical decoupling sequence injected substantial control pulse error.
+2. **Dynamic Feedforward Syndrome Correction (1,000 shots)**:
+   - Job `dasj9edvr3kc73ek6o60`: On-chip conditional Pauli-X corrections triggered in **18 / 1,000 shots (1.8%)**; final Bell-state parity fidelity = **91.50%**.
+   - *Note*: Execution latency was not directly measured on-chip.
+3. **Repetition Code Smoke Test (500 shots)**:
+   - Distance-3 bit-flip memory: Unmitigated LER = 0.038 (19/500) vs. DD-mitigated LER = 0.006 (3/500).
+   - *Caveat*: Submitted as two sequential jobs rather than an interleaved ABAB schedule. Because a bit-flip code is largely insensitive to dephasing, observed differences reflect temporal drift or low shot counts rather than confirmed DD dephasing suppression.
 
 ---
 
-### Experiment 2: Distance Sweep & Threshold Scaling ($\Lambda$ Factor)
-Evaluated across planar surface codes of distance $d=3$ and $d=5$ ($R=3$, depolarizing noise $p_{2q}=0.005$):
+## 4. Architectural Boundaries: Inter-Batch vs. Real-Time QEC
 
-### 3.1 Live IBM Heron QPU Benchmarks (`ibm_marrakesh`, 156 Transmons)
-Executed live on `ibm_marrakesh` using Qiskit Runtime SamplerV2:
-* **[[4, 2, 2]] True Quantum Error-Detecting Code (1,000 shots):**
-  * *Unmitigated Baseline:* Job [`dasj9djg95ks73efkbog`](https://quantum.ibm.com) — Error Detection Rate: **17.50%**, Code Space Fidelity: **69.50%**
-  * *DD-Mitigated (XY4):* Job [`dasj9e5vr3kc73ek6o4g`](https://quantum.ibm.com) — Error Detection Rate: **48.80%**, Code Space Fidelity: **72.00%**
-  * Detects simultaneous $X$ bit-flip and $Z$ phase-flip errors; interleaving XY4 pulses significantly boosts detection sensitivity while improving post-selected code fidelity ($p = 5.36 \times 10^{-50}$).
-* **OpenQASM 3 Sub-Microsecond Dynamic Feedforward (1,000 shots):**
-  * Job [`dasj9edvr3kc73ek6o60`](https://quantum.ibm.com) — Sub-microsecond active Pauli-X corrections applied in real-time on QPU controller electronics: **18 / 1,000 shots (1.8%)**; Final Bell state parity fidelity: **91.50%**.
-* **Repetition Code Smoke Test (500 shots):**
-  * Unmitigated Job [`dashr9jojkfs738pc4n0`](https://quantum.ibm.com) (LER = 0.0380) vs. DD-mitigated Job [`dashra5vr3kc73ek595g`](https://quantum.ibm.com) (LER = 0.0060) $\to$ **84.2% drop in idle dephasing errors** ($p = 0.000562$).
-
-### 3.2 Headline Simulation Benchmark: Adaptive vs. Static Strategies ($N = 50,000$ Shots/Arm)
-Evaluated across 50 observation windows $\times$ 1,000 shots (150,000 total decoding trials) on distance-3 surface codes under non-stationary drift, cosmic ray bursts, and leakage:
-* **STATIC MWPM (Baseline):** $\text{LER} = \mathbf{0.170320}$ ($[0.1670, 0.1736]$)
-* **STATIC UF+XY4 (Best Static):** $\text{LER} = \mathbf{0.136980}$ ($[0.1340, 0.1400]$)
-* **ADAPTIVE (Ours):** $\text{LER} = \mathbf{0.130220}$ ($[0.1273, 0.1332]$)
-* **Statistical Significance:**
-  * Adaptive vs. Baseline MWPM: **$+23.54\%$ error reduction** ($z = 17.51, p < 10^{-68}$)
-  * Adaptive vs. Best Static Arm: **$+4.94\%$ error reduction** ($z = -3.1416, \mathbf{p = 0.001680 < 0.01}$, statistically confirmed).
-* **Accelerated Union-Find Decoder:** Precomputed All-Pairs Shortest Paths lookup engine delivers **$> 108,000$ shots/second** ($\approx 9.2\,\mu\text{s/shot}$), achieving a **$7.4\times$ speedup** over naive Dijkstra search.
-
-For complete unvarnished academic analysis and data provenance, see [RIGOROUS_EXPERIMENTAL_REPORT_AND_ACADEMIC_AUDIT.md](RIGOROUS_EXPERIMENTAL_REPORT_AND_ACADEMIC_AUDIT.md).
+It is critical to distinguish two different timescales in quantum control:
+- **Intra-Circuit Real-Time Feedforward ($< 1\,\mu\text{s}$)**: Performed directly on classical control hardware (FPGA / AWG) co-located with the cryostat. IBM's Heron processors support dynamic circuit feedforward via OpenQASM 3 on-chip.
+- **Inter-Batch Session Orchestration ($100\,\text{ms} - 10\,\text{s}$)**: Executed in software over network connections between Qiskit Runtime job submissions. AdaptiveQEC operates at this **macro-timescale**, adjusting decoder weights, DEM calibration, and pulse sequence choices between experiment batches. It does not claim real-time sub-microsecond software loop closing over cloud APIs.
 
 ---
 
-## 4. Repository Structure
+## 5. Claims Ledger & Integrity Enforcement
+
+All quantitative statements in this repository are tracked in [VALIDATION.md](VALIDATION.md) and programmatically verified against committed JSON artifacts by `scripts/make_claims.py`.
+
+To verify claims integrity locally:
+```bash
+python scripts/make_claims.py --check
+```
+
+---
+
+## 6. Repository Layout
 
 ```text
 A real-QPU adaptive QEC stack/
-├── configs/
-│   └── default.yaml                   # Master configuration (IBM Marrakesh baselines)
-├── pyproject.toml                     # Python packaging and test configuration
-├── VALIDATION.md                      # Claims-to-evidence matrix and provenance ledger
-├── COMPREHENSIVE_RESEARCH_AND_PROGRESS.md # Master engineering journal & mathematical derivations
-├── README.md                          # Technical architecture, benchmarks, and quickstart
+├── configs/                   # Hardware calibration baselines
+├── data/
+│   └── hardware_results/      # Committed IBM Quantum Heron r2 execution artifacts
+├── experiments/
+│   └── results/               # Committed simulation benchmark JSON outputs
+├── pyproject.toml             # Python packaging and test configuration
+├── VALIDATION.md              # Machine-checked claims ledger
+├── README.md                  # System status and documentation
 ├── scripts/
-│   ├── run_experiment.py              # CLI experiment runner (single, sweep, temporal)
-│   ├── analyze_results.py             # Post-hoc experiment store inspector
-│   └── build_rocksolid_ui.py          # Standalone WebGL cryostat & dashboard compiler
+│   ├── make_claims.py         # Claims ledger generator & CI audit validator
+│   ├── run_experiment.py      # Experiment CLI
+│   └── pull_live_calibration.py # IBM Quantum backend properties snapshot fetcher
 ├── src/
 │   └── adaptive_qec/
-│       ├── analysis/                  # ThresholdAnalyzer, Wilson score CIs, Lambda ratios
-│       ├── api/                       # FastAPI application & real-time telemetry endpoints
-│       ├── cli.py                     # 'aqec' command line interface (run, check, serve)
-│       ├── controller/                # AdaptiveController, CostWeights, HysteresisTracker
-│       ├── decoders/                  # MWPM (sparse blossom) & Union-Find (on-demand Dijkstra)
-│       ├── digital_twin/              # HardwareDigitalTwin (QubitState, calibration tracking)
-│       ├── experiment/                # ExperimentManager, DistanceSweep, ExperimentStore
-│       ├── experiments/               # adaptive_vs_static.py (3-arm core paper trial)
-│       ├── mitigation/                # AdaptiveDDPlanner, discrete pulse scheduler
-│       ├── noise/                     # BurstDetector, LeakageDetector, CompositeDriftDetector
-│       ├── provenance.py              # DataProvenance enum and audit registry
-│       ├── qec/                       # Stim surface code circuit synthesis with embeddings
-│       ├── qpu/                       # IBM Quantum (Qiskit Runtime), mock, and base backends
-│       └── topology/                  # HeavyHexTopology and EmbeddingFinder
-└── tests/                             # 239 unit and integration tests (100% passing)
+│       ├── analysis/          # Wilson score CIs and threshold estimators
+│       ├── controller/        # AdaptiveController, CostWeights, HysteresisTracker
+│       ├── decoders/          # MWPM (PyMatching) & Union-Find decoders
+│       ├── digital_twin/      # Hardware calibration digital twin
+│       ├── mitigation/        # Dynamical decoupling pulse sequence planners
+│       ├── noise/             # Drift, burst, and leakage telemetry estimators
+│       ├── qec/               # Stim surface code circuit synthesis
+│       ├── qpu/               # Qiskit Runtime QPU harness
+│       └── topology/          # Heavy-hex graph embedding utilities
+└── tests/                     # Automated test suites
 ```
 
 ---
 
-## 5. Quick Start & Execution
+## 7. AI-Assistance Disclosure
 
-### Setup
+In accordance with emerging journal policies (IEEE, ACM, Nature Portfolio):
+- Large language models (Google DeepMind Gemini models) were utilized as coding and editorial assistants during codebase exploration, refactoring, test drafting, and document formatting.
+- All scientific claims, mathematical derivations, data provenance, and empirical experimental results are verified by the human authors and programmatic CI checks (`scripts/make_claims.py`).
+- No scientific result or empirical conclusion in this work is generated by AI hallucination; all metrics are grounded in committed JSON artifacts.
+
+---
+
+## 8. Quick Start
+
+### Installation
 ```bash
 git clone https://github.com/prathamsingh404/A-real-QPU-adaptive-QEC-stack.git
 cd "A real-QPU adaptive QEC stack"
@@ -250,73 +163,12 @@ python -m venv .venv
 pip install -e .
 ```
 
-### Run the Full Verification Suite
+### Run Tests
 ```bash
 pytest -q
-# Output: 261 passed in ~3.5s (100% pass rate)
 ```
 
-### Benchmark Decoders Directly via CLI
+### Validate Claims Ledger
 ```bash
-aqec benchmark-decoder --shots 10000 --distance 3 --rounds 3
-# Benchmarks Union-Find (>100,000 shots/s, ~9.2 us/shot) vs MWPM
+python scripts/make_claims.py --check
 ```
-
-### Run the 3-Arm Adaptive vs Static Experiment
-```bash
-python -m adaptive_qec.experiments.adaptive_vs_static
-```
-
-### Launch the Live Telemetry & WebGL Dashboard
-```bash
-uvicorn adaptive_qec.api.app:app --host 0.0.0.0 --port 8000
-```
-Navigate to `http://localhost:8000` to inspect real-time detector graphs, CUSUM drift telemetry, and 3D cryostat thermal stages.
-
----
-
-## 6. IBM Quantum Hardware Verification
-The repository includes a production-grade Qiskit Runtime session execution harness targeting Heron r2 (`ibm_marrakesh`, 156 qubits). All physical experiments run with **zero simulation and zero hardcoding**:
-
-### A. QEC & Fault-Tolerant Dynamic Gadgets
-* `dasj9djg95ks73efkbog`: [[4, 2, 2]] Base Quantum Error Detection (1,000 shots, 69.5% code space fidelity).
-* `dasj9e5vr3kc73ek6o4g`: [[4, 2, 2]] Dynamical Decoupling Mitigation (1,000 shots, $p = 5.36 \times 10^{-50}$).
-* `dasj9edvr3kc73ek6o60`: Real-time on-chip dynamic conditional feedforward (1,000 shots, 91.5% Bell state fidelity).
-
-### B. Practical Workload Benchmarks
-* `dat0p3ahcrkc73dtfesg`: Molecular $H_2$ Ground-State via Raw IQPE (1,000 shots, equilibrium $R = 0.7414\,\text{Å}$).
-* `dat0p3rojkfs738pvjcg`: Molecular $H_2$ Ground-State via Adaptive XY4 Decoupled IQPE (1,000 shots).
-* `dat0p45vr3kc73ekooo0`: Deterministic Quantum Teleportation across heavy-hex transit links:
-  - **Dynamic Feedforward Fidelity:** **$91.90\%$** with **$100.0\%$ deterministic yield** (surpasses classical bound $66.67\%$).
-  - **Post-Selected Baseline:** $93.06\%$ fidelity but only **$23.63\%$ yield** ($76.37\%$ discarded shots).
-  - **SWAP Network Baseline:** $97.90\%$ fidelity on nearest-neighbor, but requires $O(L)$ depth scaling with distance.
-
-To run with live credentials:
-1. Copy `.env.example` to `.env` and supply credentials:
-   ```bash
-   IBM_QUANTUM_CHANNEL=ibm_cloud
-   IBM_QUANTUM_TOKEN=your_token_here
-   IBM_QUANTUM_INSTANCE=your_crn_here
-   IBM_QUANTUM_BACKEND=ibm_marrakesh
-   ```
-2. Verify hardware connectivity:
-   ```bash
-   aqec check
-   ```
-
----
-
-## 7. Key Literature & Citations
-* Delfosse & Nickerson, *"Almost-linear time decoding of topological codes"*, Quantum 5, 595 (2021).
-* Higgott & Gidney, *"Sparse Blossom: faster minimum-weight perfect matching for quantum error correction"*, arXiv:2105.13082 (2021).
-* Fowler et al., *"Surface codes: Towards practical large-scale quantum computation"*, Phys. Rev. A 86, 032324 (2012).
-* Google Quantum AI, *"Quantum error correction below the surface code threshold"*, Nature 614, 676–681 (2023).
-* Google Quantum AI, *"Suppressing quantum errors by scaling a quantum error-correcting code"*, Nature 638 (Willow processor, 2025).
-* Pokharel et al., *"Demonstration of algorithmic quantum speedup for an abelian hidden subgroup problem with dynamical decoupling"*, Phys. Rev. Lett. 130, 210602 (2023).
-* Chamberland et al., *"Topological and subsystem codes on low-degree graphs with flag qubits"*, PRX Quantum 1, 020302 (2020).
-
-## Scientific Breakthrough: Distance Scaling ($d \ge 5$) & Regret Bounds
-Under non-Markovian noise typical of superconducting processors, our physics-gated adaptive controller achieves:
-- **+10.05% Logical Error Reduction** over best static decoder at $d=5$ ($z = -7.96, p < 10^{-15}$)
-- **Sublinear Cumulative Regret** ($R_T = 0.26$) consistent with Exp3 theoretical guarantees
-- **Validated on IBM Heron r2** (`ibm_marrakesh`, 156 qubits)

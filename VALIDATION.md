@@ -1,34 +1,32 @@
-# Scientific Validation Ledger & Claims Matrix
-**Repository**: `A-real-QPU-adaptive-QEC-stack`
-**Standard**: Strict Empirical Audit & Peer Review Compliance
+# Scientific Claims Ledger & Reproducibility Matrix
 
-| Claim ID | Formal Claim Statement | Verification Status | Empirical Metric | Provenance / Artifact |
-|:---|:---|:---:|:---:|:---|
-| **Claim 1** | [[4,2,2]] Code Detection on IBM Heron | **PROVEN** | Detection Rate = 100% | `ibm_marrakesh_true_quantum_and_dynamic_results.json` |
-| **Claim 2** | Dynamic Feedforward Syndrome Correction | **PROVEN** | Latency < 1.2 $\mu$s | `ibm_marrakesh_true_quantum_and_dynamic_results.json` |
-| **Claim 3** | Repetition Code Distance-3 Fidelity | **PROVEN** | State fidelity > 94% | `ibm_marrakesh_qec_results.json` |
+> **Audit Standard**: Zero-tolerance empirical verification and strict artifact synchronization.
+> **Last Verification**: October 2026 (Phase 0 Integrity Reset)
 
-| **Claim 4** | C++ PyMatching Throughput Baseline | **PROVEN** | 312,000 shots/s | Benchmarked on AMD Ryzen / Intel Core |
-| **Claim 5** | Accelerated Precomputed Union-Find | **PROVEN** | 108,639 shots/s | `test_union_find.py` precomputed APSP |
-| **Claim 6** | Lazy MWPM Hybrid Routing | **PROVEN** | Fallback to MWPM on dense clusters | `test_lazy_mwpm.py` |
+This ledger tracks every quantitative claim across documentation, connecting each claim to its exact artifact, reproduction command, and verified status.
 
-| **Claim 7** | DASE Amnesia-Free Arm Retention | **PROVEN** | Regret bounded sublinearly | `test_bandit_regret.py` |
-| **Claim 8** | CPMG / XY4 Dynamical Decoupling | **PROVEN** | Coherence boost 1.4x | [Pokharel et al., PRL 2023] |
-| **Claim 9** | SPRT Drift Detection Sensitivity | **PROVEN** | False positive rate < 0.01 | `test_sprt.py` |
-| **Claim 10** | Cosmic Ray Burst Rapid Mitigation | **PROVEN** | Trigger latency < 2 windows | `test_burst_detector.py` |
+| Claim ID | Category | Claim Statement | Verified Status | Expected / Artifact Value | Artifact Path | Notes |
+|:---|:---|:---|:---:|:---|:---|:---|
+| **CLAIM-01** | Hardware Benchmark | [[4,2,2]] Code Detection Rate on IBM Heron (ibm_marrakesh) | **DOWNGRADED** | `0.175` | `data/hardware_results/ibm_marrakesh_true_quantum_and_dynamic_results.json` | DISPROVED PRIOR CLAIM: VALIDATION.md previously claimed 'Detection Rate = 100% | PROVEN'. The actual committed artifact records an error detection rate of 17.5% (unmitigated) and 48.8% (DD). Furthermore, under DD, X-stabilizer defects jumped from 83 to 404 (4.8x increase), indicating DD pulse damage. |
+| **CLAIM-02** | Hardware Benchmark | Dynamic Feedforward Syndrome Correction Latency | **DOWNGRADED** | `18` | `data/hardware_results/ibm_marrakesh_true_quantum_and_dynamic_results.json` | DISPROVED PRIOR CLAIM: Prior claim asserted 'Latency < 1.2 us | PROVEN'. The artifact contains zero latency timing measurements. The latency was an unmeasured architectural assumption. |
+| **CLAIM-03** | Hardware Benchmark | Repetition Code Distance-3 Memory on ibm_marrakesh | **DOWNGRADED** | `0.038` | `data/hardware_results/ibm_marrakesh_qec_results.json` | CAUTION: Unmitigated and DD jobs were submitted sequentially, not interleaved ABAB. Bit-flip repetition code is blind to pure dephasing; observed difference may be temporal drift between sequential jobs. |
+| **CLAIM-04** | Decoder Throughput | PyMatching C++ Sparse Blossom Baseline Throughput | **REPRODUCED** | ~300,000 shots/s (CPU) | *Code / Test Suite* | Standard PyMatching v2 library performance on distance-3 Stim circuits. |
+| **CLAIM-05** | Decoder Throughput | Precomputed All-Pairs Shortest Paths Union-Find Throughput | **DOWNGRADED** | ~100,000 shots/s (d=3 only) | *Code / Test Suite* | Limited to distance d=3 with 8 detectors where lookup matrix is trivial. Does not generalize to scaled distance codes without quadratic graph memory. |
+| **CLAIM-06** | Decoder Architecture | Lazy MWPM Hybrid Routing | **DOWNGRADED** | Fallback heuristic implemented in codebase | *Code / Test Suite* | Heuristic fallback; no proof of asymptotic superiority over pure MWPM under physical noise. |
+| **CLAIM-07** | Bandit Controller | DASE Bandit Amnesia-Free Arm Retention & Sublinear Regret | **DOWNGRADED** | Heuristic bandit implementation with fast-path overrides | *Code / Test Suite* | DISPROVED REGRET BOUND CLAIM: Exp3/DASE theoretical regret bounds are mathematically broken by deterministic heuristic fast-paths injected into the action selection loop. |
+| **CLAIM-08** | Error Mitigation | Dynamical Decoupling Coherence Improvement Factor | **DOWNGRADED** | Literature citation (Pokharel et al., PRL 2023) | *Code / Test Suite* | External literature result, not an independently measured baseline in this repository. |
+| **CLAIM-09** | Telemetry | SPRT / CUSUM Drift Detection Sensitivity | **REPRODUCED** | Passes synthetic unit tests | *Code / Test Suite* | Synthetic validation passing; operational tracking on QPU noise still pending closed-loop integration. |
+| **CLAIM-10** | Telemetry | Cosmic Ray Poisson Burst Detection Latency | **REPRODUCED** | Passes synthetic unit tests | *Code / Test Suite* | Synthetic validation passing on simulated Poisson spikes. |
+| **CLAIM-11** | Practical Workload | 3-bit Molecular H2 IQPE Chemical Accuracy | **DISPROVED / RETRACTED** | `False` | `data/hardware_results/ibm_marrakesh_practical_benchmarks_results.json` | DISPROVED PRIOR CLAIM: Prior claim asserted chemical accuracy demonstration. Actual committed artifact has chemical_accuracy_achieved=false with an energy error of 761.5 kcal/mol (over 760x above the 1 kcal/mol threshold for chemical accuracy). Removed from core paper scope. |
+| **CLAIM-12** | Practical Workload | Deterministic Teleportation Fidelity on Heavy-Hex | **DOWNGRADED** | `0.919` | `data/hardware_results/ibm_marrakesh_practical_benchmarks_results.json` | DISPROVED PRIOR CLAIM: Prior claim stated fidelity = 96.2%. Committed artifact shows 91.90% for dynamic feedforward, 93.06% for post-selected, and 97.90% for swap-network. Removed from core QEC paper scope as standard demonstration. |
+| **CLAIM-13** | Simulation Study | Adaptive Advantage at Scaled Distances (d=5, +10.05% Error Reduction) | **NOT REPRODUCED** | `10.05` | `experiments/results/adaptive_vs_static_d5_20260930_225600.json` | CRITICAL AUDIT FINDING: Single-seed artifact (seed 47). Multi-seed sweeps yield 12-14% worse LER for adaptive. Furthermore, simulation injected leakage by naively setting detector 2 and 5 to 1 without modifying the logical observable, while controller peeked at schedule.is_leakage_active and invoked a hardcoded fast-path rule. Status: Unreproducible and retracted as a headline scientific claim. |
+| **CLAIM-14** | Simulation Study | 50,000-Shot Headline Adaptive vs Static LER on Distance-3 | **DISPROVED / RETRACTED** | `-27.74` | `experiments/results/adaptive_vs_static_high_stats_50k.json` | CRITICAL AUDIT FINDING: README previously claimed Adaptive LER = 0.130220 vs MWPM 0.170320 (+23.54% win). The actual committed JSON artifact states Static MWPM LER = 0.170320, Adaptive LER = 0.217560, meaning Adaptive was 27.74% WORSE than Static MWPM. The prior documentation completely inverted reality. |
+| **CLAIM-15** | Simulation Study | Experiment 1: 10,000-Shot Adaptive vs Static Comparison (d=3, seed=42) | **REPRODUCED** | Null result: Adaptive does NOT statistically beat static MWPM (p = 0.76 > 0.05) | *Code / Test Suite* | Honest result: under mild drift, adaptive controller shows no statistically significant advantage over static MWPM. |
 
-| **Claim 11** | 3-bit Molecular IQPE Demonstration | **PROVEN** | Yield improvement +13.8% | `ibm_marrakesh_practical_benchmarks_results.json` |
-| **Claim 12** | Deterministic Teleportation Verification | **PROVEN** | Fidelity = 96.2% | `ibm_marrakesh_practical_benchmarks_results.json` |
+---
 
-| **Claim 13** | Adaptive Advantage at Scaled Distances ($d \ge 5$) | **PROVEN** | **+10.05% error reduction** ($z = -7.96, p < 10^{-15}$) | `adaptive_vs_static_d5_20260930_225600.json` |
-
-## Statistical Significance Proof for Claim 13
-At surface code distance $d=5$ under persistent leakage:
-- **Static MWPM LER**: $0.33016$ ($33.02\%$)
-- **Static UF+XY4 LER**: $0.32836$ ($32.84\%$)
-- **Adaptive LER**: **$0.29536$ ($29.54\%$)**
-- **Improvement**: **$+10.05\%$ relative error reduction**
-- **Two-Proportion Z-Test**: $z = -7.9644, p = 1.6 \times 10^{-15}$
-- **Cumulative Regret**: $R_T = 0.26$ (strictly sublinear)
-
-*Audit complete: 275+ automated test suites passing.*
+## Status Definitions
+- **REPRODUCED**: Independently verified and matches artifact JSON byte-for-byte or passes automated tests.
+- **DOWNGRADED**: Claim was previously inflated or lacked proper controls; rewritten with accurate physical boundaries.
+- **DISPROVED / RETRACTED**: Committed data directly contradicts prior claims, or claimed metrics were never measured.
+- **NOT REPRODUCED**: Claim was observed on an isolated single seed or broken path; fails multi-seed statistical sweeps.

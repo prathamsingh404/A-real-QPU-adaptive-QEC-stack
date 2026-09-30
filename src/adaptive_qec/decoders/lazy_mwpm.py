@@ -49,3 +49,12 @@ defect_counts = syndrome.sum(axis=1)
         if np.any(uf_mask):
             predictions[uf_mask] = self._uf.decode(syndrome[uf_mask]).observable_corrections
         return Correction(observable_corrections=predictions)
+
+def decode_batch(self, syndromes: np.ndarray, observable_flips: np.ndarray) -> DecoderMetrics:
+        shots = syndromes.shape[0]
+        t_start = time.perf_counter()
+        defect_counts = syndromes.sum(axis=1)
+        mwpm_mask = defect_counts > self.defect_threshold
+        uf_mask = ~mwpm_mask
+        num_errors = 0
+        latencies = []

@@ -52,3 +52,8 @@ def select_action(self, telemetry: HardwareTelemetry) -> ControllerAction:
             self.fast_path_count += 1
             self.current_action = ControllerAction(decoder=DecoderChoice.UNION_FIND, dd_pattern=DDPattern.XY4, recalibrate_dem=True, reason='physics_gated_leakage_clustering')
             return self.current_action
+
+if telemetry.burst_detected:
+            self.fast_path_count += 1
+            self.current_action = ControllerAction(decoder=DecoderChoice.MWPM, dd_pattern=DDPattern.XY4, recalibrate_dem=True, reason='physics_gated_burst_mitigation')
+            return self.current_action

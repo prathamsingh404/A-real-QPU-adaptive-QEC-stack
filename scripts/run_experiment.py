@@ -90,3 +90,51 @@ def main() -> None:
 
     # Create experiment manager
     manager = ExperimentManager(config)
+
+    # Connect to QPU
+    logger.info("Connecting to QPU...")
+    manager.connect_qpu()
+
+    # Run the appropriate experiment mode
+    if args.distances:
+        # Distance sweep
+        distances = [int(d.strip()) for d in args.distances.split(",")]
+        logger.info(f"Running distance sweep: {distances}")
+        results = manager.run_distance_sweep(distances, shots=args.shots)
+
+        logger.info("\n=== DISTANCE SWEEP RESULTS ===")
+        for d, r in zip(distances, results):
+            logger.info(
+                f"  d={d}: LER={r.logical_error_rate:.6f} "
+                f"[{r.logical_error_rate_ci_low:.6f}, {r.logical_error_rate_ci_high:.6f}]"
+            )
+
+    elif args.temporal:
+        # Temporal series for drift analysis
+        logger.info(f"Running temporal series: {args.temporal} experiments")
+        results = manager.run_temporal_series(
+            num_experiments=args.temporal,
+            interval_seconds=args.interval,
+            shots=args.shots,
+        )
+
+        logger.info("\n=== TEMPORAL SERIES RESULTS ===")
+        for i, r in enumerate(results):
+            logger.info(
+                f"  Experiment {i+1}: LER={r.logical_error_rate:.6f}, "
+                f"drift={r.drift_report.get('status', 'unknown')}"
+            )
+
+    else:
+        # Single experiment
+        metrics = manager.run_experiment(shots=args.shots)
+
+        logger.info(
+            f"\nResult: LER = {metrics.logical_error_rate:.6f} "
+            f"[{metrics.logical_error_rate_ci_low:.6f}, "
+            f"{metrics.logical_error_rate_ci_high:.6f}]"
+        )
+
+
+if __name__ == "__main__":
+    main()

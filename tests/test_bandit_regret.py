@@ -50,3 +50,10 @@ def test_bandit_round_robin_exploration():
     assert bandit.select_arm() == 1
     bandit.update(1, 1.0)
     assert bandit.select_arm() == 2
+
+def test_bandit_empty_active_recovery():
+    bandit = DriftAdaptiveBandit(num_arms=2)
+    bandit.active_arms[:] = False
+    arm = bandit.select_arm()
+    assert arm in [0, 1]
+    assert np.all(bandit.active_arms)

@@ -37,3 +37,9 @@ def test_nominal_state():
     assert action.decoder == DecoderChoice.MWPM
     assert action.dd_pattern == DDPattern.NONE
     assert action.recalibrate_dem is False
+
+def test_fast_path_counter():
+    ctrl = AdaptiveController(leakage_threshold=0.10, distance_crossover=3)
+    telem = HardwareTelemetry(leakage_fraction=0.20, code_distance=3)
+    ctrl.select_action(telem)
+    assert ctrl.fast_path_count == 1

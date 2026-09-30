@@ -21,3 +21,10 @@ def test_bandit_arm_retention_on_drift():
     assert len(bandit.arm_rewards[0]) == 10
     assert len(bandit.arm_rewards[1]) == 0
     assert len(bandit.arm_rewards[2]) == 0
+
+def test_bandit_cumulative_regret_tracking():
+    bandit = DriftAdaptiveBandit(num_arms=2)
+    bandit.update(0, reward=0.8, oracle_best_reward=1.0)
+    assert bandit.cumulative_regret == pytest.approx(0.2)
+    bandit.update(1, reward=1.0, oracle_best_reward=1.0)
+    assert bandit.cumulative_regret == pytest.approx(0.2)

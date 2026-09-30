@@ -19,3 +19,5 @@
 
 | **Claim 11** | 3-bit Molecular IQPE Demonstration | **PROVEN** | Yield improvement +13.8% | `ibm_marrakesh_practical_benchmarks_results.json` |
 | **Claim 12** | Deterministic Teleportation Verification | **PROVEN** | Fidelity = 96.2% | `ibm_marrakesh_practical_benchmarks_results.json` |
+
+| **Claim 13** | Adaptive Advantage at Scaled Distances ($d \ge 5$) | **PROVEN** | **+10.05% error reduction** ($z = -7.96, p < 10^{-15}$) | `adaptive_vs_static_d5_20260930_225600.json` |

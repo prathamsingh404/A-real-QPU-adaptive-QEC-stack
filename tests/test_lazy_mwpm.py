@@ -13,3 +13,11 @@ def test_lazy_mwpm_registry():
     dec = get_decoder('lazy_mwpm', defect_threshold=12)
     assert isinstance(dec, LazyMWPMDecoder)
     assert dec.defect_threshold == 12
+
+def test_lazy_mwpm_configuration():
+    circuit = stim.Circuit.generated('surface_code:rotated_memory_z', distance=3, rounds=3, after_clifford_depolarization=0.01)
+    dem = circuit.detector_error_model()
+    dec = LazyMWPMDecoder(defect_threshold=5)
+    dec.configure(circuit=circuit, dem=dem)
+    assert dec._num_detectors > 0
+    assert dec._num_observables > 0

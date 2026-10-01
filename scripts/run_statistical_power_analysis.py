@@ -64,3 +64,39 @@ def run_power_analysis() -> dict:
             p_one_sided * 100,
             n_req_80,
         )
+
+    # 3. Target effect size analysis for QEC delta LER
+    # For a scenario with sigma_delta = 0.015 and true benefit delta = -0.010, d = 0.667.
+    target_d = 0.60
+    target_power = PowerAnalysis.compute_power(target_d, n_test, alpha=alpha)
+    meets_80_pct = target_power >= 0.80
+
+    logger.info("Target effect size d=%.2f yields power=%.2f%% (>=80%%: %s)", target_d, target_power * 100, meets_80_pct)
+
+    results = {
+        "status": "PASSED" if meets_80_pct else "FAILED",
+        "primary_endpoint": ConfirmatoryProtocol.PRIMARY_ENDPOINT,
+        "confirmatory_regimes": ConfirmatoryProtocol.CONFIRMATORY_REGIMES,
+        "exploratory_regimes": ConfirmatoryProtocol.EXPLORATORY_REGIMES,
+        "seed_partition": {
+            "train": train_seeds,
+            "validation": val_seeds,
+            "test": test_seeds,
+        },
+        "target_effect_size_d": target_d,
+        "target_power_n30": round(target_power, 4),
+        "meets_80_pct_threshold": meets_80_pct,
+        "power_curve": power_curve,
+    }
+
+    out_path = Path("data/power_analysis_report.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2)
+
+    logger.info("Saved power analysis artifact to %s", out_path)
+    return results
+
+
+if __name__ == "__main__":
+    run_power_analysis()

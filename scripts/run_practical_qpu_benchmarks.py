@@ -133,3 +133,69 @@ def main() -> None:
 
     counts_raw = res_iqpe_raw[0].data.c.get_counts()
     counts_dd = res_iqpe_dd[0].data.c.get_counts()
+
+    analysis_raw = iqpe_unmitigated.decode_energy_from_bitstrings(counts_raw)
+    analysis_dd = iqpe_mitigated.decode_energy_from_bitstrings(counts_dd)
+
+    logger.info("\n=== PART 1 RESULTS (MOLECULAR GROUND ENERGY) ===")
+    logger.info(f"Exact H2 Energy:      {analysis_raw['exact_ground_energy_hartree']:.6f} Hartree")
+    logger.info(f"Unmitigated IQPE:    {analysis_raw['qpu_ground_energy_hartree']:.6f} Hartree (Error: {analysis_raw['error_hartree']:.6f})")
+    logger.info(f"Adaptive DD Mitigated:{analysis_dd['qpu_ground_energy_hartree']:.6f} Hartree (Error: {analysis_dd['error_hartree']:.6f})")
+
+    # Wait for Part 2
+    res_teleport = job_teleport.result()
+    fid_dynamic = dt_dynamic.compute_fidelity_from_bitstrings(
+        out_x=res_teleport[0].data.c_out.get_bitstrings(),
+        bsm_x=res_teleport[0].data.c_bsm.get_bitstrings(),
+        out_y=res_teleport[1].data.c_out.get_bitstrings(),
+        bsm_y=res_teleport[1].data.c_bsm.get_bitstrings(),
+        out_z=res_teleport[2].data.c_out.get_bitstrings(),
+        bsm_z=res_teleport[2].data.c_bsm.get_bitstrings(),
+    )
+
+    fid_post = dt_post.compute_fidelity_from_bitstrings(
+        out_x=res_teleport[3].data.c_out.get_bitstrings(),
+        bsm_x=res_teleport[3].data.c_bsm.get_bitstrings(),
+        out_y=res_teleport[4].data.c_out.get_bitstrings(),
+        bsm_y=res_teleport[4].data.c_bsm.get_bitstrings(),
+        out_z=res_teleport[5].data.c_out.get_bitstrings(),
+        bsm_z=res_teleport[5].data.c_bsm.get_bitstrings(),
+    )
+
+    fid_swap = dt_swap.compute_fidelity_from_bitstrings(
+        out_x=res_teleport[6].data.c_out.get_bitstrings(),
+        bsm_x=None,
+        out_y=res_teleport[7].data.c_out.get_bitstrings(),
+        bsm_y=None,
+        out_z=res_teleport[8].data.c_out.get_bitstrings(),
+        bsm_z=None,
+    )
+
+    logger.info("\n=== PART 2 RESULTS (QUANTUM TELEPORTATION FIDELITY) ===")
+    logger.info(f"Classical Entanglement Bound: {fid_dynamic['classical_bound']:.4f}")
+    logger.info(f"Dynamic Teleportation Fidelity: {fid_dynamic['state_fidelity']:.4f} (Yield: {fid_dynamic['deterministic_yield_rate']*100:.1f}%)")
+    logger.info(f"Post-Selected Fidelity:        {fid_post['state_fidelity']:.4f} (Yield: {fid_post['deterministic_yield_rate']*100:.1f}%)")
+    logger.info(f"SWAP Network Fidelity:         {fid_swap['state_fidelity']:.4f} (Yield: {fid_swap['deterministic_yield_rate']*100:.1f}%)")
+
+    results_payload["experiments"]["part1_molecular_iqpe"] = {
+        "job_id_raw": job_iqpe_raw.job_id(),
+        "job_id_dd": job_iqpe_dd.job_id(),
+        "raw_results": analysis_raw,
+        "mitigated_results": analysis_dd,
+    }
+    results_payload["experiments"]["part2_teleportation"] = {
+        "job_id": job_teleport.job_id(),
+        "dynamic_feedforward": fid_dynamic,
+        "post_selected": fid_post,
+        "swap_network": fid_swap,
+    }
+
+    final_results_path = out_dir / "ibm_marrakesh_practical_benchmarks_results.json"
+    with open(final_results_path, "w") as f:
+        json.dump(results_payload, f, indent=2)
+
+    logger.info(f"\nAll empirical results saved to: {final_results_path}")
+
+
+if __name__ == "__main__":
+    main()

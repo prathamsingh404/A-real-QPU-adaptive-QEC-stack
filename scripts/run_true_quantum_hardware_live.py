@@ -153,3 +153,85 @@ def run_true_quantum_hardware_experiment():
         data_bits = pub_res.data.meas_data.get_bitstrings()
         
         n_shots = len(data_bits)
+        # Bell state parity check: data[0] ^ data[1] == 0 in ideal state
+        feedforward_triggered = 0
+        even_parity_count = 0
+        
+        for i in range(n_shots):
+            s = int(syn_bits[i])
+            d = [int(b) for b in data_bits[i]][::-1]
+            if s == 1:
+                feedforward_triggered += 1
+            if (d[0] ^ d[1]) == 0:
+                even_parity_count += 1
+                
+        return {
+            "shots": n_shots,
+            "feedforward_corrections_applied": feedforward_triggered,
+            "feedforward_trigger_rate": feedforward_triggered / n_shots,
+            "final_bell_parity_fidelity": even_parity_count / n_shots,
+        }
+        
+    metrics_dyn = parse_dynamic_results(res_dynamic)
+    
+    # 7. Package results
+    results = {
+        "metadata": {
+            "backend": backend.name,
+            "processor": "Heron r2",
+            "num_qubits": backend.num_qubits,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "shots_per_circuit": shots,
+        },
+        "experiments": {
+            "true_quantum_422_code": {
+                "description": "[[4, 2, 2]] quantum code detecting simultaneous X bit-flips and Z phase-flips",
+                "job_id_unmitigated": job_id_422_base,
+                "job_id_dd_mitigated": job_id_422_dd,
+                "unmitigated": metrics_422_base,
+                "dd_mitigated": metrics_422_dd,
+                "statistical_comparison": {
+                    "z_statistic": float(z_stat),
+                    "p_value": float(p_val),
+                    "significant_at_005": p_val < 0.05,
+                }
+            },
+            "dynamic_circuit_feedforward": {
+                "description": "OpenQASM 3 sub-microsecond on-chip active feedforward conditional correction",
+                "job_id": job_id_dynamic,
+                "metrics": metrics_dyn,
+            }
+        }
+    }
+    
+    out_dir = Path("data/hardware_results")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "ibm_marrakesh_true_quantum_and_dynamic_results.json"
+    with open(out_path, "w") as f:
+        json.dump(results, f, indent=2)
+    logger.info(f"Hardware results successfully saved to {out_path}")
+    
+    print("\n" + "=" * 80)
+    print("REAL IBM HERON HARDWARE EXPERIMENT — TRUE QUANTUM & DYNAMIC CIRCUITS")
+    print("=" * 80)
+    print(f"Backend: {backend.name} | Shots: {shots} per circuit")
+    print(f"1. [[4, 2, 2]] True Quantum Code:")
+    print(f"   Unmitigated Job ID: {job_id_422_base}")
+    print(f"   DD-Mitigated Job ID: {job_id_422_dd}")
+    print(f"   Base Error Detection Rate: {metrics_422_base['error_detection_rate']:.4f} (CI: {ci_base[0]:.4f} - {ci_base[1]:.4f})")
+    print(f"   DD Error Detection Rate:   {metrics_422_dd['error_detection_rate']:.4f} (CI: {ci_dd[0]:.4f} - {ci_dd[1]:.4f})")
+    print(f"   Base Code Space Fidelity:  {metrics_422_base['code_space_fidelity']:.4f}")
+    print(f"   DD Code Space Fidelity:    {metrics_422_dd['code_space_fidelity']:.4f}")
+    print(f"   Two-proportion z:          {z_stat:.4f} (p = {p_val:.6e})")
+    print()
+    print(f"2. Dynamic Circuit Feedforward:")
+    print(f"   Job ID: {job_id_dynamic}")
+    print(f"   Active Corrections Applied: {metrics_dyn['feedforward_corrections_applied']}/{shots} ({metrics_dyn['feedforward_trigger_rate']*100:.1f}%)")
+    print(f"   Final Bell State Fidelity:  {metrics_dyn['final_bell_parity_fidelity']*100:.1f}%")
+    print("=" * 80)
+    
+    return results
+
+
+if __name__ == "__main__":
+    run_true_quantum_hardware_experiment()

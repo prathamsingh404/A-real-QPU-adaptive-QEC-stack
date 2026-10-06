@@ -50,3 +50,32 @@ def verify_lock(lock_path: Path = Path("paper.lock")) -> bool:
             missing.append(rel_path)
             all_matched = False
             continue
+
+        actual_hash = compute_sha256(p)
+        if actual_hash != expected_hash:
+            mismatches.append((rel_path, expected_hash, actual_hash))
+            all_matched = False
+
+    if missing:
+        logger.error("Missing files tracked in lock: %s", missing)
+
+    if mismatches:
+        logger.error("Hash mismatches detected in %d files:", len(mismatches))
+        for path, exp, act in mismatches:
+            logger.error("  %s: expected %s, got %s", path, exp[:12], act[:12])
+
+    if all_matched:
+        logger.info(
+            "ALL %d tracked files VERIFIED against SHA-256 lock (commit: %s)",
+            len(files),
+            lock_data.get("metadata", {}).get("git_commit", "N/A")[:8],
+        )
+        return True
+    else:
+        logger.error("Lock verification FAILED.")
+        return False
+
+
+if __name__ == "__main__":
+    success = verify_lock()
+    sys.exit(0 if success else 1)

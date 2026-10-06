@@ -100,3 +100,56 @@ def test_conformal_prediction_intervals():
     preds = [0.15 + 0.005 * i for i in range(20)]
     # True values with max absolute error ~0.008
     trues = [p + (-0.008 if i % 2 == 0 else 0.006) for i, p in enumerate(preds)]
+
+    q_hat = predictor.calibrate(preds, trues)
+    assert q_hat > 0.0
+    assert q_hat <= 0.010
+
+    # Test prediction
+    low, high = predictor.predict_interval(0.18)
+    assert low < 0.18 < high
+    assert high - low == pytest.approx(2 * q_hat)
+
+
+def test_analytical_proofs_and_bounds():
+    """Verify analytical bounds: switching condition, false switch, boundary threshold, regret."""
+    # 1. Switching condition (TASK-088)
+    should_switch, lcb, thresh = AnalyticalProofsAndBounds.evaluate_switching_condition(
+        delta_hat=0.020,
+        sigma_delta=0.003,
+        c_switch=0.005,
+        c_latency=0.002,
+        confidence=0.95,
+    )
+    # z_0.95 = 1.645 -> LCB = 0.020 - 1.645 * 0.003 = 0.015065 > 0.007 -> True
+    assert should_switch is True
+    assert lcb > thresh
+
+    # 2. False switching probability bound (TASK-089)
+    p_false = AnalyticalProofsAndBounds.false_switching_probability_bound(
+        sigma_noise=0.01,
+        n_samples=500,
+        threshold=0.005,
+    )
+    # Exponent: -(500 * 2.5e-5) / (2 * 1e-4) = -0.0125 / 0.0002 = -62.5 -> p_false << 1e-15
+    assert p_false < 1e-10
+
+    # 3. Adaptation boundary threshold (TASK-090)
+    a_thresh = AnalyticalProofsAndBounds.adaptation_boundary_threshold(
+        sigma_noise=0.02,
+        c_switch=0.005,
+        c_latency=0.002,
+        window_length=400,
+        desired_confidence=0.95,
+    )
+    # se = 0.02 / 20 = 0.001. z = 1.645. a_thresh = 0.007 + 0.001645 = 0.008645
+    assert a_thresh == pytest.approx(0.008645, abs=1e-4)
+
+    # 4. Piecewise stationary regret bound (TASK-091)
+    bound = AnalyticalProofsAndBounds.piecewise_stationary_regret_bound(
+        total_steps_t=1000,
+        num_change_points_s=3,
+        num_arms_k=4,
+        c_switch=0.01,
+    )
+    assert bound > 0.0

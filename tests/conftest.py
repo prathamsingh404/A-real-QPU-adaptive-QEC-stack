@@ -62,3 +62,37 @@ def relaxation_dominated_state() -> HardwareState:
 
 
 @pytest.fixture
+def default_arms() -> list[BanditArm]:
+    """Standard 6-arm bandit arm set."""
+    return build_arm_set()
+
+
+@pytest.fixture
+def d3_stim_circuit() -> stim.Circuit:
+    """Distance-3 surface code circuit with standard noise."""
+    return stim.Circuit.generated(
+        "surface_code:rotated_memory_z",
+        distance=3,
+        rounds=4,
+        after_clifford_depolarization=0.005,
+        before_round_data_depolarization=0.005,
+        before_measure_flip_probability=0.01,
+        after_reset_flip_probability=0.0025,
+    )
+
+
+@pytest.fixture
+def d3_dem(d3_stim_circuit) -> stim.DetectorErrorModel:
+    """Detector error model for the d=3 circuit."""
+    return d3_stim_circuit.detector_error_model(decompose_errors=True)
+
+
+@pytest.fixture
+def d3_syndrome_data(d3_stim_circuit) -> tuple[np.ndarray, np.ndarray]:
+    """Sample 1000 shots of syndromes + observables from d=3 circuit."""
+    sampler = d3_stim_circuit.compile_detector_sampler()
+    detection_events, observable_flips = sampler.sample(
+        shots=1000,
+        separate_observables=True,
+    )
+    return detection_events, observable_flips

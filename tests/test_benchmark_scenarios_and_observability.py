@@ -39,3 +39,30 @@ def test_synthetic_environment_observability_tiers():
     """Verify that information is gated strictly across O0, O1, O2, and O_oracle."""
     config = ScenarioConfig(scenario_type=ScenarioType.DO_NOTHING, total_steps=20)
     factory = NoiseScenarioFactory(config)
+
+    # Tier O0: Minimal
+    env_o0 = SyntheticEnvironment(factory=factory, observability=ObservabilityLevel.O0_RAW_BITSTRINGS)
+    obs_o0, _ = env_o0.step()
+    assert "defect_rate" in obs_o0
+    assert "p_2q" not in obs_o0
+    assert "latent_true_p_2q" not in obs_o0
+
+    # Tier O1: Macro Calibration
+    env_o1 = SyntheticEnvironment(factory=factory, observability=ObservabilityLevel.O1_CALIBRATION_TELEMETRY)
+    obs_o1, _ = env_o1.step()
+    assert "p_2q" in obs_o1
+    assert "t1_mean_us" in obs_o1
+    assert "drift_magnitude" not in obs_o1
+    assert "latent_true_p_2q" not in obs_o1
+
+    # Tier O2: Deployable observables
+    env_o2 = SyntheticEnvironment(factory=factory, observability=ObservabilityLevel.O2_DEPLOYABLE_OBSERVABLES)
+    obs_o2, _ = env_o2.step()
+    assert "drift_magnitude" in obs_o2
+    assert "latent_true_p_2q" not in obs_o2
+
+    # Tier O_oracle: Privileged Oracle
+    env_oracle = SyntheticEnvironment(factory=factory, observability=ObservabilityLevel.O_ORACLE_FULL_LATENT)
+    obs_oracle, _ = env_oracle.step()
+    assert "latent_true_p_2q" in obs_oracle
+    assert "latent_scenario" in obs_oracle

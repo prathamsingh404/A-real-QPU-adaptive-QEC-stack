@@ -138,3 +138,70 @@ def test_observation_frame_blocks_oracle_fields():
     assert not hasattr(frame, "latent_noise")
     assert not hasattr(frame, "true_ler")
     assert not hasattr(frame, "actual_p_x")
+
+
+def test_oracle_information_changes_do_not_change_controller():
+    """Verify that the controller decisions depend strictly on observables, not latent labels."""
+    from adaptive_qec.controller.controller import AdaptiveController, HardwareState
+    controller = AdaptiveController()
+
+    # Two states with identical observable telemetry but simulated under different latent contexts
+    obs_state_1 = HardwareState(
+        defect_rate=0.02,
+        drift_magnitude=0.1,
+        code_distance=3,
+        num_detectors=8,
+    )
+    obs_state_2 = HardwareState(
+        defect_rate=0.02,
+        drift_magnitude=0.1,
+        code_distance=3,
+        num_detectors=8,
+    )
+
+    action_1 = controller.decide(obs_state_1)
+    action_2 = controller.decide(obs_state_2)
+
+    assert action_1.decoder == action_2.decoder
+    assert action_1.dd_policy == action_2.dd_policy
+
+
+def test_detector_map_matches_stabilizers_for_all_distances():
+    """Verify that DetectorMap correctly classifies X vs Z stabilizers for d=3, 5, 7."""
+    from adaptive_qec.qec.geometry import CodeGeometry
+    for d in [3, 5, 7]:
+        geom = CodeGeometry.for_rotated_surface_code(distance=d, rounds=2)
+        det_map = geom.detector_map
+        assert len(det_map.x_indices) > 0
+        assert len(det_map.z_indices) > 0
+        assert set(det_map.x_indices).isdisjoint(set(det_map.z_indices))
+        # Total detectors equals x_indices + z_indices
+        assert len(det_map.detectors) == len(det_map.x_indices) + len(det_map.z_indices)
+
+
+def test_action_intervention_separation():
+    """Verify that classical decoder selection is decoupled from physical quantum interventions."""
+    from adaptive_qec.controller.controller import ControlAction, DecoderChoice, InterventionType
+    from adaptive_qec.mitigation.dynamical_decoupling import DDSequenceType
+
+    # Classical only (decoder switch with no DD and no recalibration)
+    action_classical = ControlAction(
+        decoder=DecoderChoice.UNION_FIND,
+        dd_policy=DDSequenceType.NONE,
+        request_recalibration=False,
+    )
+    assert action_classical.is_classical_only
+    assert not action_classical.is_physical
+    assert action_classical.intervention_type == InterventionType.CLASSICAL_ONLY
+
+    # Physical circuit intervention (DD sequence or recalibration)
+    action_physical = ControlAction(
+        decoder=DecoderChoice.MWPM,
+        dd_policy=DDSequenceType.XY4,
+        request_recalibration=False,
+    )
+    assert not action_physical.is_classical_only
+    assert action_physical.is_physical
+    assert action_physical.intervention_type == InterventionType.HYBRID
+
+

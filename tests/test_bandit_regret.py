@@ -50,3 +50,27 @@ def test_bandit_round_robin_exploration():
     assert bandit.select_arm() == 1
     bandit.update(1, 1.0)
     assert bandit.select_arm() == 2
+
+def test_bandit_empty_active_recovery():
+    bandit = DriftAdaptiveBandit(num_arms=2)
+    bandit.active_arms[:] = False
+    arm = bandit.select_arm()
+    assert arm in [0, 1]
+    assert np.all(bandit.active_arms)
+
+def test_bandit_window_trimming():
+    bandit = DriftAdaptiveBandit(num_arms=1, window_size=5)
+    for i in range(20):
+        bandit.update(0, float(i))
+    assert len(bandit.arm_rewards[0]) <= 10
+
+def test_bandit_set_arm_window():
+    bandit = DriftAdaptiveBandit(num_arms=2)
+    bandit.set_arm_window(1, [0.5, 0.8])
+    assert len(bandit.arm_rewards[1]) == 2
+
+def test_bandit_single_arm():
+    bandit = DriftAdaptiveBandit(num_arms=1)
+    assert bandit.select_arm() == 0
+    bandit.update(0, 1.0)
+    assert bandit.select_arm() == 0

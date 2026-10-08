@@ -79,3 +79,45 @@ class TestConfigValidation:
     def test_even_distance_rejected(self):
         with pytest.raises(Exception):
             load_config_from_dict({"qec": {"distance": 4}})
+
+    def test_zero_rounds_rejected(self):
+        with pytest.raises(Exception):
+            load_config_from_dict({"qec": {"rounds": 0}})
+
+    def test_invalid_confidence_rejected(self):
+        with pytest.raises(Exception):
+            load_config_from_dict({"analysis": {"confidence_level": 1.5}})
+
+    def test_negative_noise_rejected(self):
+        with pytest.raises(Exception):
+            load_config_from_dict({
+                "noise": {"gate": {"single_qubit": -0.1}}
+            })
+
+
+class TestEnvOverrides:
+    """Test environment variable overrides."""
+
+    def test_env_override_string(self, tmp_path):
+        config_path = tmp_path / "base.yaml"
+        with open(config_path, "w") as f:
+            yaml.dump({"hardware": {"backend": "original"}}, f)
+
+        os.environ["AQEC_HARDWARE__BACKEND"] = "ibm_override"
+        try:
+            config = load_config(config_path)
+            assert config.hardware.backend == "ibm_override"
+        finally:
+            del os.environ["AQEC_HARDWARE__BACKEND"]
+
+    def test_env_override_int(self, tmp_path):
+        config_path = tmp_path / "base.yaml"
+        with open(config_path, "w") as f:
+            yaml.dump({}, f)
+
+        os.environ["AQEC_QEC__DISTANCE"] = "7"
+        try:
+            config = load_config(config_path)
+            assert config.qec.distance == 7
+        finally:
+            del os.environ["AQEC_QEC__DISTANCE"]

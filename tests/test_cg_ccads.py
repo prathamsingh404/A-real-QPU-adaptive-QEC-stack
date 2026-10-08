@@ -89,3 +89,50 @@ def test_gate3_confidence_gated_switch_under_drift():
     for _ in range(5):
         controller.step(HardwareState(defect_rate=0.03))
         controller.update(reward=-0.02)
+
+    # Induce massive persistent leakage & defect surge
+    switched = False
+    for _ in range(10):
+        state = HardwareState(defect_rate=0.14, leakage_fraction=0.08, p_2q=0.01)
+        action = controller.step(state)
+        controller.update(reward=0.05)  # Good performance
+        if action.decoder == DecoderChoice.UNION_FIND:
+            switched = True
+            break
+
+    assert switched
+    assert controller.total_switches > 0
+    assert controller.decision_state in (ControllerDecision.PROBATION, ControllerDecision.SWITCH)
+
+
+def test_probationary_failure_triggers_automatic_rollback():
+    """Verify TASK-036: If candidate performs poorly during probation, rollback to baseline."""
+    controller = CGCCADSController(probation_blocks=3)
+
+    # Force switch into probation
+    controller.active_decoder = DecoderChoice.UNION_FIND
+    controller.decision_state = ControllerDecision.PROBATION
+    controller.probation_counter = 0
+
+    # Deliver severe negative surrogate rewards during probation
+    state = HardwareState(defect_rate=0.05)
+    controller.observe(state)
+    controller.update(reward=-0.30)  # Terrible performance
+    controller.observe(state)
+    controller.update(reward=-0.35)  # Terrible performance again
+
+    action = controller.decide()
+    assert action.decoder == DecoderChoice.MWPM
+    assert "rollback" in action.notes.lower()
+    assert controller.total_rollbacks > 0
+    assert controller.active_decoder == DecoderChoice.MWPM
+
+
+def test_adaptation_budget_prevents_thrashing():
+    """Verify TASK-040: Controller cannot exceed max switches per epoch."""
+    budget = AdaptationBudget(max_switches_per_epoch=2, epoch_length=20)
+    assert budget.has_budget
+    assert budget.record_step(switched=True)
+    assert budget.record_step(switched=True)
+    assert not budget.has_budget
+    assert not budget.record_step(switched=True)  # Blocked by budget

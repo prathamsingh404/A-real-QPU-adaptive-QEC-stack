@@ -94,3 +94,50 @@ class TestDriftIntegration:
         # Normal warmup
         for _ in range(5):
             composite.update(rates)
+
+        # Create burst syndrome tensor
+        syndrome_tensor = np.zeros((20, 8), dtype=np.uint8)
+        syndrome_tensor[10:12, :] = 1  # massive burst
+
+        report = composite.update(
+            detection_rates=rates,
+            syndrome_tensor=syndrome_tensor,
+            num_detectors_per_round=8,
+        )
+
+        assert report.status == DriftStatus.BURST_EVENT
+        assert report.magnitude > 0
+        assert "burst_analysis" in report.details
+
+
+class TestMWPMBurstAware:
+    """Tests for MWPM burst-aware decoding."""
+
+    def test_mwpm_decode_burst_aware(self):
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.01
+        circuit = code.generate_circuit(noise=noise)
+
+        sampler = circuit.compile_detector_sampler()
+        detectors, observables = sampler.sample(shots=100, separate_observables=True)
+
+        mwpm = MWPMDecoder()
+        mwpm.configure(circuit=circuit)
+
+        # Total detectors = 3 rounds * ~8 detectors
+        num_detectors = detectors.shape[1]
+        num_rounds = 3
+        det_per_round = num_detectors // num_rounds
+
+        std_metrics, burst_metrics, summary = mwpm.decode_burst_aware(
+            detectors,
+            observables,
+            num_rounds=num_rounds,
+            num_detectors_per_round=det_per_round,
+        )
+
+        assert std_metrics.total_shots == 100
+        assert burst_metrics.total_shots == 100
+        assert "burst_shots" in summary
+        assert "ler_reduction" in summary

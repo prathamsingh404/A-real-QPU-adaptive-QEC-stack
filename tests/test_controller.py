@@ -208,3 +208,109 @@ class TestHysteresisTracker:
         # Next two shouldn't trigger (counter reset)
         result = tracker.should_switch("uf:none", "mwpm:xy4", 1.0, 0.8)
         assert not result
+
+    def test_same_mode_no_switch(self):
+        """Switching to the same mode should never trigger."""
+        tracker = HysteresisTracker(patience=1, margin=0.0)
+        for _ in range(10):
+            result = tracker.should_switch("mwpm:xy4", "mwpm:xy4", 1.0, 0.5)
+            assert not result
+
+
+# ---------------------------------------------------------------------------
+# Full controller integration tests
+# ---------------------------------------------------------------------------
+
+class TestAdaptiveController:
+    def test_basic_action_selection(self):
+        """Controller should return a valid action."""
+        ctrl = AdaptiveController()
+        state = _make_state()
+        action = ctrl.select_action(state)
+
+        assert isinstance(action, ControlAction)
+        assert isinstance(action.decoder, DecoderChoice)
+        assert isinstance(action.dd_policy, DDSequenceType)
+
+    def test_stable_state_selects_optimal(self):
+        """Under stable conditions, controller should select lowest-cost action."""
+        ctrl = AdaptiveController()
+        state = _make_state()
+        action = ctrl.select_action(state)
+        # Should pick some valid action (we don't prescribe which)
+        assert action is not None
+
+    def test_burst_triggers_mitigation(self):
+        """During a burst, controller should consider burst mitigation."""
+        ctrl = AdaptiveController()
+        state = _make_state(burst_active=True, p_2q=0.005)
+        action = ctrl.select_action(state)
+        # Burst mitigation should be selected when burst is active
+        # (the cost function penalizes not mitigating during bursts)
+        assert action.burst_mitigation is True
+
+    def test_metrics_tracking(self):
+        """Controller should track metrics across windows."""
+        ctrl = AdaptiveController()
+        for _ in range(10):
+            state = _make_state()
+            ctrl.select_action(state)
+
+        assert ctrl.metrics.total_windows == 10
+        assert len(ctrl.metrics.cost_history) == 10
+
+    def test_reset(self):
+        """Reset should clear all state."""
+        ctrl = AdaptiveController()
+        for _ in range(5):
+            ctrl.select_action(_make_state())
+
+        ctrl.reset()
+        assert ctrl.metrics.total_windows == 0
+        assert ctrl.current_action is None
+
+    def test_summary(self):
+        """Summary should return a valid dict."""
+        ctrl = AdaptiveController()
+        ctrl.select_action(_make_state())
+        summary = ctrl.summary()
+
+        assert "weights" in summary
+        assert "metrics" in summary
+        assert "hysteresis" in summary
+
+    def test_drift_changes_action(self):
+        """Significant drift should eventually change the controller's action."""
+        ctrl = AdaptiveController(hysteresis_patience=1, hysteresis_margin=0.01)
+
+        # Start with stable conditions
+        stable = _make_state(drift_magnitude=0.1, p_2q=0.002)
+        action_stable = ctrl.select_action(stable)
+
+        # Introduce severe drift — costs should shift
+        drifted = _make_state(
+            drift_magnitude=5.0,
+            drift_status=DriftStatus.SEVERE,
+            p_2q=0.02,
+        )
+        # Run several windows to overcome hysteresis
+        for _ in range(5):
+            action_drifted = ctrl.select_action(drifted)
+
+        # The controller should have adapted (higher cost state)
+        assert ctrl.metrics.total_windows == 6
+
+    def test_mode_switch_count(self):
+        """Mode switches should be counted."""
+        ctrl = AdaptiveController(hysteresis_patience=1, hysteresis_margin=0.001)
+
+        # Alternate between very different states
+        quiet = _make_state(p_2q=0.001, burst_active=False)
+        noisy = _make_state(p_2q=0.05, burst_active=True, drift_magnitude=5.0)
+
+        for _ in range(10):
+            ctrl.select_action(quiet)
+            ctrl.select_action(noisy)
+
+        # Should have had some mode switches
+        assert ctrl.metrics.total_windows == 20

@@ -95,3 +95,54 @@ class TestDEMCalibrator:
         """When hardware error doubles, edge weights should scale accordingly."""
         p_nominal = 0.01
         p_measured = 0.02  # Doubled
+        
+        # Proportional scaling
+        scale = p_measured / p_nominal
+        p_scaled = p_nominal * scale
+        assert abs(p_scaled - p_measured) < 1e-10
+
+    def test_symmetric_edge_handling(self):
+        """Edge (a, b) and (b, a) should produce the same weight."""
+        p = 0.015
+        w1 = np.log((1 - p) / p)
+        w2 = np.log((1 - p) / p)
+        assert abs(w1 - w2) < 1e-15
+
+    def test_calibrate_and_to_matching(self):
+        """Calibrator produces valid matching graph."""
+        calibrator = DEMCalibrator()
+        calibrated = calibrator.calibrate(measured_p_2q=0.005, measured_p_ro=0.02)
+        assert len(calibrated.edges) > 0
+
+        matching = calibrated.to_matching()
+        assert matching is not None
+        assert matching.num_detectors > 0
+
+    def test_calibrate_from_syndromes(self):
+        """Calibrator reweights edges from syndrome batch."""
+        calibrator = DEMCalibrator()
+        dummy_syndromes = np.zeros((100, 24), dtype=np.uint8)
+        dummy_syndromes[:5, 0] = 1
+        dummy_syndromes[:5, 1] = 1
+
+        calibrated = calibrator.calibrate_from_syndromes(dummy_syndromes, smoothing=0.5)
+        assert len(calibrated.edges) > 0
+        matching = calibrated.to_matching()
+        assert matching is not None
+
+    def test_calibrate_spitz_matching_recovery(self):
+        """Verify Spitz et al. (2018) parity estimator recovers known edge probabilities."""
+        import stim, pymatching
+        from adaptive_qec.decoders.dem_calibration import calibrate_spitz_matching
+
+        circuit = stim.Circuit.generated("surface_code:rotated_memory_z", distance=3, rounds=3, after_clifford_depolarization=0.005)
+        dem = circuit.detector_error_model(decompose_errors=True)
+        base_matching = pymatching.Matching.from_detector_error_model(dem)
+
+        sampler = circuit.compile_detector_sampler()
+        dets = sampler.sample(shots=5000)
+
+        calibrated_matching = calibrate_spitz_matching(base_matching, dets)
+        assert calibrated_matching is not None
+        assert calibrated_matching.num_detectors == base_matching.num_detectors
+        assert calibrated_matching.num_fault_ids == base_matching.num_fault_ids

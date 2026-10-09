@@ -71,3 +71,41 @@ class TestDynamicalDecoupling:
         sched_xy8 = planner.plan_schedule({0: 50.0}, preferred_sequence=DDSequenceType.XY8)
         assert sched_xy8.qubit_sequences[0] == DDSequenceType.XY8
         assert sched_xy8.total_pulses_inserted == 8
+
+    def test_estimate_idle_map_and_apply(self):
+        code = create_code("repetition", distance=3, rounds=3)
+        circuit = code.generate_circuit()
+
+        idle_map = AdaptiveDDPlanner.estimate_idle_map_from_circuit(circuit)
+        assert len(idle_map) > 0
+
+        planner = AdaptiveDDPlanner()
+        schedule = planner.plan_schedule(idle_map)
+        protected_circuit = planner.apply_dd_to_circuit(circuit, schedule)
+
+        assert isinstance(protected_circuit, stim.Circuit)
+        assert protected_circuit.num_detectors == circuit.num_detectors
+
+
+class TestDigitalTwinDDCandidates:
+    """Tests for Digital Twin get_dd_candidates method."""
+
+    def test_get_dd_candidates(self):
+        twin = HardwareDigitalTwin(num_qubits=3)
+        q0 = twin.get_qubit_state(0)
+        q1 = twin.get_qubit_state(1)
+        q2 = twin.get_qubit_state(2)
+        assert q0 is not None and q1 is not None and q2 is not None
+        q0.t2_us = 10.0   # very bad T2
+        q1.t2_us = 50.0   # moderate T2
+        q2.t2_us = 500.0  # very good T2
+
+        # During a 5us idle period:
+        # q0 dephasing: 1 - exp(-5/10) = 0.393 > 0.001 -> Candidate
+        # q1 dephasing: 1 - exp(-5/50) = 0.095 > 0.001 -> Candidate
+        # q2 dephasing: 1 - exp(-5/500) = 0.010 > 0.001 -> Candidate
+        candidates = twin.get_dd_candidates(idle_duration_us=5.0, pulse_error_budget=0.05)
+        # With budget 0.05, only q0 and q1 exceed 0.05
+        assert 0 in candidates
+        assert 1 in candidates
+        assert 2 not in candidates

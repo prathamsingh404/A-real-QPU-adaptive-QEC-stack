@@ -76,3 +76,45 @@ class TestExperimentStore:
         loaded = store.load_detector_data("test_001")
         assert loaded.num_detectors == 8
         assert loaded.syndrome_tensor.shape == (1000, 8)
+
+    def test_save_metrics(self, tmp_path):
+        store = ExperimentStore(tmp_path)
+        record = self._make_record()
+        store.save_experiment(record)
+
+        metrics = ExperimentMetrics(
+            experiment_id="test_001",
+            logical_error_rate=0.05,
+            logical_error_rate_ci_low=0.04,
+            logical_error_rate_ci_high=0.06,
+            confidence_level=0.95,
+        )
+        store.save_metrics(metrics)
+
+        loaded = store.load_metrics("test_001")
+        assert loaded["logical_error_rate"] == 0.05
+
+    def test_list_experiments(self, tmp_path):
+        store = ExperimentStore(tmp_path)
+
+        for i in range(3):
+            record = self._make_record(f"exp_{i:03d}")
+            store.save_experiment(record)
+
+        experiments = store.list_experiments()
+        assert len(experiments) == 3
+        assert "exp_000" in experiments
+
+    def test_delete_experiment(self, tmp_path):
+        store = ExperimentStore(tmp_path)
+        record = self._make_record()
+        store.save_experiment(record)
+
+        assert (tmp_path / "test_001").exists()
+        store.delete_experiment("test_001")
+        assert not (tmp_path / "test_001").exists()
+
+    def test_load_nonexistent_raises(self, tmp_path):
+        store = ExperimentStore(tmp_path)
+        with pytest.raises(FileNotFoundError):
+            store.load_experiment("nonexistent")

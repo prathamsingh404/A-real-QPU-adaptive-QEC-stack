@@ -89,3 +89,48 @@ def test_decision_accuracy_benchmark():
     """Verify controller decision precision, recall, and false adaptation rate."""
     decisions = ["ADAPT", "ADAPT", "STAY", "STAY", "ADAPT"]
     ground_truth = [True, True, False, False, False] # 2 TP, 2 TN, 1 FP
+
+    rep = benchmark_decision_accuracy(decisions, ground_truth)
+    assert rep.true_positives == 2
+    assert rep.false_positives == 1
+    assert rep.true_negatives == 2
+    assert rep.false_negatives == 0
+    assert rep.precision == pytest.approx(2 / 3, abs=1e-3)
+    assert rep.recall == 1.0
+    assert rep.false_adaptation_rate == pytest.approx(1 / 3, abs=1e-3)
+
+
+def test_calibration_curve():
+    """Verify probability calibration curve and ECE."""
+    probs = [0.1, 0.15, 0.35, 0.65, 0.85, 0.90]
+    outcomes = [False, False, False, True, True, True]
+
+    curve = compute_calibration_curve(probs, outcomes, num_bins=3)
+    assert len(curve.bin_centers) == 3
+    assert curve.expected_calibration_error >= 0.0
+    assert curve.brier_score < 0.25
+
+
+def test_component_ablation_study():
+    """Verify ablation table dynamic calculation from suite results."""
+    rows = ComponentAblationStudy.run_ablation()
+    assert len(rows) >= 4
+
+    row_dict = {r.configuration: r for r in rows}
+    assert "Static Baseline (MWPM)" in row_dict
+    assert "Full (CG-CCADS)" in row_dict
+    assert "Small-Window Naive (-Stay, W=200)" in row_dict
+
+    # Static baseline has delta = 0
+    static_row = row_dict["Static Baseline (MWPM)"]
+    assert static_row.delta_ler_pct == 0.0
+    assert static_row.abstention_rate_pct == 100.0
+
+    # Small-window naive reweighting has positive delta (variance explosion)
+    naive_row = row_dict["Small-Window Naive (-Stay, W=200)"]
+    assert naive_row.delta_ler_pct > 0.0
+
+    # Markdown table formatting
+    md = ComponentAblationStudy.format_markdown_table(rows)
+    assert "| **Full (CG-CCADS)** |" in md
+    assert "Mean LER" in md

@@ -62,3 +62,33 @@ def test_lazy_mwpm_batch_parity():
     m = dec.decode_batch(det_data, obs_data)
     assert m.total_shots == 50
     assert 0.0 <= m.logical_error_rate <= 1.0
+
+def test_lazy_mwpm_latency_percentiles():
+    circuit = stim.Circuit.generated('surface_code:rotated_memory_z', distance=3, rounds=3, after_clifford_depolarization=0.01)
+    dem = circuit.detector_error_model()
+    dec = LazyMWPMDecoder(defect_threshold=5)
+    dec.configure(circuit=circuit, dem=dem)
+    sampler = circuit.compile_detector_sampler()
+    det_data, obs_data = sampler.sample(shots=20, separate_observables=True)
+    m = dec.decode_batch(det_data, obs_data)
+    assert m.latency_p50_us >= 0
+    assert m.latency_p99_us >= m.latency_p50_us
+
+def test_lazy_mwpm_mwpm_fraction_diagnostic():
+    circuit = stim.Circuit.generated('surface_code:rotated_memory_z', distance=3, rounds=3, after_clifford_depolarization=0.01)
+    dem = circuit.detector_error_model()
+    dec = LazyMWPMDecoder(defect_threshold=1)
+    dec.configure(circuit=circuit, dem=dem)
+    sampler = circuit.compile_detector_sampler()
+    det_data, obs_data = sampler.sample(shots=30, separate_observables=True)
+    m = dec.decode_batch(det_data, obs_data)
+    assert 'mwpm_fraction' in m.extra
+    assert 0.0 <= m.extra['mwpm_fraction'] <= 1.0
+
+def test_lazy_mwpm_empty_syndrome_batch():
+    dec = LazyMWPMDecoder()
+    det = np.zeros((0, 8), dtype=np.uint8)
+    obs = np.zeros((0, 1), dtype=np.uint8)
+    m = dec.decode_batch(det, obs)
+    assert m.total_shots == 0
+    assert m.num_logical_errors == 0

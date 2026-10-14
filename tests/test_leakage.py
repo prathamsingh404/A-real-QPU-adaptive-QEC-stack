@@ -90,3 +90,44 @@ class TestLeakageRateEstimator:
             ],
             estimated_leakage_rate=0.001,
         )
+
+        estimator.add_analysis(mock_analysis)
+        rates = estimator.estimate_rates()
+
+        assert "gamma_leakage" in rates
+        assert "gamma_seepage" in rates
+        assert "p_leak_steady" in rates
+        assert rates["gamma_leakage"] > 0
+        assert pytest.approx(rates["gamma_seepage"], rel=1e-2) == 0.1  # 1 / 10 rounds
+        assert rates["p_leak_steady"] > 0
+
+
+class TestDigitalTwinLeakage:
+    """Tests for Digital Twin integration with leakage."""
+
+    def test_update_leakage_from_analysis(self):
+        twin = HardwareDigitalTwin(num_qubits=10)
+
+        analysis = LeakageAnalysis(
+            total_rounds=50,
+            total_detectors=10,
+            leaked_qubits=[
+                LeakedQubit(
+                    detector_index=3,
+                    onset_round=5,
+                    persistence_length=20,
+                    autocorrelation=0.75,
+                    firing_rate=0.8,
+                    confidence=0.9,
+                )
+            ],
+        )
+
+        twin.update_leakage_from_analysis(analysis)
+        q3 = twin.get_qubit_state(3)
+        assert q3 is not None
+        assert q3.leakage_probability == 0.9
+
+        q1 = twin.get_qubit_state(1)
+        assert q1 is not None
+        assert q1.leakage_probability == 0.0

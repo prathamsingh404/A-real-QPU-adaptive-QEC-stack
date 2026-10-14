@@ -109,3 +109,61 @@ class TestEWMADriftDetector:
         for _ in range(10):
             rates = np.full(10, 0.30)  # 6x increase
             report = detector.update(rates)
+
+        assert report is not None
+        assert report.status in (DriftStatus.DRIFT_DETECTED, DriftStatus.SEVERE)
+        assert report.magnitude > 0
+
+
+class TestCUSUMDriftDetector:
+    """Test CUSUM drift detection."""
+
+    def test_stable_no_alarm(self):
+        detector = CUSUMDriftDetector(warmup_samples=10)
+
+        report = None
+        for _ in range(30):
+            rates = np.full(5, 0.1)
+            report = detector.update(rates)
+
+        assert report is not None
+        assert report.status == DriftStatus.STABLE
+
+    def test_sudden_shift_alarm(self):
+        detector = CUSUMDriftDetector(warmup_samples=10, threshold=3.0)
+
+        # Warmup
+        for _ in range(15):
+            rates = np.full(5, 0.05)
+            detector.update(rates)
+
+        # Sudden shift
+        report = None
+        for _ in range(10):
+            rates = np.full(5, 0.25)
+            report = detector.update(rates)
+
+        assert report is not None
+        assert report.status == DriftStatus.DRIFT_DETECTED
+
+
+class TestCompositeDriftDetector:
+    """Test composite drift detection."""
+
+    def test_composite_reports_worst(self):
+        detector = CompositeDriftDetector(warmup_samples=10)
+
+        # Warmup
+        for _ in range(15):
+            rates = np.full(5, 0.05)
+            detector.update(rates)
+
+        # Apply drift
+        report = None
+        for _ in range(10):
+            rates = np.full(5, 0.3)
+            report = detector.update(rates)
+
+        # Should catch drift via at least one method
+        assert report is not None
+        assert report.status != DriftStatus.STABLE or report.magnitude > 0

@@ -81,3 +81,44 @@ class TestSurfaceCode:
         assert isinstance(circuit, stim.Circuit)
         assert circuit.num_detectors > 0
         assert circuit.num_observables == 1
+
+    def test_distance_scaling(self):
+        """Higher distance should produce more qubits and detectors."""
+        c3 = SurfaceCode(distance=3, rounds=3).generate_circuit()
+        c5 = SurfaceCode(distance=5, rounds=3).generate_circuit()
+
+        assert c5.num_qubits > c3.num_qubits
+        assert c5.num_detectors > c3.num_detectors
+
+    def test_with_noise(self):
+        code = SurfaceCode(distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.01
+        circuit = code.generate_circuit(noise=noise)
+
+        assert isinstance(circuit, stim.Circuit)
+
+    def test_detector_error_model(self):
+        code = SurfaceCode(distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.01
+        circuit = code.generate_circuit(noise=noise)
+
+        dem = circuit.detector_error_model(decompose_errors=True)
+        assert dem.num_detectors == circuit.num_detectors
+
+
+class TestCodeFactory:
+    """Test the create_code factory function."""
+
+    def test_create_repetition(self):
+        code = create_code("repetition", distance=3, rounds=3)
+        assert isinstance(code, RepetitionCode)
+
+    def test_create_surface(self):
+        code = create_code("surface", distance=3, rounds=3)
+        assert isinstance(code, SurfaceCode)
+
+    def test_invalid_type(self):
+        with pytest.raises(ValueError):
+            create_code("invalid_code", distance=3, rounds=3)

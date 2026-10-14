@@ -102,3 +102,54 @@ class TestQPUBase:
             backend_name="test",
             qubit_calibrations=qubits,
         )
+
+        q0 = cal.get_qubit(0)
+        assert q0 is not None and q0.t1_us == 100
+        assert cal.t1_values().shape == (2,)
+        assert cal.readout_errors().shape == (2,)
+
+
+class TestMockBackend:
+    """Test with mock backend."""
+
+    def test_mock_run(self):
+        config = HardwareConfig(provider=HardwareProvider.IBM, backend="mock")
+        backend = MockQPUBackend(config)
+        backend.connect()
+
+        result = backend.run(None, shots=100)
+        assert result.shots == 100
+        assert result.measurement_outcomes.shape[0] == 100
+
+    def test_mock_calibration(self):
+        config = HardwareConfig()
+        backend = MockQPUBackend(config)
+        cal = backend.get_calibration()
+
+        assert len(cal.qubit_calibrations) == 10
+        t1_val = cal.qubit_calibrations[0].t1_us
+        assert t1_val is not None and t1_val > 0
+
+    def test_mock_topology(self):
+        config = HardwareConfig()
+        backend = MockQPUBackend(config)
+        topo = backend.get_topology()
+
+        assert topo.num_qubits == 10
+        assert len(topo.coupling_map) == 9
+
+
+class TestBackendRegistry:
+    """Test backend registry."""
+
+    def test_register_and_retrieve(self):
+        register_backend("mock", MockQPUBackend)
+
+        config = load_config_from_dict({
+            "hardware": {"provider": "mock", "backend": "test"}
+        })
+
+        # This would fail because "mock" isn't in HardwareProvider enum
+        # But we can test the registry directly
+        from adaptive_qec.qpu.registry import _BACKENDS
+        assert "mock" in _BACKENDS

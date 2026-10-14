@@ -74,3 +74,40 @@ ALLOWED_FLOAT_WHITELIST = {
     0.00003,
     0.00001,
 }
+
+
+def scan_file_for_unwhitelisted_floats(file_path: Path) -> list[tuple[int, float]]:
+    """Scan a Python source file and return all unwhitelisted float literals with line numbers."""
+    tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
+    unwhitelisted = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, float):
+            val = float(node.value)
+            if val not in ALLOWED_FLOAT_WHITELIST:
+                unwhitelisted.append((node.lineno, val))
+
+    return unwhitelisted
+
+
+def test_make_paper_tables_has_no_hardcoded_results():
+    """Verify make_paper_tables.py contains no hardcoded scientific result literals."""
+    target = Path("src/adaptive_qec/analysis/make_paper_tables.py")
+    violations = scan_file_for_unwhitelisted_floats(target)
+    assert violations == [], f"Found unwhitelisted float literals in {target}: {violations}"
+
+
+def test_make_paper_figures_has_no_hardcoded_results():
+    """Verify make_paper_figures.py contains no hardcoded scientific result literals."""
+    target = Path("src/adaptive_qec/analysis/make_paper_figures.py")
+    violations = scan_file_for_unwhitelisted_floats(target)
+    assert violations == [], f"Found unwhitelisted float literals in {target}: {violations}"
+
+
+def test_missing_results_file_raises_error():
+    """Verify pipeline fails gracefully when results file is missing."""
+    from adaptive_qec.evaluation.empirical_scaling_and_ablation import ComponentAblationStudy
+
+    non_existent = Path("data/definitely_missing_results_12345.json")
+    with pytest.raises(FileNotFoundError):
+        ComponentAblationStudy.run_ablation(results_path=non_existent)

@@ -48,3 +48,30 @@ class TestMolecularIQPE:
         assert "measure" in op_names
         assert "reset" in op_names
         assert "crz" in op_names or "rz" in op_names
+
+    def test_build_circuit_with_dd(self) -> None:
+        """Test building IQPE circuit with XY4 dynamical decoupling."""
+        iqpe = MolecularIQPE(r_angstrom=0.7414, num_bits=3, tau=1.0, apply_dd=True)
+        qc = iqpe.build_circuit()
+        op_names = [inst.operation.name for inst in qc.data]
+        # XY4 decoupling injects X and Y gates on system qubit
+        assert "x" in op_names
+        assert "y" in op_names
+
+    def test_decode_energy_from_bitstrings(self) -> None:
+        """Test decoding physical bitstrings into ground state energy."""
+        iqpe = MolecularIQPE(r_angstrom=0.7414, num_bits=3, tau=1.0)
+        counts = {"000": 800, "001": 150, "111": 50}
+        results = iqpe.decode_energy_from_bitstrings(counts)
+        assert results["r_angstrom"] == 0.7414
+        assert results["most_likely_bitstring"] == "000"
+        assert results["total_shots"] == 1000
+        assert "qpu_ground_energy_hartree" in results
+        assert "exact_ground_energy_hartree" in results
+        assert "error_hartree" in results
+
+    def test_empty_counts_raises(self) -> None:
+        """Test that empty counts dictionary raises ValueError."""
+        iqpe = MolecularIQPE(r_angstrom=0.7414)
+        with pytest.raises(ValueError, match="Empty counts"):
+            iqpe.decode_energy_from_bitstrings({})

@@ -43,3 +43,32 @@ def test_fast_path_counter():
     telem = HardwareTelemetry(leakage_fraction=0.20, code_distance=3)
     ctrl.select_action(telem)
     assert ctrl.fast_path_count == 1
+
+def test_controller_reset():
+    ctrl = AdaptiveController(leakage_threshold=0.10, distance_crossover=3)
+    telem = HardwareTelemetry(leakage_fraction=0.20, code_distance=3)
+    ctrl.select_action(telem)
+    ctrl.reset()
+    assert ctrl.fast_path_count == 0
+    assert ctrl.current_action is None
+
+def test_telemetry_defaults():
+    telem = HardwareTelemetry()
+    assert telem.drift_magnitude == 0.0
+    assert telem.burst_detected is False
+    assert telem.code_distance == 3
+
+def test_custom_crossover_distance():
+    ctrl = AdaptiveController(leakage_threshold=0.10, distance_crossover=7)
+    telem = HardwareTelemetry(leakage_fraction=0.15, code_distance=5)
+    action = ctrl.select_action(telem)
+    assert action.decoder == DecoderChoice.MWPM
+
+def test_multiple_sequential_actions():
+    ctrl = AdaptiveController()
+    t1 = HardwareTelemetry(burst_detected=True)
+    t2 = HardwareTelemetry(drift_magnitude=0.0)
+    a1 = ctrl.select_action(t1)
+    a2 = ctrl.select_action(t2)
+    assert a1.decoder == DecoderChoice.MWPM
+    assert a2.decoder == DecoderChoice.MWPM

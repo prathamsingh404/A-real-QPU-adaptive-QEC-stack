@@ -177,3 +177,98 @@ class TestQiskitRuntimeLoop:
             loop = QiskitRuntimeLoop(config=config)
             loop.connect()
             results = loop.run()
+
+            assert len(results) == 3
+            assert loop.total_shots == 1500
+            for r in results:
+                assert isinstance(r, BatchResult)
+                assert r.shots == 500
+
+    def test_budget_integration(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = RuntimeLoopConfig(
+                dry_run=True,
+                shots_per_batch=1000,
+                max_batches=10,
+                max_total_shots=50000,
+                output_dir=tmpdir,
+            )
+            budget = ShotBudgetManager(
+                BudgetConfig(max_total_shots=3000, safety_margin=0)
+            )
+            loop = QiskitRuntimeLoop(
+                config=config,
+                budget_manager=budget,
+            )
+            loop.connect()
+            results = loop.run()
+
+            # Should stop at 3 batches (3000 shots)
+            assert loop.total_shots <= 3000
+
+    def test_convergence_detection(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = RuntimeLoopConfig(
+                dry_run=True,
+                shots_per_batch=1000,
+                max_batches=100,
+                max_total_shots=200000,
+                convergence_threshold=0.5,  # Very loose threshold
+                convergence_window=3,
+                warmup_batches=2,
+                output_dir=tmpdir,
+            )
+            loop = QiskitRuntimeLoop(config=config)
+            loop.connect()
+            results = loop.run()
+
+            # Should stop before 100 batches due to convergence
+            assert len(results) < 100
+
+    def test_result_serialization(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = RuntimeLoopConfig(
+                dry_run=True,
+                shots_per_batch=500,
+                max_batches=2,
+                max_total_shots=5000,
+                output_dir=tmpdir,
+            )
+            loop = QiskitRuntimeLoop(config=config)
+            loop.connect()
+            loop.run()
+
+            # Check that results file was created
+            result_files = list(Path(tmpdir).glob("run_*.json"))
+            assert len(result_files) == 1
+
+            with open(result_files[0]) as f:
+                data = json.load(f)
+            assert data["summary"]["total_batches"] == 2
+            assert data["summary"]["total_shots"] == 1000
+
+    def test_summary(self):
+        config = RuntimeLoopConfig(dry_run=True)
+        loop = QiskitRuntimeLoop(config=config)
+        summary = loop.summary()
+        assert "run_id" in summary
+        assert "total_shots" in summary
+        assert "overall_ler" in summary
+
+    def test_hardware_mode_missing_circuit_builder_raises(self):
+        config = RuntimeLoopConfig(dry_run=False, backend_name="ibm_marrakesh")
+        loop = QiskitRuntimeLoop(config=config)
+        from adaptive_qec.runtime.qiskit_loop import HardwareExecutionError
+        with pytest.raises(HardwareExecutionError, match="No circuit_builder provided"):
+            loop._run_circuit(shots=100, circuit_builder=None)
+
+    def test_hardware_mode_execution_failure_raises(self):
+        config = RuntimeLoopConfig(dry_run=False, backend_name="ibm_marrakesh")
+        loop = QiskitRuntimeLoop(config=config)
+        from adaptive_qec.runtime.qiskit_loop import HardwareExecutionError
+
+        def failing_builder():
+            raise ConnectionError("QPU endpoint unreachable")
+
+        with pytest.raises(HardwareExecutionError, match="Hardware execution failed"):
+            loop._run_circuit(shots=100, circuit_builder=failing_builder)

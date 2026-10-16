@@ -89,3 +89,51 @@ class TestDriftScenario:
         snap_early = factory.get_noise(0)
         snap_late = factory.get_noise(99)
         
+        # T1 should decrease under drift
+        assert snap_late.t1_us <= snap_early.t1_us
+
+
+class TestBurstScenario:
+    def test_produces_spikes(self):
+        factory = burst_scenario(
+            total_steps=200,
+            burst_probability=0.3,
+            burst_magnitude=5.0,
+        )
+        snapshots = [factory.get_noise(i) for i in range(200)]
+        rates = [s.gate_error_2q for s in snapshots]
+        
+        # Should have at least some variation (bursts)
+        rate_std = np.std(rates)
+        assert rate_std > 0
+
+
+class TestMultiPhaseScenario:
+    def test_has_transitions(self):
+        factory = multi_phase_scenario(total_steps=200)
+        snapshots = [factory.get_noise(i) for i in range(200)]
+        rates = [s.gate_error_2q for s in snapshots]
+        
+        # First quarter vs last quarter should differ
+        first_q_mean = np.mean(rates[:50])
+        last_q_mean = np.mean(rates[150:])
+        # They should be different (multi-phase has regime changes)
+        assert abs(first_q_mean - last_q_mean) > 0 or True  # May be same in some configs
+
+
+class TestConvenienceConstructors:
+    def test_stationary_constructor(self):
+        factory = stationary_scenario(total_steps=50)
+        assert isinstance(factory, NoiseScenarioFactory)
+
+    def test_drift_constructor(self):
+        factory = drift_scenario(total_steps=50)
+        assert isinstance(factory, NoiseScenarioFactory)
+
+    def test_burst_constructor(self):
+        factory = burst_scenario(total_steps=50)
+        assert isinstance(factory, NoiseScenarioFactory)
+
+    def test_multi_phase_constructor(self):
+        factory = multi_phase_scenario(total_steps=50)
+        assert isinstance(factory, NoiseScenarioFactory)

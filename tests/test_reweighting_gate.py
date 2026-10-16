@@ -74,3 +74,47 @@ def test_localized_hotspot_triggers_reweight_at_large_window(surface_code_fixtur
             lines.append("DEPOLARIZE1(0.04) 10")
     circuit_hotspot = stim.Circuit("\n".join(lines))
     sampler_hotspot = circuit_hotspot.compile_detector_sampler()
+
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        drift_z_threshold=2.0,
+        adaptation_tax=0.003,
+        dead_zone_epsilon=0.001,
+        reference_defect_rate=0.015, # Nominal reference
+    )
+
+    syndromes, _ = sampler_hotspot.sample(shots=2000, separate_observables=True)
+    decision, active_matching, stats = controller.evaluate_window(syndromes)
+
+    assert decision == GateDecision.REWEIGHT
+    assert controller.is_reweighted
+    assert stats.max_edge_lcb > 0.003
+
+
+def test_small_window_suppresses_reweighting(surface_code_fixture):
+    """At small window W=150, high binomial variance suppresses LCB, enforcing STAY."""
+    circuit_base, base_matching, _ = surface_code_fixture
+
+    # Mild drift
+    lines = []
+    for line in str(circuit_base).splitlines():
+        lines.append(line)
+        if line.startswith("TICK"):
+            lines.append("DEPOLARIZE1(0.015) 10")
+    circuit_mild = stim.Circuit("\n".join(lines))
+    sampler_mild = circuit_mild.compile_detector_sampler()
+
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        drift_z_threshold=1.5,
+        adaptation_tax=0.008,
+        dead_zone_epsilon=0.004,
+        reference_defect_rate=0.015,
+    )
+
+    # Very small window: SE is high (~0.015), suppressing LCB below tax + deadzone
+    syndromes, _ = sampler_mild.sample(shots=150, separate_observables=True)
+    decision, _, stats = controller.evaluate_window(syndromes)
+
+    # Should safely abstain (STAY)
+    assert decision == GateDecision.STAY

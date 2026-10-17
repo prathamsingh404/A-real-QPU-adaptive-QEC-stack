@@ -67,3 +67,39 @@ class TestSyndromeExtractor:
 
         assert tensor.ndim == 3
         assert tensor.shape[0] == 100  # shots
+
+    def test_detector_graph(self):
+        """Test detector graph construction."""
+        circuit = self._make_noisy_circuit(p=0.01)
+        extractor = SyndromeExtractor(circuit)
+
+        graph = extractor.build_detector_graph()
+
+        assert graph.num_detectors == circuit.num_detectors
+        assert len(graph.edges) > 0  # should have error mechanisms
+
+    def test_surface_code_extraction(self):
+        """Test extraction for surface code."""
+        circuit = self._make_noisy_circuit(code_type="surface", distance=3, rounds=3)
+        extractor = SyndromeExtractor(circuit)
+
+        detections, obs = extractor.sample_detectors(shots=500)
+
+        assert detections.shape[0] == 500
+        assert detections.shape[1] == circuit.num_detectors
+
+    def test_detector_record_creation(self):
+        """Test creating a DetectorRecord."""
+        circuit = self._make_noisy_circuit()
+        extractor = SyndromeExtractor(circuit)
+
+        detections, obs = extractor.sample_detectors(shots=100)
+        record = extractor.create_detector_record(
+            experiment_id="test_001",
+            detection_events=detections,
+            observable_flips=obs,
+            num_rounds=3,
+        )
+
+        assert record.experiment_id == "test_001"
+        assert record.num_detectors == circuit.num_detectors

@@ -1,0 +1,369 @@
+"""
+Live DEM Calibration Experiment.
+
+Validates Phase 4 / Stage 3 of the Adaptive QEC Stack:
+Evaluates real-time closed-loop Detector Error Model (DEM) graph reweighting
+under drifting physical noise.
+
+Compares:
+    1. Static Factory MWPM (fixed matching graph from nominal calibration)
+    2. Live-Calibrated MWPM (dynamic DEM reweighting from sliding-window syndrome/hardware telemetry)
+    3. Static Union-Find Baseline
+
+Usage:
+    python -m adaptive_qec.experiments.live_calibration
+    python -m adaptive_qec.experiments.live_calibration --windows 30 --shots 1000
+    python -m adaptive_qec.experiments.live_calibration --scenario drift --distance 3
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+import numpy as np
+import pymatching
+import stim
+
+from adaptive_qec.analysis.significance import (
+    StatisticalTestResult,
+    welch_t_test,
+    wilson_score_ci,
+)
+from adaptive_qec.decoders.dem_calibration import CalibratedDEM, DEMCalibrator
+from adaptive_qec.decoders.union_find import UnionFindDecoder
+from adaptive_qec.engine.scenarios import (
+    NoiseScenarioFactory,
+    NoiseSnapshot,
+    burst_scenario,
+    drift_scenario,
+    multi_phase_scenario,
+    stationary_scenario,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class LiveCalibrationConfig:
+    """Configuration for live DEM calibration experiment."""
+
+    code_distance: int = 3
+    num_rounds: int = 3
+    num_windows: int = 40
+    shots_per_window: int = 1000
+    scenario: str = "drift"
+    nominal_error_rate: float = 0.003
+    smoothing: float = 0.35
+    seed: int = 42
+    output_dir: str = "experiments/results/live_calibration"
+
+
+@dataclass
+class WindowComparison:
+    """Per-window evaluation record."""
+
+    window_idx: int
+    p_2q: float
+    p_ro: float
+    static_errors: int
+    calibrated_errors: int
+    uf_errors: int
+    total_shots: int
+    static_ler: float
+    calibrated_ler: float
+    uf_ler: float
+
+
+class LiveCalibrationExperiment:
+    """Experiment comparing static vs live-calibrated decoders under drift."""
+
+    def __init__(self, config: LiveCalibrationConfig) -> None:
+        self._config = config
+        self._rng = np.random.default_rng(config.seed)
+
+        # Baseline nominal circuit and static factory matcher
+        self._nominal_circuit = self._build_circuit(
+            p_2q=config.nominal_error_rate,
+            p_ro=config.nominal_error_rate * 2.0,
+        )
+        self._static_dem = self._nominal_circuit.detector_error_model(decompose_errors=True)
+        self._static_matcher = pymatching.Matching.from_detector_error_model(self._static_dem)
+
+        # DEM Calibrator initialized with nominal circuit
+        self._calibrator = DEMCalibrator(
+            circuit=self._nominal_circuit,
+            min_probability=1e-6,
+            max_probability=0.4999,
+        )
+
+        # Union-Find decoder
+        self._uf_decoder = UnionFindDecoder()
+        self._uf_decoder.configure_from_dem(self._static_dem)
+
+        # Noise scenario
+        self._scenario = self._create_scenario()
+
+        # Telemetry
+        self._records: list[WindowComparison] = []
+
+    def _build_circuit(self, p_2q: float, p_ro: float) -> stim.Circuit:
+        """Construct surface code circuit with specified physical noise rates."""
+        d = self._config.code_distance
+        r = self._config.num_rounds
+        return stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=d,
+            rounds=r,
+            after_clifford_depolarization=p_2q,
+            before_round_data_depolarization=p_2q,
+            before_measure_flip_probability=p_ro,
+            after_reset_flip_probability=p_ro * 0.5,
+        )
+
+    def _create_scenario(self) -> NoiseScenarioFactory:
+        """Create noise scenario based on config."""
+        n = self._config.num_windows
+        scenarios = {
+            "stationary": lambda: stationary_scenario(total_steps=n),
+            "drift": lambda: drift_scenario(total_steps=n, rate=0.0003),
+            "burst": lambda: burst_scenario(total_steps=n),
+            "multi_phase": lambda: multi_phase_scenario(total_steps=n),
+        }
+        factory_fn = scenarios.get(self._config.scenario, scenarios["drift"])
+        return factory_fn()
+
+    def run(self) -> dict[str, Any]:
+        """Execute the live calibration experiment."""
+        logger.info(
+            f"Starting LIVE CALIBRATION experiment: d={self._config.code_distance}, "
+            f"windows={self._config.num_windows}, scenario={self._config.scenario}"
+        )
+        t_start = time.time()
+        cfg = self._config
+
+        for window_idx in range(cfg.num_windows):
+            snapshot: NoiseSnapshot = self._scenario.step()
+            p_2q = snapshot.p_2q
+            p_ro = snapshot.p_ro
+
+            # Generate real drifting circuit and sample syndromes
+            noisy_circuit = self._build_circuit(p_2q=p_2q, p_ro=p_ro)
+            sampler = noisy_circuit.compile_detector_sampler(seed=int(self._rng.integers(0, 2**31)))
+            detection_events, observables = sampler.sample(
+                shots=cfg.shots_per_window,
+                separate_observables=True,
+            )
+
+            obs_flat = observables[:, :1] if observables.ndim > 1 else observables.reshape(-1, 1)
+
+            # 1. Decode with Static Factory MWPM
+            static_preds = self._static_matcher.decode_batch(detection_events)
+            static_flat = static_preds[:, :1] if static_preds.ndim > 1 else static_preds.reshape(-1, 1)
+            static_errs = int(np.sum(np.any(static_flat != obs_flat, axis=1)))
+
+            # 2. Decode with Live-Calibrated MWPM
+            calibrated_dem: CalibratedDEM = self._calibrator.calibrate_from_syndromes(
+                detection_events,
+                smoothing=cfg.smoothing,
+                calibration_timestamp=f"window_{window_idx}",
+            )
+            calibrated_matcher = calibrated_dem.to_matching()
+            cal_preds = calibrated_matcher.decode_batch(detection_events)
+            cal_flat = cal_preds[:, :1] if cal_preds.ndim > 1 else cal_preds.reshape(-1, 1)
+            cal_errs = int(np.sum(np.any(cal_flat != obs_flat, axis=1)))
+
+            # 3. Decode with Static Union-Find
+            uf_preds = self._uf_decoder.decode_batch(detection_events)
+            uf_flat = uf_preds[:, :1] if uf_preds.ndim > 1 else uf_preds.reshape(-1, 1)
+            uf_errs = int(np.sum(np.any(uf_flat != obs_flat, axis=1)))
+
+            rec = WindowComparison(
+                window_idx=window_idx,
+                p_2q=p_2q,
+                p_ro=p_ro,
+                static_errors=static_errs,
+                calibrated_errors=cal_errs,
+                uf_errors=uf_errs,
+                total_shots=cfg.shots_per_window,
+                static_ler=static_errs / cfg.shots_per_window,
+                calibrated_ler=cal_errs / cfg.shots_per_window,
+                uf_ler=uf_errs / cfg.shots_per_window,
+            )
+            self._records.append(rec)
+
+            if (window_idx + 1) % 10 == 0 or window_idx == cfg.num_windows - 1:
+                logger.info(
+                    f"Window {window_idx + 1:2d}/{cfg.num_windows}: "
+                    f"p_2q={p_2q:.4f}, "
+                    f"Static MWPM LER={rec.static_ler:.4f}, "
+                    f"Calibrated MWPM LER={rec.calibrated_ler:.4f}, "
+                    f"UF LER={rec.uf_ler:.4f}"
+                )
+
+        elapsed = time.time() - t_start
+        results = self._analyze_results(elapsed)
+        self._save_results(results)
+        self._print_summary(results)
+        return results
+
+    def _analyze_results(self, elapsed: float) -> dict[str, Any]:
+        """Compute statistical metrics and hypothesis tests."""
+        cfg = self._config
+        total_shots = sum(r.total_shots for r in self._records)
+
+        static_total_errs = sum(r.static_errors for r in self._records)
+        cal_total_errs = sum(r.calibrated_errors for r in self._records)
+        uf_total_errs = sum(r.uf_errors for r in self._records)
+
+        static_overall_ler = static_total_errs / max(total_shots, 1)
+        cal_overall_ler = cal_total_errs / max(total_shots, 1)
+        uf_overall_ler = uf_total_errs / max(total_shots, 1)
+
+        static_ci = wilson_score_ci(static_total_errs, total_shots)
+        cal_ci = wilson_score_ci(cal_total_errs, total_shots)
+        uf_ci = wilson_score_ci(uf_total_errs, total_shots)
+
+        static_lers = [r.static_ler for r in self._records]
+        cal_lers = [r.calibrated_ler for r in self._records]
+        uf_lers = [r.uf_ler for r in self._records]
+
+        # Hypothesis test: Calibrated vs Static MWPM
+        t_test_static = welch_t_test(static_lers, cal_lers)
+
+        # Relative improvement
+        rel_improvement = 0.0
+        if static_overall_ler > 0:
+            rel_improvement = (static_overall_ler - cal_overall_ler) / static_overall_ler * 100.0
+
+        return {
+            "config": {
+                "code_distance": cfg.code_distance,
+                "num_rounds": cfg.num_rounds,
+                "num_windows": cfg.num_windows,
+                "shots_per_window": cfg.shots_per_window,
+                "scenario": cfg.scenario,
+                "smoothing": cfg.smoothing,
+                "nominal_error_rate": cfg.nominal_error_rate,
+            },
+            "summary": {
+                "total_shots": total_shots,
+                "static_mwpm": {
+                    "errors": static_total_errs,
+                    "overall_ler": static_overall_ler,
+                    "ci_95": list(static_ci),
+                    "mean_ler": float(np.mean(static_lers)),
+                    "std_ler": float(np.std(static_lers)),
+                },
+                "calibrated_mwpm": {
+                    "errors": cal_total_errs,
+                    "overall_ler": cal_overall_ler,
+                    "ci_95": list(cal_ci),
+                    "mean_ler": float(np.mean(cal_lers)),
+                    "std_ler": float(np.std(cal_lers)),
+                },
+                "static_uf": {
+                    "errors": uf_total_errs,
+                    "overall_ler": uf_overall_ler,
+                    "ci_95": list(uf_ci),
+                    "mean_ler": float(np.mean(uf_lers)),
+                    "std_ler": float(np.std(uf_lers)),
+                },
+                "comparison": {
+                    "relative_improvement_pct": rel_improvement,
+                    "p_value": t_test_static.p_value,
+                    "statistic": t_test_static.statistic,
+                    "significant_at_05": t_test_static.p_value < 0.05,
+                    "significant_at_01": t_test_static.p_value < 0.01,
+                },
+                "elapsed_s": round(elapsed, 2),
+            },
+            "per_window": [
+                {
+                    "window": r.window_idx,
+                    "p_2q": r.p_2q,
+                    "p_ro": r.p_ro,
+                    "static_ler": r.static_ler,
+                    "calibrated_ler": r.calibrated_ler,
+                    "uf_ler": r.uf_ler,
+                }
+                for r in self._records
+            ],
+        }
+
+    def _save_results(self, results: dict[str, Any]) -> None:
+        """Save results to disk."""
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        output_dir = Path(self._config.output_dir) / timestamp
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(output_dir / "results.json", "w") as f:
+            json.dump(results, f, indent=2, default=str)
+
+        logger.info(f"Results saved to {output_dir}")
+
+    def _print_summary(self, results: dict[str, Any]) -> None:
+        """Print experiment summary to console."""
+        sm = results["summary"]
+        comp = sm["comparison"]
+        print("\n" + "=" * 70)
+        print("LIVE DEM CALIBRATION EXPERIMENT RESULTS")
+        print("=" * 70)
+        print(f"  Code distance:        d={results['config']['code_distance']}")
+        print(f"  Total shots:          {sm['total_shots']:,}")
+        print(f"  Scenario:             {results['config']['scenario']}")
+        print("-" * 70)
+        print(f"  Static Factory MWPM:  LER = {sm['static_mwpm']['overall_ler']:.6f}  95% CI [{sm['static_mwpm']['ci_95'][0]:.6f}, {sm['static_mwpm']['ci_95'][1]:.6f}]")
+        print(f"  Live-Calibrated MWPM: LER = {sm['calibrated_mwpm']['overall_ler']:.6f}  95% CI [{sm['calibrated_mwpm']['ci_95'][0]:.6f}, {sm['calibrated_mwpm']['ci_95'][1]:.6f}]")
+        print(f"  Static Union-Find:    LER = {sm['static_uf']['overall_ler']:.6f}  95% CI [{sm['static_uf']['ci_95'][0]:.6f}, {sm['static_uf']['ci_95'][1]:.6f}]")
+        print("-" * 70)
+        print(f"  Relative Gain:        {comp['relative_improvement_pct']:+.2f}%")
+        print(f"  Welch t-statistic:    {comp['statistic']:.4f}")
+        print(f"  p-value:              {comp['p_value']:.6f}")
+        print(f"  Significant (p < .05): {comp['significant_at_05']}")
+        print(f"  Significant (p < .01): {comp['significant_at_01']}")
+        print(f"  Elapsed:              {sm['elapsed_s']:.1f}s")
+        print("=" * 70 + "\n")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Live DEM Calibration Experiment")
+    parser.add_argument("--distance", type=int, default=3, help="Code distance")
+    parser.add_argument("--rounds", type=int, default=3, help="QEC rounds")
+    parser.add_argument("--windows", type=int, default=30, help="Number of windows")
+    parser.add_argument("--shots", type=int, default=1000, help="Shots per window")
+    parser.add_argument("--scenario", type=str, default="drift", choices=["stationary", "drift", "burst", "multi_phase"])
+    parser.add_argument("--smoothing", type=float, default=0.35, help="EWMA smoothing factor")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--output-dir", type=str, default="experiments/results/live_calibration")
+
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    config = LiveCalibrationConfig(
+        code_distance=args.distance,
+        num_rounds=args.rounds,
+        num_windows=args.windows,
+        shots_per_window=args.shots,
+        scenario=args.scenario,
+        smoothing=args.smoothing,
+        seed=args.seed,
+        output_dir=args.output_dir,
+    )
+
+    experiment = LiveCalibrationExperiment(config)
+    experiment.run()
+
+
+if __name__ == "__main__":
+    main()

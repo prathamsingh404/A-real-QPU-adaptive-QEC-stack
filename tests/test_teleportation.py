@@ -52,3 +52,32 @@ class TestTeleportation:
         qc = dt.build_circuit(measurement_basis="X")
         op_names = [inst.operation.name for inst in qc.data]
         assert "swap" in op_names
+
+    def test_compute_fidelity_ideal_plus_state(self) -> None:
+        """Verify fidelity calculation for ideal |+> state counts."""
+        state = get_cardinal_state("|+>")
+        dt = DeterministicTeleportation(target_state=state, regime="dynamic")
+        # In X-basis for |+>, outcome 0 should dominate
+        counts_x = {"000": 950, "100": 50}
+        # In Y-basis for |+>, outcomes 0 and 1 are 50/50
+        counts_y = {"000": 500, "100": 500}
+        # In Z-basis for |+>, outcomes 0 and 1 are 50/50
+        counts_z = {"000": 500, "100": 500}
+
+        results = dt.compute_fidelity_from_tomography(counts_x, counts_y, counts_z)
+        assert results["state_fidelity"] > 0.90
+        assert results["surpasses_classical_limit"] is True
+        assert results["deterministic_yield_rate"] == 1.0
+
+    def test_post_selected_yield_rate(self) -> None:
+        """Verify post-selected regime discards non-(0,0) BSM shots."""
+        state = get_cardinal_state("|0>")
+        dt = DeterministicTeleportation(target_state=state, regime="post_selected")
+        # 4 BSM branches: 00, 01, 10, 11 (each ~25% frequency)
+        counts_z = {"000": 250, "001": 250, "010": 250, "011": 250}
+        counts_x = {"000": 250, "001": 250, "010": 250, "011": 250}
+        counts_y = {"000": 250, "001": 250, "010": 250, "011": 250}
+
+        results = dt.compute_fidelity_from_tomography(counts_x, counts_y, counts_z)
+        # Only the '000' branch is retained out of the 1000 total per basis
+        assert results["deterministic_yield_rate"] < 0.35

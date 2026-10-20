@@ -86,3 +86,46 @@ class TestThresholdAnalyzer:
         analyzer = ThresholdAnalyzer()
         analyzer.add_result(3, _mock_metrics(1000, 20), physical_error_rate=0.003)
         analyzer.add_result(5, _mock_metrics(1000, 5), physical_error_rate=0.003)
+
+        table = analyzer.scaling_table()
+        assert len(table) == 2
+        assert table[0]["distance"] == 3
+        assert table[0]["lambda_vs_prev"] is None
+        assert table[1]["distance"] == 5
+        assert table[1]["lambda_vs_prev"] > 1.0
+
+
+class TestDistanceSweep:
+    """Tests for automated DistanceSweep runner."""
+
+    def test_sweep_execution(self):
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.008
+
+        sweep = DistanceSweep(
+            distances=[3],
+            rounds_per_distance={3: 2},
+            noise=noise,
+            decoder_names=["mwpm", "union_find"],
+            shots_per_distance=100,
+            code_type="surface",
+        )
+        results = sweep.run()
+
+        assert isinstance(results, DistanceSweepResults)
+        assert len(results.results) == 2  # mwpm and union_find
+        assert results.total_wall_time_s > 0
+
+        mwpm_res = results.get_by_decoder("mwpm")
+        assert len(mwpm_res) == 1
+        assert mwpm_res[0].metrics.total_shots == 100
+        assert 0 <= mwpm_res[0].metrics.logical_error_rate <= 1.0
+
+        uf_res = results.get_by_decoder("union_find")
+        assert len(uf_res) == 1
+        assert uf_res[0].metrics.total_shots == 100
+        assert 0 <= uf_res[0].metrics.logical_error_rate <= 1.0
+
+        d_dict = results.to_dict()
+        assert "results" in d_dict
+        assert len(d_dict["results"]) == 2

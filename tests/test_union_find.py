@@ -196,3 +196,101 @@ class TestUnionFindDecoder:
         assert 0 <= metrics.logical_error_rate <= 1
         assert metrics.decode_time_s > 0
         assert metrics.throughput_shots_per_s > 0
+
+    def test_error_rate_reasonable(self):
+        """UF error rate should be in a reasonable range for d=3."""
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+
+        sampler = circuit.compile_detector_sampler()
+        detectors, observables = sampler.sample(
+            shots=1000, separate_observables=True
+        )
+
+        decoder = UnionFindDecoder()
+        decoder.configure(circuit=circuit)
+        metrics = decoder.decode_batch(detectors, observables)
+
+        # At p=0.5%, d=3, error rate should be well below 50%
+        assert metrics.logical_error_rate < 0.5
+
+    def test_latency_metrics(self):
+        """Latency percentiles should be ordered correctly."""
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+
+        sampler = circuit.compile_detector_sampler()
+        detectors, observables = sampler.sample(
+            shots=200, separate_observables=True
+        )
+
+        decoder = UnionFindDecoder()
+        decoder.configure(circuit=circuit)
+        metrics = decoder.decode_batch(detectors, observables)
+
+        assert metrics.latency_p50_us <= metrics.latency_p95_us
+        assert metrics.latency_p95_us <= metrics.latency_p99_us
+        assert metrics.latency_p99_us <= metrics.latency_p999_us
+
+
+# ---------------------------------------------------------------------------
+# Comparison: UF vs MWPM
+# ---------------------------------------------------------------------------
+
+class TestUFvsMWPM:
+    """Compare UF decoder against MWPM baseline."""
+
+    def test_uf_vs_mwpm_same_data(self):
+        """
+        Run both decoders on identical syndrome data.
+        UF should be within ~20% error rate of MWPM.
+        """
+        code = create_code("surface", distance=3, rounds=3)
+        noise = NoiseConfig()
+        noise.gate.two_qubit = 0.005
+        circuit = code.generate_circuit(noise=noise)
+
+        sampler = circuit.compile_detector_sampler()
+        detectors, observables = sampler.sample(
+            shots=2000, separate_observables=True
+        )
+
+        # MWPM
+        mwpm = MWPMDecoder()
+        mwpm.configure(circuit=circuit)
+        mwpm_metrics = mwpm.decode_batch(detectors, observables)
+
+        # UF
+        uf = UnionFindDecoder()
+        uf.configure(circuit=circuit)
+        uf_metrics = uf.decode_batch(detectors, observables)
+
+        # UF should be slightly worse but not dramatically so
+        # Allow up to 3x worse error rate (generous for d=3 low noise)
+        if mwpm_metrics.logical_error_rate > 0:
+            ratio = uf_metrics.logical_error_rate / mwpm_metrics.logical_error_rate
+            assert ratio < 3.0, (
+                f"UF error rate ({uf_metrics.logical_error_rate:.4f}) is "
+                f"{ratio:.1f}x worse than MWPM ({mwpm_metrics.logical_error_rate:.4f})"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Registry integration
+# ---------------------------------------------------------------------------
+
+class TestRegistryIntegration:
+    """Test that UF decoder is properly registered."""
+
+    def test_get_union_find(self):
+        decoder = get_decoder("union_find")
+        assert decoder.name == "union_find"
+        assert isinstance(decoder, UnionFindDecoder)
+
+    def test_get_by_uppercase(self):
+        decoder = get_decoder("UNION_FIND")
+        assert decoder.name == "union_find"

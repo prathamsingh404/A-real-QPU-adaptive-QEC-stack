@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "backend": "ibm_marrakesh",
+    "processor": "Heron r2",
+    "num_qubits": 156,
+    "timestamp": "2026-09-27T15:22:39.041803+00:00",
+    "shots_per_circuit": 1000
+  },
+  "experiments": {
+    "true_quantum_422_code": {
+      "description": "[[4, 2, 2]] quantum code detecting simultaneous X bit-flips and Z phase-flips",
+      "job_id_unmitigated": "dasj9djg95ks73efkbog",
+      "job_id_dd_mitigated": "dasj9e5vr3kc73ek6o4g",
+      "unmitigated": {
+        "shots": 1000,
+        "z_stabilizer_defects": 119,
+        "z_defect_rate": 0.119,
+        "x_stabilizer_defects": 83,
+        "x_defect_rate": 0.083,
+        "total_detected_errors": 175,
+        "error_detection_rate": 0.175,
+        "code_space_violations": 305,
+        "code_space_fidelity": 0.6950000000000001,
+        "ci_95": [
+          0.1527053610921423,
+          0.19978212298901157
+        ]
+      },
+      "dd_mitigated": {
+        "shots": 1000,
+        "z_stabilizer_defects": 167,
+        "z_defect_rate": 0.167,
+        "x_stabilizer_defects": 404,
+        "x_defect_rate": 0.404,
+        "total_detected_errors": 488,
+        "error_detection_rate": 0.488,
+        "code_space_violations": 280,
+        "code_space_fidelity": 0.72,
+        "ci_95": [
+          0.45712383226342285,
+          0.5189680133026505
+        ]
+      },
+      "statistical_comparison": {
+        "z_statistic": -14.867463040462036,
+        "p_value": 5.360651698534969e-50,
+        "significant_at_005": true
+      }
+    },
+    "dynamic_circuit_feedforward": {
+      "description": "OpenQASM 3 sub-microsecond on-chip active feedforward conditional correction",
+      "job_id": "dasj9edvr3kc73ek6o60",
+      "metrics": {
+        "shots": 1000,
+        "feedforward_corrections_applied": 18,
+        "feedforward_trigger_rate": 0.018,
+        "final_bell_parity_fidelity": 0.915
+      }
+    }
+  }
+}

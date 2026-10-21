@@ -44,3 +44,24 @@ To strictly prevent p-hacking and post-hoc parameter overfitting:
    - Random Seeds: `1000` to `1029` ($N=30$ independent trajectories).
    - Evaluated exactly once under frozen parameters and configurations in `configs/suite.yaml`.
    - All results tables and figures in the manuscript are compiled exclusively from this partition.
+
+---
+
+## 4. Design Power Calculation (Sample Sizing)
+
+*Note: This is a prospective experimental design calculation for sample sizing, not empirical evidence.*
+
+- **Pilot Variance on Tuning Partition**: Evaluated on seeds 0–99 at $d=3$, the standard deviation of trajectory-paired deltas under localized drift is $\sigma_{\Delta} \approx 0.0011$.
+- **Minimum Detectable Effect Size**: Setting a minimum relevant effect size $\Delta_{\text{min}} = -0.0006$ (corresponding to Cohen's $d = |\Delta_{\text{min}}| / \sigma_{\Delta} \approx 0.55$), a paired sample size of $N = 30$ trajectories achieves:
+  $$\text{Statistical Power} = 1 - \beta \approx 0.84 \quad (\text{at } \alpha = 0.05, \text{ two-sided})$$
+- Confirmatory execution with $N=30$ seeds therefore provides adequate statistical power to detect meaningful shifts without excessive compute overhead.
+
+---
+
+## 5. Decision Rules & Confirmatory Acceptance
+
+| Outcome on Confirmatory Held-Out Set | Scientific Interpretation & Action |
+| :--- | :--- |
+| **Localized Hotspot**: $\bar{\Delta} < 0$, $p_{\text{Holm}} < 0.05$ | **Confirmed**: Localized drift justifies adaptive reweighting. |
+| **Negative Controls (Stationary/Uniform)**: $\bar{\Delta} \approx 0$, $p > 0.05$, Stay Rate $> 85\%$ | **Confirmed**: Confidence gating prevents false adaptation under null drift. |
+| **Small Window ($W=200$)**: Naive LER $\gg$ Static LER, CG-CCADS Stay Rate $> 90\%$ | **Confirmed**: Finite-sample variance explosion demonstrated; safe abstention protects fidelity. |

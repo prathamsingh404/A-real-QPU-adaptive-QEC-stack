@@ -37,3 +37,26 @@ Below, we detail the six primary failure modes and their exact operational bound
 ---
 
 ## 3. Quantitative Boundary Conditions
+
+### 3.1 Timescale Ratio Boundary ($\rho$)
+The adaptation timescale ratio is defined as:
+$$\rho \equiv \frac{\tau_{\text{adapt}}}{\tau_{\text{drift}}} = \frac{T_{\text{meas}} + T_{\text{decode}} + T_{\text{decision}} + T_{\text{comm}}}{\tau_{\text{drift}}}$$
+- **Regime $\rho < 0.1$ (Quasi-Static Drift)**: Adaptation is highly effective. $\eta_{\text{adapt}} \to 1.0$.
+- **Regime $0.1 \le \rho \le 1.0$ (Intermediate Drift)**: Selective adaptation required; cost constraints determine profitability.
+- **Regime $\rho > 1.0$ (High-Frequency Jitter)**: **Strictly un-adaptable**. The noise environment changes faster than information can be processed. CG-CCADS proves its mathematical optimality by remaining in `STAY`.
+
+### 3.2 Switching Cost Upper Bound
+Let $\Delta L_{\text{max}}$ be the maximum possible logical error rate reduction between candidate decoders under the true drifted noise. An adaptation policy can never be profitable if:
+$$\Delta L_{\text{max}} < \frac{C_{\text{switch}}}{M}$$
+where $M$ is the expected duration (in QEC rounds) of the noise regime before the next transition.
+
+### 3.3 Sample Size Lower Bound for Decision Making
+To distinguish a genuine improvement $\Delta$ from statistical noise at confidence level $1-\alpha$ with power $1-\beta$:
+$$N_{\text{obs}} \ge \frac{(z_{1-\alpha/2} + z_{1-\beta})^2 \cdot 2 p(1-p)}{\Delta^2}$$
+If the available syndrome window $W < N_{\text{obs}}$, no causal decision can be made. CG-CCADS mandates probation and rollback rather than irrevocable commitment.
+
+---
+
+## 4. Conclusion & Pedagogical Value
+
+Reporting these failure modes strengthens the manuscript substantially. Rather than presenting adaptive QEC as an unchecked panacea, this paper establishes the **first rigorous decision-theoretic boundaries** governing when quantum error correction should—and should not—adapt.

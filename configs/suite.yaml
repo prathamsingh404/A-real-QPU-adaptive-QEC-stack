@@ -1,0 +1,80 @@
+# Confirmatory Simulation Benchmark Suite Specification
+# Governed by frozen Analysis Plan (docs/ANALYSIS_PLAN.md)
+experiment:
+  name: "adaptive_qec_confirmatory_suite"
+  version: "2.0.0"
+  provenance: "simulation"
+
+noise_regime:
+  base_physical_error: 0.004 # Below threshold (surface code threshold ~0.01)
+  distances: [3, 5]
+
+scenarios:
+  - id: "stationary_noise"
+    label: "Stationary Baseline"
+    type: "confirmatory_control"
+    description: "Nominal physical noise (negative control, optimal policy is STAY)"
+    drift_type: "stationary"
+    p_base: 0.004
+    drift_p: 0.004
+    hotspot_qubit: null
+
+  - id: "uniform_drift"
+    label: "Uniform Global Drift"
+    type: "confirmatory_control"
+    description: "All error rates scale globally to 0.007 (negative control, delta <= 1.7%, optimal policy is STAY)"
+    drift_type: "uniform_ramp"
+    p_base: 0.004
+    drift_p: 0.007
+    hotspot_qubit: null
+
+  - id: "localized_hotspot"
+    label: "Localized Hotspot"
+    type: "confirmatory_drift"
+    description: "Central data transmon undergoes 10x localized drift to 0.040 (structural drift where reweighting pays off)"
+    drift_type: "localized_hotspot"
+    p_base: 0.004
+    drift_p: 0.040
+    hotspot_qubit_d3: 10
+    hotspot_qubit_d5: 27
+
+  - id: "structural_anisotropy"
+    label: "Structural Anisotropy Shift"
+    type: "confirmatory_drift"
+    description: "Asymmetric dephasing vs relaxation shift (p_X=0.002, p_Z=0.010)"
+    drift_type: "structural_anisotropy"
+    p_base: 0.004
+    drift_p: 0.010
+    hotspot_qubit: null
+
+window_regimes:
+  - window_size: 200
+    description: "Small window regime demonstrating sample variance penalty (+170% on stationary noise)"
+  - window_size: 1000
+    description: "Intermediate window regime"
+  - window_size: 2000
+    description: "Large window regime where localized drift reweighting pays off"
+
+trajectory:
+  total_shots: 10000
+
+seeds:
+  tuning: [0, 99]
+  held_out_evaluation: [1000, 1029] # N=30 independent seeds
+
+arms:
+  - id: "arm_static_mwpm"
+    label: "Static Factory MWPM"
+    description: "Fixed pre-calibrated baseline matching graph. Zero online update cost."
+
+  - id: "arm_naive_reweighted_mwpm"
+    label: "Naive Reweighted MWPM (Spitz et al.)"
+    description: "Unconditionally updates matching edge weights every window from empirical covariance."
+
+  - id: "arm_cg_ccads"
+    label: "Confidence-Gated Reweighting (CG-CCADS)"
+    description: "Label-free statistical gate: updates weights only when drift LCB exceeds estimation noise and adaptation tax."
+
+  - id: "arm_oracle_mwpm"
+    label: "Oracle Matched MWPM"
+    description: "Theoretical performance ceiling with exact knowledge of drifting noise parameters."

@@ -71,3 +71,40 @@ Output:
 15: end if
 16: 
 17: // GATE 1: Drift Significance Gate
+18: if D_t <= T_drift and not is_drift_flag then
+19:     Return STAY   // Regarded as stationary Poisson noise; cost = 0
+20: end if
+21: 
+22: // GATE 2: Relevance & Decoder Disagreement Gate
+23: C_t <- ComputePairwiseDisagreement(s_t, d_active, d_candidate)
+24: if C_t <= delta_disagree then
+25:     Return STAY   // Candidates agree on > (1 - delta_disagree) corrections; zero benefit
+26: end if
+27: 
+28: // GATE 3: Lower Confidence Bound & Cost Constraint Gate
+29: delta_hat <- EstimateSurrogateGain(s_t, d_active, d_candidate)
+30: sigma_delta <- ComputeStandardError(s_t)
+31: LCB_gain <- delta_hat - z_{1-alpha} * sigma_delta
+32: 
+33: // Dead Zone & Hysteresis Checks
+34: required_margin <- tau_adapt + epsilon_deadzone + (T_hys if d_active == d_base else 0)
+35: 
+36: if LCB_gain > required_margin and HasRemainingBudget(B_epoch) then
+37:     ConsumeBudget(B_epoch)
+38:     ResetCUSUM()
+39:     InitializeProbation(K_prob)
+40:     Return SWITCH(d_candidate)
+41: else
+42:     Return STAY   // Gain is statistically indistinguishable from cost; abstain
+43: end if
+================================================================================
+```
+
+---
+
+## 4. Key Properties & Guarantees
+
+1. **Zero Flapping Guarantee**: Under dual-threshold hysteresis $T_{\uparrow} > T_{\downarrow}$ and dead zone $\epsilon_{\text{deadzone}}$, high-frequency noise jitter cannot trigger rapid cyclical switching.
+2. **Strict Budget Bound**: The controller never executes more than $B_{\text{max}}$ switches per epoch of length $L$, guaranteeing that switching latency cannot accumulate unboundedly.
+3. **Probationary Safety**: Any switch enters a temporary probation period of $K$ blocks. If the candidate decoder performs worse than baseline under real hardware noise, the controller immediately executes `ROLLBACK`.
+4. **Deployable Exclusivity**: All inputs $x_t$ are computed strictly from syndrome bitstrings and macro calibration data. Zero oracle information is ingested.

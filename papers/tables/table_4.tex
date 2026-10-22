@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\small
+\caption{\textbf{Software Orchestration Latency Stack.} Measured via \texttt{time.perf\_counter()} on host CPU (Python 3.11 / C++ PyMatching). Clearly delineated as an offline / macro-timescale orchestration layer, not sub-microsecond FPGA real-time decoding. Provenance: analytic/host measurement.}
+\label{tab:latency_stack}
+\begin{tabular}{llcc}
+\toprule
+\textbf{Subsystem Phase} & \textbf{Component} & \textbf{Mean Duration} & \textbf{Share (\%)} \\
+\midrule
+Syndrome Readout ($T_{\text{meas}}$) & Simulated Detection Stream & $1.50\,\mu\text{s}$ & $0.2\%$ \\
+Syndrome Decoding ($T_{\text{decode}}$) & PyMatching MWPM Solve & $591.50\,\mu\text{s}$ & $64.8\%$ \\
+Controller Decision ($T_{\text{decision}}$) & CG-CCADS 3-Gate Pipeline & $317.51\,\mu\text{s}$ & $34.8\%$ \\
+Software Dispatch ($T_{\text{comm}}$) & Internal Process Dispatch & $2.00\,\mu\text{s}$ & $0.2\%$ \\
+\midrule
+\textbf{Total Orchestration Cycle} & \textbf{Macro-Step Cycle} & \textbf{912.51\,$\mu$\text{s}} & \textbf{100.0\%} \\
+\bottomrule
+\end{tabular}
+\end{table}

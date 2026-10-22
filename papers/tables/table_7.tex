@@ -1,0 +1,18 @@
+\begin{table*}[t]
+\centering
+\small
+\caption{\textbf{Systematic Prior Art Comparison Matrix.} Positioning CG-CCADS within classical, neural, and adaptive QEC decoding frameworks.}
+\label{tab:prior_art}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Framework} & \textbf{Noise Model} & \textbf{Adaptation Basis} & \textbf{Cost-Aware?} & \textbf{Safe Abstention (\texttt{STAY})?} & \textbf{Theoretical Bound} & \textbf{Evaluation Modality} \\
+\midrule
+Static MWPM~\cite{dennis2002,fowler2012} & Stationary Pauli & None (Fixed prior) & N/A & Always stays & Static threshold & Multi-platform QPU \\
+Spitz et al.~\cite{spitz2018} & Time-dependent & Unconditional covariance & No & No & Estimator variance & Simulation \\
+Bhardwaj et al.~\cite{bhardwaj2026} & Drifting channels & Sliding-window reweighting & No & No & Asymptotic convergence & Simulation \\
+AlphaQubit~\cite{alphaqubit2024} & Device-calibrated & Transformer neural inference & No & No & Empirical scaling & Sycamore QPU \\
+Willow RL~\cite{willow2026} & Physical Hamiltonian & Pulse/frequency tuning & Partial & No & RL Convergence & Willow QPU \\
+\textbf{CG-CCADS (This Work)} & \textbf{Non-stationary QEC} & \textbf{3-Gate Statistical LCB} & \textbf{Yes} & \textbf{Yes (Default)} & \textbf{FWER-controlled LCB} & \textbf{Simulation / Emulation} \\
+\bottomrule
+\end{tabular}
+\end{table*}

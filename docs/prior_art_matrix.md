@@ -41,3 +41,24 @@
 ### 2.4 Google Willow RL Control (*Nature* 2026)
 - **Foundational Insight**: Uses reinforcement learning to optimize microwave pulse parameters, frequencies, and physical gate calibrations at the physical device layer.
 - **Our Positioning**: Google Willow intervenes on the **physical quantum Hamiltonian** (pulse-level control). CG-CCADS operates on the **classical information layer** (deciding how syndrome graphs are weighted), avoiding physical state perturbation.
+
+---
+
+## 3. Core Scientific Contributions
+
+1. **Phase Characterization of the Online Reweighting Tradeoff**:
+   First empirical and theoretical demonstration that naive sliding-window DEM reweighting suffers a severe finite-sample tax under small observation windows ($+104.38\%$ degradation at $W=200$), and that uniform global drift provides negligible adaptation headroom ($<2\%$).
+2. **The CG-CCADS 3-Gate Architecture**:
+   A decision-theoretic meta-control pipeline operating strictly on label-free syndrome streams:
+   - *Gate 1: Defect Rate CUSUM Test* ($|Z_{\text{drift}}| \le T_{\text{drift}} \implies \text{STAY}$)
+   - *Gate 2: FWER-Controlled LCB Test* ($\max_e \text{LCB}_e \le \epsilon_{\text{deadzone}} \implies \text{STAY}$)
+   - *Gate 3: Cost-Constrained Threshold* ($\max_e \text{LCB}_e > \tau_{\text{adapt}} + C_{\text{switch}} \implies \text{REWEIGHT}$)
+3. **Rigorous Analytical Bounds**:
+   - Family-wise error rate control: $P(\text{False Switch} \mid H_0) \le \alpha$.
+   - Average Run Length under null stationary noise: $\text{ARL}_0 \ge \frac{\exp(2\delta T) - 2\delta T - 1}{2\delta^2}$.
+   - Minimum detectable drift amplitude threshold $A_{\text{drift}}^*$.
+   - Piecewise-stationary dynamic regret bound: $\mathcal{O}(\sqrt{S \cdot |E| \cdot T \log T} + S \cdot C_{\text{switch}})$.
+4. **Reproducible Empirical Validation**:
+   - Evaluated across $N=30$ independent held-out trajectories (seeds 1000–1029) on rotated surface codes below threshold ($p=0.004 < p_{\text{th}}$, $d \in \{3, 5\}$).
+   - Below-threshold error suppression factor $\Lambda_{3 \to 5} = 1.543 > 1.0$.
+   - Bound to an automated pipeline verified by AST checks (zero hardcoded literals) and cryptographic SHA-256 provenance lock (`paper.lock`).

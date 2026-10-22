@@ -43,3 +43,24 @@ To avoid confounding experimental results, all control actions are formally clas
   - Deliberately choosing `STAY` (abstaining from switching, $C_{\text{switch}} = 0$).
 * **Evaluation Protocol**:
   - **Counterfactual Replay**: Classical policies MUST be evaluated on the **exact same syndrome bitstream** ($s_{1:N}$). This yields zero quantum variance and enables trajectory-paired statistical power ($\Delta_i = \text{LER}_{\text{adaptive}, i} - \text{LER}_{\text{static}, i}$).
+
+### 3.2. Physical Circuit Interventions (`PHYSICAL_CIRCUIT`)
+* **Definition**: Interventions that modify quantum circuits executed on the QPU or simulator.
+* **Examples**:
+  - Inserting Dynamical Decoupling sequences (CPMG, XY4, XY8) during idle stabilizer windows.
+  - Requesting QPU recalibration or retuning frequency offsets.
+  - Physical qubit leakage reset or syndrome idling.
+* **Evaluation Protocol**:
+  - **Interleaved Randomized Blocks ($A/B/B/A$)**: Because physical interventions modify the quantum states, they cannot be evaluated counterfactually on the same shots. They MUST be executed in strictly interleaved randomized blocks to eliminate temporal drift confounds.
+
+---
+
+## 4. Verification and Architectural Enforcement
+
+The architectural boundaries defined in this document are enforced in code by:
+1. `src/adaptive_qec/observation/schema.py`: `ObservationFrame` dataclass with `__slots__` and strict type validation that rejects latent oracle attributes (`actual_p_x`, `true_ler`, `latent_noise`).
+2. `src/adaptive_qec/controller/action.py`: `ControlAction` metadata indicating `is_classical_only()` vs `is_physical()`.
+3. `tests/test_architecture_boundaries.py`: Automated AST parsing and permutation tests verifying that:
+   - The controller module has zero imports of simulation noise schedules.
+   - Permuting hidden latent noise parameters while keeping observed syndrome bitstrings fixed produces zero change in controller decisions.
+   - Separate experimental arms compute independent predictions.

@@ -91,3 +91,54 @@ $$V_{\text{gross}}(A_{\text{drift}}) \approx \kappa \cdot A_{\text{drift}}, \qua
 
 Online adaptation yields a positive net return ($V_{\text{net}} > 0$) if and only if the true physical drift amplitude exceeds the critical threshold:
 $$A_{\text{drift}}^* = \frac{1}{\kappa} \left[ C_{\text{switch}} + C_{\text{latency}} + z_{1 - \alpha / (2|E|)} \sqrt{\frac{p_{\text{ref}}(1 - p_{\text{ref}})}{W}} + \epsilon_{\text{deadzone}} \right]$$
+
+#### Proof:
+From Definition 1.1, $V_{\text{net}} > 0 \iff V_{\text{gross}} > C_{\text{adapt}}$.
+Substituting the linear approximation $V_{\text{gross}} \approx \kappa A_{\text{drift}}$ and the conservative statistical estimation barrier $z_{1 - \alpha/(2|E|)} \text{SE}(W) + \epsilon_{\text{deadzone}}$ required by Gate 2 and Gate 3 yields:
+$$\kappa A_{\text{drift}} > C_{\text{switch}} + C_{\text{latency}} + z_{1 - \alpha/(2|E|)} \text{SE}(W) + \epsilon_{\text{deadzone}}$$
+Dividing both sides by $\kappa > 0$ yields the result. $\blacksquare$
+
+#### Corollary 4.1: The Un-Adaptable Dead Zone
+For any physical drift with amplitude $A_{\text{drift}} < A_{\text{drift}}^*$:
+1. The statistical signal is indistinguishable from finite-sample binomial shot noise.
+2. The gross adaptation benefit is strictly smaller than the reconfiguration and estimation tax.
+3. Attempting online adaptation in this dead zone guarantees systematic LER degradation. CG-CCADS provably abstains (`STAY`) in this regime.
+
+---
+
+## 5. Dynamic Regret Bounds in Piecewise-Stationary Noise
+
+Consider a non-stationary QEC experiment spanning $T$ syndrome rounds, partitioned into $S$ piecewise-stationary environmental epochs:
+$$\mathcal{T} = \bigcup_{s=1}^S [t_{s-1}, t_s), \quad t_0 = 0, \quad t_S = T$$
+separated by $S - 1$ unknown change-points. Within each epoch $s$, the optimal matching graph configuration is $a_s^* = \arg\min_{a \in \mathcal{A}} L(a, \mathcal{D}_s)$.
+
+### Theorem 5.1: Cumulative Tracking Regret Bound
+Let cumulative tracking regret against the dynamic hindsight oracle with switching costs be defined as:
+$$R(T) \equiv \sum_{t=1}^T \left[ L(a_t, \mathcal{D}_t) - L(a_t^*, \mathcal{D}_t) \right] + \sum_{t=1}^T C_{\text{switch}} \cdot \mathbf{1}\{a_t \ne a_{t-1}\}$$
+
+Under the CG-CCADS policy with sequential CUSUM change-point detection (Gate 1), Bonferroni LCB estimation (Gate 2), and hysteresis cost thresholds (Gate 3), the cumulative regret satisfies:
+$$R(T) \le \mathcal{O}\left( \sqrt{S \cdot |E| \cdot T \log T} + S \cdot C_{\text{switch}} \right)$$
+
+#### Proof Sketch:
+1. **Intra-Epoch Tracking Regret**:
+   Within stationary epoch $s$ of duration $T_s = t_s - t_{s-1}$, by standard concentration for sub-Gaussian / bounded estimators in non-stationary bandit environments (Garivier & Moulines, 2011; Besbes, Gur, & Zeevi, 2014; Lattimore & Szepesvári, 2020), the estimation regret across $|E|$ edge parameters is bounded by $\mathcal{O}(\sqrt{|E| T_s \log T_s})$.
+2. **Summation Over Epochs**:
+   Applying the Cauchy-Schwarz inequality across the $S$ epochs:
+   $$\sum_{s=1}^S \sqrt{T_s} \le \sqrt{S \sum_{s=1}^S T_s} = \sqrt{S T}$$
+   Summing over all epochs yields total parameter tracking regret bounded by $\mathcal{O}(\sqrt{S \cdot |E| \cdot T \log T})$.
+3. **Switching Penalty Control**:
+   Spurious intra-epoch switching is prevented by the dual barriers of Gate 1 ($\text{ARL}_0$ exponential suppression) and Gate 2 ($P(\text{false switch}) \le \alpha$). Consequently, switching events occur at most $\mathcal{O}(1)$ times per true physical change-point, bounding total reconfiguration penalties to $\mathcal{O}(S \cdot C_{\text{switch}})$.
+4. Combining the two bounds yields the claimed result:
+   $$R(T) \le \mathcal{O}\left( \sqrt{S \cdot |E| \cdot T \log T} + S \cdot C_{\text{switch}} \right) \quad \blacksquare$$
+
+---
+
+## 6. Literature Grounding & Theoretical Scope
+
+| Aspect | Classical Sliding-Window (Bhardwaj 2026; Spitz 2018) | Conservative / Switching Bandits (Wu 2016; Garivier 2011) | CG-CCADS (This Work) |
+| :--- | :--- | :--- | :--- |
+| **Update Mechanism** | Unconditional periodic re-estimation | Upper/Lower Confidence Bounds on Payoffs | 3-Gate Sequential Test (CUSUM + LCB + Tax) |
+| **Observation Boundary** | Label-free syndrome coincidences | Scalar reward / feedback | Strictly label-free syndrome coincidences |
+| **False-Alarm Defense** | None (sample variance ignored) | Sub-Gaussian confidence intervals | FWER Bonferroni across $|E|$ edges + CUSUM |
+| **Dead-Zone Handling** | Updates on micro-fluctuations | Exploits until bound shifts | Provable abstention (`STAY`) below $A_{\text{drift}}^*$ |
+| **Real-Time Role** | Recomputes matching graph every window | Reallocates exploration probabilities | Software meta-orchestration above FPGA decoders |

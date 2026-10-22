@@ -43,3 +43,26 @@ In this work, we formalize the conditions under which online decoder reweighting
    Profiling host orchestration latency stack with sub-millisecond overhead, and honestly contextualizing software emulation vs. long-duration hardware requirements.
 
 ---
+
+## 3. Methodology & Estimator
+
+### 3.1 Spitz Covariance-Parity Estimator
+Following Spitz et al. (2018), edge error probabilities $p_{uv}$ are computed label-free from $W$ syndrome measurements without ground-truth logical labels:
+$$p_{uv} = \frac{1}{2} - \frac{1}{2}\sqrt{\max\left(0, 1 - \frac{4(x_{uv} - \bar{x}_u \bar{x}_v)}{1 - 2\bar{x}_u - 2\bar{x}_v + 4x_{uv}}\right)}$$
+Boundary edges are recovered via parity conservation:
+$$1 - 2\bar{x}_u = (1 - 2p_b) \prod_{e \in \partial u \setminus \{b\}} (1 - 2p_e)$$
+
+### 3.2 Sequential Statistical Gates
+- **Gate 1 (Defect CUSUM)**: $Z_{\text{drift}} \le T_{\text{drift}} \implies \texttt{STAY}$.
+- **Gate 2 (Bonferroni LCB)**: $\max_e \text{LCB}_e \le \epsilon_{\text{deadzone}} \implies \texttt{STAY}$.
+- **Gate 3 (Cost Threshold)**: $\max_e \text{LCB}_e > \tau_{\text{adapt}} + C_{\text{switch}} \implies \texttt{REWEIGHT}$.
+
+---
+
+## 4. Confirmatory Results
+
+- **Stationary Baseline (Negative Control)**: Static LER $0.0115 \pm 0.0011$ vs. CG-CCADS $0.0116 \pm 0.0011$ ($\bar{\Delta} = +0.0001$, $p = 0.3256 \implies \texttt{STAY}$).
+- **Uniform Drift (Negative Control)**: Static LER $0.0320 \pm 0.0018$ vs. CG-CCADS $0.0321 \pm 0.0017$ ($\bar{\Delta} = +0.0002$, $p = 0.1052 \implies \texttt{STAY}$).
+- **Localized Hotspot Drift**: Static LER $0.0255 \pm 0.0015$ vs. CG-CCADS $0.0251 \pm 0.0015$ ($\bar{\Delta} = -0.0004$, $t = -2.60$, $p = 0.0145 \implies \texttt{STAY/ADAPT}$).
+- **Window Sensitivity**: At $W=200$, naive reweighting LER is $0.04107$ ($+104.38\%$ degradation); CG-CCADS abstains with $92.7\%$ stay rate, maintaining baseline fidelity ($0.02004$).
+- **Below-Threshold Suppression**: $\Lambda_{3 \to 5} = 1.543 > 1.0$.

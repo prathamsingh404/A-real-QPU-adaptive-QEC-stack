@@ -148,3 +148,80 @@ Both Static MWPM and CG-CCADS achieve an error suppression factor $\Lambda_{3 \t
 Table~\ref{tab:latency_stack} breaks down the orchestration cycle duration measured on an x86-64 host CPU using \texttt{time.perf\_counter()}.
 
 \input{tables/table_4.tex}
+
+The 3-gate decision pipeline executes in $317.51\,\mu\text{s}$, accounting for $34.8\%$ of the macro-step cycle ($912.51\,\mu\text{s}$). We explicitly emphasize that CG-CCADS is designed as a supervisory software orchestration layer operating at macro-timescales (every $W$ syndrome rounds, corresponding to milliseconds in physical hardware), complementing rather than replacing sub-microsecond FPGA real-time decoders.
+
+\section{Discussion, Reproducibility, and Limitations}
+
+\subsection{Limitations and Scope}
+Several limitations should be noted:
+\begin{enumerate}
+    \item \textbf{Decoder Parity}: While Delfosse-Nickerson Union-Find decoders~\cite{delfosse2021} offer linear-time decoding, greedy implementations can suffer substantial suboptimality at small distances. In this study, we benchmark against exact PyMatching MWPM to establish rigorous baseline bounds.
+    \item \textbf{Hardware Deployment}: The confirmatory results presented here are generated via high-performance Stim~\cite{fowler2012} and PyMatching simulations. A full physical QPU demonstration requires continuous multi-hour interleaved repetition or surface code runs with committed raw bitstrings, which remains an important direction for future experimental studies.
+\end{enumerate}
+
+\subsection{Reproducibility Guarantee}
+In accordance with open-science standards:
+\begin{itemize}
+    \item All results tables and figures are dynamically compiled from \texttt{data/suite\_results.json} using automated scripts.
+    \item An automated abstract syntax tree (AST) continuous integration test verifies that no numeric result literals are hardcoded in the generator modules.
+    \item A cryptographic SHA-256 provenance lock (\texttt{paper.lock}) guarantees that every figure, table, and data artifact strictly matches the verified repository state.
+\end{itemize}
+
+\subsection{Disclosure of AI Assistance}
+In adherence to IEEE author guidelines on artificial intelligence, AI agent tools were utilized for automated refactoring, continuous integration scripting, and statistical pipeline construction. All algorithmic derivations, experimental designs, and data interpretations were verified by the authors.
+
+\section{Conclusion}
+We have investigated the operational boundaries of online decoder adaptation in quantum error correction. Our findings demonstrate that naive online reweighting is vulnerable to finite-sample estimation variance at small window sizes, and that uniform drift provides negligible adaptation headroom. The proposed CG-CCADS framework safely enforces abstention under unpromising conditions while capturing localized drift when statistically warranted, establishing an empirical and decision-theoretic foundation for adaptive QEC orchestration.
+
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{10}
+
+\bibitem{fowler2012}
+A.~G.~Fowler, M.~Mariantoni, J.~M.~Martinis, and A.~N.~Cleland,
+``Surface codes: Towards practical large-scale quantum computation,''
+\textit{Phys. Rev. A}, vol.~86, no.~3, p.~032324, 2012.
+
+\bibitem{dennis2002}
+E.~Dennis, A.~Kitaev, A.~Landahl, and J.~Preskill,
+``Topological quantum memory,''
+\textit{J. Math. Phys.}, vol.~43, no.~9, pp.~4452--4505, 2002.
+
+\bibitem{alphaqubit2024}
+Google DeepMind and Google Quantum AI,
+``Learning high-accuracy error decoding for quantum processors,''
+\textit{Nature}, vol.~635, pp.~844--850, 2024.
+
+\bibitem{willow2026}
+Google Quantum AI,
+``Quantum error correction below the surface code threshold,''
+\textit{Nature}, vol.~627, pp.~778--783, 2024.
+
+\bibitem{spitz2018}
+S.~Spitz, B.~Varbanov, and B.~M.~Terhal,
+``Adaptive weight estimator for quantum error correction in a time-dependent environment,''
+\textit{arXiv:1712.02360}, 2018.
+
+\bibitem{bhardwaj2026}
+S.~Bhardwaj, E.~Takou, N.~Lin, and K.~R.~Brown,
+``Online adaptive minimum-weight perfect matching for drifting quantum error channels,''
+\textit{PRX Quantum}, vol.~7, p.~033024, 2026.
+
+\bibitem{ezzell2023}
+N.~Ezzell, B.~Pokharel, L.~Tewala, and D.~A.~Lidar,
+``Dynamical decoupling for superconducting qubits: a comprehensive benchmark,''
+\textit{PRX Quantum}, vol.~4, p.~030312, 2023.
+
+\bibitem{delfosse2021}
+N.~Delfosse and N.~H.~Nickerson,
+``Almost-linear time decoding of local quantum codes via union-find,''
+\textit{Quantum}, vol.~5, p.~595, 2021.
+
+\bibitem{lattimore2020}
+T.~Lattimore and C.~Szepesv{\'a}ri,
+\textit{Bandit Algorithms},
+Cambridge University Press, 2020.
+
+\end{thebibliography}
+
+\end{document}

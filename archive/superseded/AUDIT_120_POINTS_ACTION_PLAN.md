@@ -326,3 +326,170 @@ The new research question is:
 
 ### 85. Use the same hardware data for offline counterfactual decoder comparisons
 - **Mandate**: Replay raw physical bitstrings through MWPM, RW-MWPM, and UF to compare decoders on identical quantum trajectories.
+
+### 86. Run true interleaved hardware controller experiments
+- **Mandate**: Execute randomized $A/B/A/B$ hardware blocks to validate dynamic adaptation against static baselines without temporal confounding.
+
+### 87. Establish a no-synthetic-fallback hardware protocol
+- **Mandate**: Mandate that hardware runs lacking complete job IDs, calibration snapshots, or raw bitstrings are flagged as invalid rather than patched with simulation.
+
+### 88. Redesign the result JSON schema around scientific provenance
+- **Mandate**: Structure result files with complete software hashes, git commits, configuration digests, raw data hashes, and environment locks.
+
+### 89. Generate every paper number automatically
+- **Mandate**: Automate manuscript table and figure generation via scripts (`python -m adaptive_qec.analysis.make_paper_tables`) directly from result artifacts.
+
+### 90. Add a paper.lock file
+- **Mandate**: Pin primary experiment IDs, Git commits, artifact hashes, and primary endpoints in `paper.lock` to prevent manuscript drift.
+
+### 91. Pre-register the primary endpoint
+- **Mandate**: Declare the primary confirmatory metric: Trajectory-paired delta logical error rate $\bar{\Delta} = \frac{1}{N} \sum_{i=1}^N (\text{LER}_{\text{selective}, i} - \text{LER}_{\text{static}, i})$.
+
+### 92. Pre-register confirmatory vs exploratory regimes
+- **Mandate**: Pre-register Stationary, Slow Drift, and Medium Drift as confirmatory; designate Leakage, Bursts, and Hardware runs as exploratory.
+
+### 93. Perform statistical power analysis before final benchmark runs
+- **Mandate**: Compute required sample sizes and trajectory counts using pilot variance estimates to achieve $\ge 80\%$ statistical power at $\alpha = 0.05$.
+
+### 94. Report the current 50k result exactly as a historical baseline
+- **Mandate**: Transparently document the initial $27.74\%$ failure in the manuscript as the empirical motivation for confidence gating.
+
+### 95. Never hide unfavorable scenarios
+- **Mandate**: Dedicate a distinct manuscript section to "Failure Modes and Operating Limits," analyzing exactly where adaptation fails.
+
+### 96. Build the theory around a simple adaptation criterion
+- **Mandate**: Formalize the foundational condition: $\text{LCB}(\Delta L_t) > C_{\text{switch}} + C_{\text{latency}} + C_{\text{uncertainty}}$.
+
+### 97. Derive the false-switch probability bound
+- **Mandate**: Derive an analytical upper bound on the probability of a harmful switch:
+  $$P(\text{Harmful Switch}) \le \Phi\left( -\frac{C_{\text{switch}}}{\sigma_{\Delta}} - z_{1-\alpha} \right)$$
+
+### 98. Derive the analytical adaptation boundary
+- **Mandate**: Solve for the critical drift amplitude threshold $A_{\text{drift}}^*$ required to justify policy modification as a function of estimator variance and switching cost.
+
+### 99. Formulate an empirical adaptation regret bound
+- **Mandate**: Formalize empirical regret across piecewise-stationary environments with $S$ change points: $R_T \le \mathcal{O}(S \sqrt{T}) + \mathcal{O}(S \cdot C_{\text{switch}})$.
+
+### 100. The central algorithm three-gate architecture
+- **Mandate**: Structure the decision pipeline into three hierarchical gates:
+  - Gate 1: Drift Evidence ($P(\text{drift}) > \theta_{\text{drift}}$ via CUSUM/SPRT)
+  - Gate 2: Policy Relevance ($C_t > \theta_{\text{disagree}}$ via Decoder Disagreement)
+  - Gate 3: Cost/Confidence Check ($\text{LCB}(\Delta) > C_{\text{switch}} + C_{\text{latency}}$)
+
+### 101. Do not claim "real-time" without sub-microsecond proof
+- **Mandate**: Accurately describe cloud/software orchestration as "macro-timescale adaptive QEC" ($\sim$seconds per batch) and reserve "real-time" for hardware FPGA feedforward ($< 1\,\mu\text{s}$).
+
+### 102. Handle GreenPeas overlap explicitly
+- **Mandate**: Cite GreenPeas (JIT hypergraph compilation for adaptive circuits) and delineate: our work operates at the policy decision layer, above decoder compilation.
+
+### 103. Handle Local Clustering Decoder (LCD) overlap explicitly
+- **Mandate**: Cite LCD (Nat. Commun. 2025) and clarify: LCD addresses hardware-level runtime graph updates; our work addresses the meta-decision of when and whether to invoke adaptations.
+
+### 104. Implement Bhardwaj et al. as a baseline
+- **Mandate**: Integrate a sliding-window syndrome-only noise estimator (Bhardwaj et al., PRX Quantum 2026) as Baseline `B3` in the benchmark hierarchy.
+
+### 105. Treat Google Nature 2026 as motivation, not a target to replicate
+- **Mandate**: Complement Google's continuous RL physical control on Willow by addressing the higher-level decision problem: cost-aware selective decoder adaptation with abstention.
+
+### 106. Structure the manuscript narrative around the adaptation paradox
+- **Mandate**: Frame the paper around the paradox: *Noise drifts $\to$ adaptation seems necessary $\to$ but adaptation incurs switching, latency, and noise-chasing penalties $\to$ therefore, unconstrained adaptation is often harmful $\to$ selective, confidence-gated adaptation resolves the paradox.*
+
+### 107. Define four clear, defensible paper contributions
+- **Mandate**:
+  1. A formal decision-theoretic framework for selective QEC adaptation (CG-CCADS) with explicit `STAY`, `SWITCH`, and `ROLLBACK` actions.
+  2. An observable-only controller operating without privileged noise states or unobservable LER signals.
+  3. A trajectory-paired counterfactual benchmarking methodology evaluating non-stationary QEC under explicit adaptation costs.
+  4. An empirically validated 2D adaptation phase diagram mapping the viability boundary of QEC adaptation.
+
+### 108. Explicitly eliminate forbidden hype claims
+- **Mandate**: Remove all unsubstantiated claims: *"first adaptive QEC system"*, *"statistically indisputable"*, *"sub-1.2 us real-time hardware control"*, and *"proven superior"*.
+
+### 109. Maintain strictly defensible scientific claims
+- **Mandate**: Assert only supported conclusions: conservative confidence-gated switching reduces unnecessary interventions, recovers available adaptation gains, and prevents degradation in noisy regimes.
+
+### 110. Design the final eight paper figures
+- **Figure 1**: System Architecture & The 3-Gate Pipeline.
+- **Figure 2**: The Adaptation Paradox (Motivating 50k Naive Failure vs Static MWPM).
+- **Figure 3**: 2D Adaptation Phase Diagram (Drift Rate vs Amplitude vs Cost).
+- **Figure 4**: Performance vs Switching Budget & Adaptation Tax Pareto Frontier.
+- **Figure 5**: Full Component Ablation (Naive $\to$ +Stay $\to$ +Cost $\to$ +Confidence $\to$ Full).
+- **Figure 6**: Observability Gap (Oracle vs Fully Observable vs Syndrome-Only).
+- **Figure 7**: Code Distance Scaling ($d = 3, 5, 7$) and Error Suppression ($\Lambda$).
+- **Figure 8**: Interleaved Hardware Execution on IBM Heavy-Hex QPU.
+
+### 111. Construct the seven core manuscript tables
+- **Table 1**: Benchmark Noise Suite & Physical Drift Parameters.
+- **Table 2**: Baseline Decoder Ladder Properties.
+- **Table 3**: Controller Component Specifications.
+- **Table 4**: Trajectory-Level Paired Statistical Results.
+- **Table 5**: IBM Hardware Backend Metadata & Calibration Telemetry.
+- **Table 6**: Latency, Throughput, and Computational Overhead Breakdown.
+- **Table 7**: Comparative Prior-Art Demarcation Matrix.
+
+### 112. Execute the 14-phase implementation sequence
+- **Sequence**: Phase 0 (Preservation) $\to$ Phase 1 (Integrity & Schemas) $\to$ Phase 2 (Observation Boundary) $\to$ Phase 3 (Geometry & Stabilizer Maps) $\to$ Phase 4 (Baseline Ladder) $\to$ Phase 5 (Counterfactual Engine) $\to$ Phase 6 (CG-CCADS Controller) $\to$ Phase 7 (Trajectory Benchmarking) $\to$ Phase 8 (Stateful Leakage) $\to$ Phase 9 (Predictive Layer) $\to$ Phase 10 (DD Interleaving) $\to$ Phase 11 (Hardware Interleaving) $\to$ Phase 12 (Statistical Analysis) $\to$ Phase 13 (Automated Paper Build).
+
+### 113. Enforce a clean, traceable Git commit sequence
+- **Mandate**: Structure commits logically (e.g., `001-archive-v1-snapshot` to `027-preregistered-final-evaluation`) reflecting deliberate scientific progress.
+
+### 114. Reposition CUSUM / SPRT as change detectors
+- **Mandate**: Do not treat CUSUM/SPRT as the adaptive algorithm itself; position them as Gate 1 change-point triggers feeding the downstream policy evaluator.
+
+### 115. Refactor the bandit into a candidate policy proposer
+- **Mandate**: Confine Exp3/DASE to estimating candidate policy performance within Gate 2, subordinating arm selection to Gate 3 confidence constraints.
+
+### 116. Refactor Dynamical Decoupling as physical characterization
+- **Mandate**: Position DD as a physical baseline comparison; report pulse overhead and cycle elongation alongside coherence metrics.
+
+### 117. Reclassify the [[4,2,2]] code hardware results
+- **Mandate**: Re-label the [[4,2,2]] IBM experiment as an exploratory demonstration of DD pulse damage ($17.5\% \to 48.8\%$ defect increase), removing claims of fault-tolerant memory.
+
+### 118. Reclassify the distance-3 repetition code experiment
+- **Mandate**: Retitle the repetition code hardware result as a smoke test of Qiskit Runtime session execution, noting sequential confounding limitations.
+
+### 119. Maintain the retracted $d=5$ result as a historical case study
+- **Mandate**: Document the retracted $d=5$ synthetic result as a prime case study demonstrating why observation boundary enforcement and multi-seed sweeps are essential.
+
+### 120. Finalize publication targeting strategy
+- **Target**: Submit to *IEEE Transactions on Quantum Engineering* (IEEE TQE) or *Quantum Science and Technology* (QST) as primary targets; prepare manuscript standards to allow submission to *PRX Quantum*.
+
+### 121. Working paper title
+- **Primary Title**: *"When Should Quantum Error Correction Adapt? Confidence- and Cost-Constrained Decoder Selection under Non-Stationary Noise"*
+- **Alternative**: *"Selective Adaptive Quantum Error Correction under Drift, Uncertainty, and Switching Costs"*
+
+### 122. Formal paper abstract narrative
+- **Sequence**: *Non-stationary noise in physical QPUs motivates adaptive QEC $\to$ However, real-time adaptation incurs switching latency, estimation noise, and risk of policy flapping $\to$ We demonstrate that naive adaptive policies can perform $27.7\%$ worse than static MWPM $\to$ We formulate QEC adaptation as a cost-bearing decision problem under partial observability $\to$ We introduce CG-CCADS featuring confidence gating, decoder disagreement, and rollback $\to$ Validated across 12 noise regimes, code distances $d \in \{3, 5, 7\}$, and IBM Heron hardware $\to$ Our selective framework suppresses unnecessary switches by $80\%+$ while recovering adaptive benefits.*
+
+### 123. The deepest scientific contribution
+- **Mandate**: The fundamental pivot from reactive control (*"Observe $\to$ Adapt"*) to decision-theoretic control (*"Observe $\to$ Estimate Uncertainty $\to$ Weigh Switching Costs $\to$ Decide Adapt vs Abstain vs Rollback"*).
+
+### 124. The complete $12 \times 6$ experimental simulation matrix
+- **Matrix**: 12 Scenarios (Stationary to Mixed Drift+Leakage) across 6 Controllers (Static MWPM, RW-MWPM, UF, Naive Adaptive, Selective CG-CCADS, Oracle), each evaluated over $\ge 20$ independent trajectories with distance sweeps.
+
+### 125. The comprehensive evaluation metric matrix
+- **Metrics**: LER, 95% Wilson CI, paired $\Delta \text{LER}$, effect size (Cohen's $d$), switch count, false-switch rate, rollback frequency, adaptation latency, estimation RMSE, decoder throughput, and circuit depth overhead.
+
+### 126. What NOT to do (Avoid the "Novelty Soup" trap)
+- **Mandate**: Do not pile on unrelated buzzwords (deep RL, transformers, continuous gate tuning, qLDPC) to simulate novelty. Focus on methodological depth, statistical rigor, and the selective adaptation decision problem.
+
+### 127. Final end-to-end system architecture
+- **Architecture**: Ingest QPU/Simulated Syndromes $\to$ Observable Feature Extraction $\to$ Multiscale Estimator (EWMA/SPRT) $\to$ Candidate Decoder Disagreement Engine $\to$ Confidence & Cost Decision Gate $\to$ Action Execution (`STAY` / `SWITCH` / `ROLLBACK`) $\to$ Closed-Loop Telemetry Logging.
+
+### 128. Definition of "Done" (Submission Readiness Checklist)
+- **Checklist**:
+  - [x] All 298 existing test cases passing
+  - [ ] Claims ledger strictly synchronized with zero unverified claims
+  - [ ] Complete elimination of silent synthetic hardware fallback
+  - [ ] End-to-end verified observation boundary (no latent state leakage)
+  - [ ] True cluster-growth Union-Find benchmarked against PyMatching
+  - [ ] Paired counterfactual decoding engine implemented
+  - [ ] $\ge 20$ independent trajectories per scenario with frozen seeds
+  - [ ] Pre-registered primary endpoint and statistical power analysis
+  - [ ] Stateful phenomenological leakage model implemented
+  - [ ] Full component ablation table populated
+  - [ ] Automated paper figures and tables reproducible via single command
+
+### 129. The three non-negotiable submission gates
+- **Gate A (Scientific Correctness)**: Zero oracle peeking, zero fake leakage, zero silent fallback, and fully reconciled claims ledger.
+- **Gate B (Algorithmic Novelty)**: Controller demonstrably executes `STAY`, `SWITCH`, and `ROLLBACK` governed by statistical confidence and switching costs.
+- **Gate C (Empirical Evidence)**: Validated across $\ge 20$ independent trajectories, distance scaling ($d=3, 5, 7$), held-out seeds, and interleaved QPU hardware execution.

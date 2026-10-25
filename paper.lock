@@ -1,0 +1,23 @@
+{
+  "metadata": {
+    "version": "2.0.0",
+    "git_commit": "64b76ca5972016911cd2b73b83c2021fa01cffc5",
+    "created_at_utc": "2026-10-25T17:29:14.608821+00:00",
+    "hash_algorithm": "SHA-256",
+    "provenance": "simulation",
+    "total_tracked_files": 11
+  },
+  "files": {
+    "configs/suite.yaml": "f440020d7f4f7eb15e03ec43a6b6d19257316521f5f8b0fcb15571aa5f016339",
+    "data/suite_results.json": "8f9776e345ead19a927c9326a9268efff907f5be068c73d941ed23297fc3c9c6",
+    "data/manifest.json": "6c5ac51f625705906fc4b0cc7728b3ed385ff01146faa9c47e5b3574d38a8fac",
+    "papers/tables/table_1.tex": "1e56584129ef121ad87de268356592ca00a87af8fa8b38cc6a5a7887a50589ce",
+    "papers/tables/table_2.tex": "9800281905947b27cd5ec5335d74804ed6b751b49d9fb679a9da21028c435458",
+    "papers/tables/table_3.tex": "242e40c84077994fdde2d331a4c5fa2ae32b40b8913ea108e18abd92b036fbe3",
+    "papers/tables/table_4.tex": "23de07e3f4dffcdfdd3089bec9423451fb9428f4ae9efdfa5b26d989c73ee31f",
+    "papers/figures/fig_1_window_variance_tradeoff.pdf": "75489cf91dea575275a74bbd96c7513a74e6c86994ed2d9aa7d842537a41d53c",
+    "papers/figures/fig_2_architecture_diagram.pdf": "1e88628f324256f029489e8c0b1aa6f5da4b8c84c9c622fe762f1cb91b5d1591",
+    "papers/figures/fig_4_distance_scaling.pdf": "bffe339fa211966a4f4c98535fdee964a62f8eddbce196a089667ba8af8837c5",
+    "papers/figures/fig_5_paired_deltas.pdf": "6cdca15a346081d25d7bdcf0b3ddaee2d247fe4b4a17038ee644637e8a972cc3"
+  }
+}

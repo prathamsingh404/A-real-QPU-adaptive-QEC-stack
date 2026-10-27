@@ -69,3 +69,37 @@ timeline
     Phase 4 : Literature Matrix & Framing : Bhardwaj / DGR positioning : Venue selection
     Phase 5 : Manuscript & Peer Review : TQE/TQC submission
 ```
+
+### Phase 0: Integrity Reset (Completed)
+- Git tag `pre-audit-2026-09-30` established.
+- `scripts/make_claims.py` implemented to verify claims against committed JSON artifacts.
+- Commit generator scripts and bloated WebGL UI builders removed.
+- README and VALIDATION matrices rewritten as honest status pages.
+
+### Phase 1: Reproducibility
+- Version drift reconciliation (Stim, PyMatching, NumPy RNG).
+- Standardized results schema: git commit, library versions, seed, config, wall-clock time, SHA-256 artifact hash.
+- Unit tests enforcing architectural separation: controller must not import ground-truth noise schedules.
+
+### Phase 2: Redesign the Simulation Study
+1. **Estimate-Only Controller**: HardwareState constructed purely from syndrome statistics (defect rates, CUSUM drift, lag-1 autocorrelation).
+2. **Physically Grounded Noise Models**:
+   - 1/f and two-level-fluctuator (TLF) drift models grounded in IBM calibration time-series.
+   - Genuine transmon leakage model (randomized checks, seepage rate, consistent observable tracking).
+   - Spatially decaying multi-qubit burst models.
+3. **Baseline Ladder**:
+   1. Static MWPM (factory DEM)
+   2. MWPM with sliding-window DEM re-estimation (Bhardwaj et al. style)
+   3. DGR-style graph re-weighting
+   4. Adaptive controller
+   5. Oracle switcher (hindsight upper bound)
+4. **Regime Heatmap**: Sweep drift amplitude $\times$ timescale $\times$ distance to map where adaptation wins, ties, or loses.
+
+### Phase 3: Hardware Closed-Loop (IBM Heron)
+- Distance $d=3, 5, 7$ repetition-code memory on heavy-hex lines.
+- Interleaved ABAB control (static vs adaptive) within identical execution sessions.
+- Open publishing of raw bitstrings, job IDs, transpiled circuits, and calibration properties.
+
+### Phase 4 & 5: Positioning & Submission
+- Target Venues: IEEE Transactions on Quantum Engineering (TQE) or ACM Transactions on Quantum Computing (TQC).
+- Pre-registration (`PREREG.md`) before final runs to eliminate researcher degrees of freedom.

@@ -443,3 +443,221 @@ flowchart TD
     *   Dynamically update cluster expansion speed $\Delta r_i(t) \propto \hat{p}_i(t)$ so that high-noise physical regions expand faster in the Union-Find growth phase.
 4.  **Benchmark Validation (`experiments/live_calibration.py`)**:
     *   Simulate drifting physical noise channels and demonstrate that live-calibrated MWPM consistently outperforms static DEM MWPM by $\ge 12\%$ in LER.
+
+---
+
+### Phase 5: Qiskit Runtime Closed-Loop Cloud Architecture (Weeks 9–11)
+
+> **Scientific Objective**: Engineer the cloud execution pipeline using Qiskit Runtime Primitives, establishing a robust, batched closed-loop interface with real IBM Heron hardware.
+
+#### Detailed Deliverables:
+1.  **Runtime Closed-Loop Coordinator (`src/adaptive_qec/runtime/qiskit_loop.py`)**:
+    *   Implement `QiskitRuntimeLoop` utilizing Qiskit Runtime Sessions and `SamplerV2`.
+    *   Implement **batched-step adaptation**: execute a batch of $N_{\text{batch}} = 500 - 2,000$ shots, retrieve syndrome bitstrings, evaluate bandit reward and noise state, update DEM weights and circuits, and submit the subsequent batch within the active session.
+2.  **Live Telemetry Ingestion (`src/adaptive_qec/qpu/ibm.py`)**:
+    *   Implement automated retrieval of IBM backend properties: $T_1(q), T_2(q)$, readout error $\epsilon_{\text{RO}}(q)$, and 2-qubit gate error $\epsilon_{\text{ECR/CZ}}(q_1, q_2)$.
+    *   Feed live calibration parameters into the prior distributions of the bandit and DEM calibrator.
+3.  **Shot Budget & Quota Manager (`src/adaptive_qec/runtime/budget.py`)**:
+    *   Implement strict credit allocation guards to prevent accidental over-consumption of IBM cloud execution quotas.
+4.  **Hardware Dry-Run Validation (`experiments/hardware_dryrun.py`)**:
+    *   Validate the complete closed loop using the cloud simulator (`ibmq_qasm_simulator` or fake Heron backends) before touching physical hardware.
+
+---
+
+### Phase 6: Real QPU Hardware Execution on IBM Heron (Weeks 11–14)
+
+> **Scientific Objective**: Execute the complete, integrated adaptive QEC stack on an IBM Heron processor (`ibm_marrakesh` or `ibm_kingston`), generating empirical evidence of adaptive advantage.
+
+#### Detailed Deliverables:
+1.  **Hardware Baseline Suite (`experiments/hardware_baseline.py`)**:
+    *   Execute 6 static baseline configurations (MWPM vs UF) $\times$ (No-DD vs XY4 vs XY8) at code distance $d=3$ (17 physical qubits on heavy-hex lattice).
+    *   Collect 10,000 shots per configuration ($60,000$ shots total).
+    *   Compute empirical LER with exact 95% Wilson Score intervals.
+2.  **Closed-Loop Bandit Execution (`experiments/full_adaptive.py`)**:
+    *   Deploy the full adaptive stack for 100,000 shots across an active hardware drift window (monitoring diurnal calibration shifts).
+    *   Log all strategy selections, empirical rewards, DEM weight trajectories, and SPRT switching decisions.
+3.  **Ablation Runs on Hardware**:
+    *   Run bandit controller *without* statistical gating (verifying whether chattering degrades physical performance).
+    *   Run adaptive scheduling under static nominal decoders.
+4.  **Automated Analysis Pipeline (`experiments/analysis.py`)**:
+    *   Generate publication-ready figures: LER comparison with error bars, cumulative regret curves, bandit Q-value trajectories, and timeline of statistical switching events.
+
+---
+
+### Phase 7: Publication, Artifact Release & Open Science Suite (Weeks 14–17)
+
+> **Scientific Objective**: Consolidate all empirical data, statistical proofs, and software into a publication package and open-source release.
+
+#### Detailed Deliverables:
+1.  **Manuscript Preparation**:
+    *   Draft full paper adhering to *PRX Quantum* / *Nature Communications* standards:
+        *   *Title*: "Real-Time Adaptive Quantum Error Correction via Online Bandit Control on a 156-Qubit Superconducting Processor"
+        *   *Main Sections*: Introduction, Theoretical Framework & Regret Bounds, System Architecture, Heavy-Hex Embedding & Circuit Compilation, Hardware Experimental Results, Ablation Studies, Discussion & Scaling Analysis.
+2.  **Reproducibility Package (`reproducibility/`)**:
+    *   Jupyter notebooks replicating every figure from raw hardware telemetry.
+    *   Complete Zenodo data repository containing raw bitstrings, timestamps, and IBM calibration JSONs.
+3.  **Interactive Visualizer Upgrade (`generated-page.html`)**:
+    *   Connect the existing web dashboard to live experiment JSON traces to enable interactive exploration of bandit convergence and syndrome imbalance over time.
+
+---
+
+## 7. Hardware Experimentation Protocol on IBM Heron
+
+### 7.1 Target Hardware Specifications
+
+*   **Processor Family**: IBM Heron (Revision 2 or 3)
+*   **Candidate Backends**: `ibm_marrakesh` (156 qubits), `ibm_kingston` (156 qubits), or `ibm_sherbrooke` (127 qubits Eagle as fallback)
+*   **Topology**: Heavy-Hexagonal Lattice (degree-2 and degree-3 vertices)
+*   **Native 2Q Gate**: Direct CNOT or Cross-Resonance (CR) calibrated CZ
+*   **Code Embedding**: Distance-3 rotated planar surface code embedded on heavy-hex sub-graph using flag qubits or SWAP-free bridge ancillas (17 physical qubits total: 9 data qubits, 8 syndrome ancillas).
+
+### 7.2 Shot Allocation & Execution Budget
+
+To ensure statistical power while strictly respecting IBM cloud runtime allocations, the experimental budget is structured as follows:
+
+| Experiment Phase | Configurations / Arms | Shots per Step | Total Batches | Total Shots | Est. Qiskit Runtime Time |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Phase 6.1: Static Baselines** | 6 fixed configurations | 2,000 | 5 batches / arm | 60,000 | $\approx 25\text{ minutes}$ |
+| **Phase 6.2: Adaptive Stack** | Full Bandit + DA-SE + Calibrator | 1,000 | 80 batches | 80,000 | $\approx 35\text{ minutes}$ |
+| **Phase 6.3: Ablations** | No-Gate Bandit & Static Scheduler | 1,000 | 40 batches | 40,000 | $\approx 18\text{ minutes}$ |
+| **Buffer / Calibration** | Benchmarking & Noise Probes | 1,000 | 20 batches | 20,000 | $\approx 10\text{ minutes}$ |
+| **TOTAL** | — | — | **145 batches** | **200,000 shots** | $\approx \mathbf{88\text{ minutes}}$ |
+
+---
+
+## 8. Statistical Rigor, Power Analysis & Ablation Protocol
+
+### 8.1 Statistical Hypothesis Testing Standards
+To guarantee publishable rigor, every performance claim must satisfy the following statistical criteria:
+1.  **Primary Metric**: Logical Error Rate per Round ($P_{L,\text{round}}$).
+2.  **Uncertainty Quantification**: 95% Wilson Score intervals (not naive Gaussian $\sqrt{p(1-p)/n}$, which fails at low error rates).
+3.  **Significance Testing**: Two-tailed two-proportion Z-test. A performance gain is claimed **only if** $p < 0.01$.
+4.  **Multiple Testing Correction**: When comparing across all 6 candidate arms, apply Benjamini-Hochberg False Discovery Rate (FDR) control at $q = 0.05$.
+5.  **Statistical Power**: With $N = 20,000$ shots per arm, the two-proportion test achieves statistical power $1 - \beta \ge 0.90$ for detecting a true LER difference of $\Delta P_L = 0.005$ at baseline $P_L = 0.03$.
+
+### 8.2 Comprehensive Ablation Matrix
+
+To isolate the individual contribution of each component, the evaluation suite executes the following 6-arm ablation study:
+
+```
+[ARM 1] FULL ADAPTIVE STACK (Our Complete Proposed System)
+        Bandit (D-UCB) + SPRT Statistical Gate + Adaptive X/Z Scheduler + Live DEM Reweighting
+
+[ARM 2] ABLATION: NO STATISTICAL GATE
+        Bandit (D-UCB) without SPRT (tests impact of stochastic decision chattering)
+
+[ARM 3] ABLATION: NO ADAPTIVE SCHEDULING
+        Bandit (D-UCB) + SPRT Gate + Fixed Balanced Schedule (tests contribution of DA-SE)
+
+[ARM 4] ABLATION: NO LIVE CALIBRATION
+        Bandit (D-UCB) + SPRT Gate + Static Offline DEM (tests value of in-situ reweighting)
+
+[ARM 5] BASELINE: STATIC HEURISTIC CONTROLLER
+        Existing controller.py (analytical cost function + simple hysteresis counter)
+
+[ARM 6] NULL BASELINE: STATIC MWPM
+        Standard offline PyMatching 2 with fixed 1:1 schedule and no dynamical decoupling
+```
+
+---
+
+## 9. File-Level Implementation Map
+
+### 9.1 New Files to Create
+
+| Target File Path | Primary Class / Functions | Theoretical Role | Est. LOC |
+| :--- | :--- | :--- | :--- |
+| `src/adaptive_qec/controller/base.py` | `BaseController`, `Action`, `NoiseState` | Formal typing contract & abstract lifecycle | ~120 |
+| `src/adaptive_qec/controller/bandit.py` | `DiscountedUCBController`, `ThompsonSamplingController` | Non-stationary online reinforcement learning | ~450 |
+| `src/adaptive_qec/controller/statistics.py` | `SequentialProbabilityRatioTest`, `wilson_ci`, `z_test` | Formal hypothesis testing & switching gates | ~280 |
+| `src/adaptive_qec/qec/schedules.py` | `StabilizerSchedule`, `PREDEFINED_SCHEDULES` | Non-uniform $X/Z$ schedule representations | ~150 |
+| `src/adaptive_qec/qec/adaptive_scheduler.py`| `AdaptiveXZScheduler` | Dynamic anisotropic syndrome extraction (DA-SE) | ~320 |
+| `src/adaptive_qec/decoders/dem_calibrator.py`| `DEMCalibrator` | Closed-form in-place DEM graph edge reweighting | ~350 |
+| `src/adaptive_qec/experiment/harness.py` | `ExperimentHarness`, `ExperimentConfig`, `ExperimentResult` | Unified execution harness (Stim & Hardware) | ~450 |
+| `src/adaptive_qec/engine/scenarios.py` | `NoiseScenarioFactory`, `NoiseScenario` | 6 reproducible physical noise drift scenarios | ~300 |
+| `src/adaptive_qec/runtime/qiskit_loop.py` | `QiskitRuntimeLoop` | Closed-loop batched Qiskit Runtime session driver | ~420 |
+| `src/adaptive_qec/runtime/budget.py` | `ShotBudgetManager` | Hardware execution quota & credit enforcement | ~160 |
+| `experiments/bandit_vs_static.py` | Full simulation comparison script | Benchmark Phase 2 simulation suite | ~280 |
+| `experiments/adaptive_scheduling.py`| Scheduling benchmark script | Benchmark Phase 3 anisotropic noise suite | ~250 |
+| `experiments/hardware_baseline.py` | Hardware baseline runner | Execute Phase 6.1 static QPU experiments | ~220 |
+| `experiments/full_adaptive.py` | Main hardware experiment driver | Execute Phase 6.2 closed-loop QPU experiments | ~350 |
+| `experiments/analysis.py` | Automated statistical & figure generator | Generate publication plots, p-values & tables | ~480 |
+| `tests/test_bandit_controller.py` | Unit & convergence tests for D-UCB / TS | Verify regret bounds & arm updates | ~320 |
+| `tests/test_statistics.py` | Numerical verification of SPRT & Wilson CI | Verify type-I error bounds & numerical stability | ~240 |
+| `tests/test_adaptive_scheduler.py` | Tests for syndrome imbalance & switching | Verify schedule distance preservation | ~220 |
+| `tests/test_dem_calibrator.py` | Tests for in-place DEM reweighting | Verify weight update speed ($<2\,\mu\text{s}$) & math | ~250 |
+| `tests/test_experiment_harness.py` | End-to-end integration tests | Verify full pipeline determinism & provenance | ~280 |
+
+**Total Projected New Code**: **~5,690 LOC**
+
+---
+
+### 9.2 Existing Files to Modify
+
+| File Path | Nature of Necessary Refactoring |
+| :--- | :--- |
+| `src/adaptive_qec/controller/__init__.py` | Export `BaseController`, `DiscountedUCBController`, `ThompsonSamplingController`, `create_controller` factory. |
+| `src/adaptive_qec/controller/controller.py` | Refactor existing `AdaptiveController` to inherit from `BaseController` as a reference baseline. |
+| `src/adaptive_qec/decoders/mwpm.py` | Add `reweight_edges(weight_map: dict[int, float])` method for zero-copy graph updates. |
+| `src/adaptive_qec/decoders/union_find.py`| Add dynamic cluster growth scaling hooks linked to ancilla defect rates. |
+| `src/adaptive_qec/syndrome/extraction.py`| Generalize Stim circuit generator to support arbitrary periodic $X/Z$ schedules. |
+| `src/adaptive_qec/qpu/ibm.py` | Add live telemetry parser converting IBM backend properties into normalized error maps. |
+| `src/adaptive_qec/provenance.py` | Add `RoundRecord` dataclass and SHA-256 state hashing. |
+| `configs/default.yaml` | Add complete configuration sections for bandit hyperparameters, SPRT thresholds, and scheduling. |
+| `generated-page.html` | Connect UI elements to live JSON output traces for publication demo visualization. |
+
+---
+
+## 10. Risk Register & Physical Failure Mode Mitigations
+
+| Risk ID | Failure Scenario | Likelihood | Impact | Concrete Engineering & Scientific Mitigation |
+| :--- | :--- | :--- | :--- | :--- |
+| **R-01** | **IBM Cloud Queue Delay**: Long wait times between consecutive batches break session continuity. | HIGH | HIGH | Use Qiskit Runtime **Sessions** (which hold dedicated QPU reservation windows). Keep classical bandit updates sub-millisecond so batches dispatch immediately without timing out the session. |
+| **R-02** | **Bandit Starvation**: The bandit exploits an early lucky arm and fails to identify the true optimal arm. | MEDIUM | HIGH | Enforce forced exploration ($N_a \ge N_{\min} = 10$) for all arms before unconstrained exploitation. Use Discounted-UCB with parameter $\xi=1.0$ to guarantee persistent exploration. |
+| **R-03** | **Spurious Switching (Noise Chattering)**: Stochastic syndrome fluctuations cause the controller to switch strategies every round. | HIGH | HIGH | **Wald SPRT & Wilson Score Gate**: No strategy switch is committed unless the candidate is statistically superior at $p < 0.01$ over a minimum observation window. |
+| **R-04** | **Null Result in Scheduling**: Adaptive $X/Z$ scheduling shows negligible improvement under isotropic noise. | MEDIUM | LOW | If hardware noise exhibits $\eta \approx 1$, scheduling naturally remains balanced. If true asymmetry is low on the chosen device, we document the threshold boundary where DA-SE becomes advantageous (still a publishable scientific result). |
+| **R-05** | **Cloud Execution Quota Depletion**: Experiments exceed monthly IBM Quantum API credits. | MEDIUM | HIGH | Pre-calculate exact shot requirements (Section 7.2: 200,000 shots total $\approx 88$ runtime minutes). Implement strict `ShotBudgetManager` that aborts execution if budget limits are approached. Validate all pipelines via Stim simulation first. |
+| **R-06** | **PyMatching Graph Instability**: Incremental edge reweighting produces negative weights or numerical divergence. | LOW | CRITICAL | Enforce weight clamping $p_e \in [10^{-6}, 0.5 - 10^{-6}] \implies w_e \in [\epsilon, \ln(10^6)]$. Fall back to nominal Stim DEM if edge weights exceed physical bounds. |
+
+---
+
+## 11. Traceability & Dependency Matrix
+
+```mermaid
+graph TD
+    P1["Phase 1: Foundation Hardening\n(Harness, Scenarios, BaseController)"] --> P2["Phase 2: Bandit Controller\n(D-UCB, Thompson, SPRT Gate)"]
+    P1 --> P3["Phase 3: Adaptive Scheduling\n(DA-SE, Imbalance Metric, Stim Compilation)"]
+    P1 --> P4["Phase 4: Live DEM Calibration\n(In-Place Edge Reweighting, UF Growth)"]
+    
+    P2 --> P5["Phase 5: Qiskit Runtime Integration\n(Sessions, Batched Loop, Budget Manager)"]
+    P3 --> P5
+    P4 --> P5
+    
+    P5 --> P6["Phase 6: Real QPU Hardware Execution\n(IBM Heron ibm_marrakesh, 200k Shots)"]
+    P6 --> P7["Phase 7: Publication Package\n(Paper Draft, Open Science Artifacts, Zenodo)"]
+
+    style P1 fill:#334155,stroke:#94a3b8,color:#ffffff
+    style P2 fill:#1e40af,stroke:#60a5fa,color:#ffffff
+    style P3 fill:#0369a1,stroke:#38bdf8,color:#ffffff
+    style P4 fill:#4338ca,stroke:#818cf8,color:#ffffff
+    style P5 fill:#0f766e,stroke:#2dd4bf,color:#ffffff
+    style P6 fill:#b91c1c,stroke:#f87171,color:#ffffff
+    style P7 fill:#15803d,stroke:#4ade80,color:#ffffff
+```
+
+---
+
+## 12. Final Pre-Implementation Checklist
+
+- [x] Comprehensive literature review completed (AlphaQubit 1/2, QAdapt, BRAVE, Duke/Brown 2026, Gottesman 2025, IBM Bivariate Bicycle).
+- [x] Clear theoretical demarcation established (Sub-microsecond classical MAB + SPRT gating vs. black-box neural networks).
+- [x] Formal mathematical claims, theorems, and regret bounds formulated.
+- [x] Full codebase audit completed (113 passing unit tests verified).
+- [x] Complete 7-Phase execution blueprint with weekly deliverables mapped.
+- [x] Hardware protocol for IBM Heron 156-qubit heavy-hex lattice designed.
+- [x] Shot budget optimized to 200,000 shots (~88 runtime minutes) with quota guard.
+- [x] Statistical rigor standards defined (Wilson Score intervals, SPRT, Benjamini-Hochberg).
+- [x] All 20 new target files and 9 refactoring targets cataloged.
+- [x] Risk register and failure modes documented with concrete mitigations.
+
+> **Next Step**: Await user confirmation on research direction and roadmap alignment before creating or modifying code files.

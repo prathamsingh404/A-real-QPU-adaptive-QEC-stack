@@ -91,3 +91,47 @@ Transfer an unknown quantum state $|\psi\rangle = \cos(\theta/2)|0\rangle + e^{i
          circuit.z(q2)
      ```
 5. **State Verification (Quantum State Tomography):** Measure $q_2$ in $X, Y, Z$ bases to reconstruct the full density matrix $\rho_{\text{teleported}}$.
+
+### C. The Three Experimental Arms for Rigorous Comparison
+1. **Arm 1 (Post-Selected Teleportation - Static Baseline):**
+   - Discards all shots where $(c_0, c_1) \neq (0, 0)$.
+   - **Flaw:** Only $25\%$ effective throughput; non-deterministic.
+2. **Arm 2 (SWAP Network - Unitary Baseline):**
+   - Teleportation via 3 physical SWAP gates ($9$ two-qubit gates).
+   - **Flaw:** High depth and cumulative 2-qubit gate error ($\sim 15-20\%$).
+3. **Arm 3 (Our Adaptive Dynamic Teleportation):**
+   - Deterministic feedforward ($100\%$ throughput) + **XY4 pulse train on $q_2$** while $q_0, q_1$ are measured and classical logic resolves in the control rack.
+
+### D. Quantitative Metrics
+- **Teleportation State Fidelity:** $\mathcal{F} = \langle \psi | \rho_{q_2} | \psi \rangle$.
+- **Classical Communication Threshold:** Prove $\mathcal{F} > \frac{2}{3} \approx 66.7\%$ (the rigorous classical limit of state transfer without quantum entanglement).
+- **Deterministic Yield:** Ratio of valid output shots ($\approx 100\%$ for Dynamic vs. $25\%$ for Post-Selected).
+
+---
+
+## 4. End-to-End Execution Plan & Milestones
+
+### Milestone 1: Mathematical Engine & Circuit Generators
+- Create `src/adaptive_qec/experiments/molecular_iqpe.py`:
+  - Analytical STO-3G molecular integral solver for $H_2$.
+  - Dynamic IQPE circuit generator supporting arbitrary bond lengths $R$, bit precision $m$, mid-circuit reset, conditional phase gates, and XY4 decoupling insertion.
+- Create `src/adaptive_qec/experiments/deterministic_teleportation.py`:
+  - Parameterized quantum state generator for 6 cardinal states.
+  - Dynamic teleportation circuit with mid-circuit Bell measurement and conditional $X/Z$ corrections.
+  - Tomography basis rotation circuits ($X, Y, Z$ projection).
+
+### Milestone 2: Unit Testing & Algorithmic Validation
+- Create `tests/test_molecular_iqpe.py` and `tests/test_teleportation.py`.
+- Verify exact state evolution, classical feedforward logic, and integration with Qiskit dynamic circuit syntax.
+- Ensure 100% test pass rate across the full repository.
+
+### Milestone 3: Live Hardware Execution on IBM Heron (`ibm_marrakesh`)
+- Execute real physical jobs:
+  - Part 1: IQPE dissociation curve at equilibrium ($R = 0.7414\,\text{Å}$) and stretched bonds ($R = 1.2\,\text{Å}, 1.8\,\text{Å}$) comparing Unmitigated vs Adaptive DD.
+  - Part 2: Deterministic Teleportation of $|+\rangle$ and $|+i\rangle$ states comparing Post-Selected vs Dynamic Feedforward vs SWAP baseline.
+- Capture immutable IBM Quantum Runtime Job IDs and full JSON results.
+
+### Milestone 4: Scientific Comparative Analysis & Audit Report
+- Compute chemical accuracy $\Delta E$, quantum state fidelity $\mathcal{F}$, and statistical significance ($p$-values, error bars).
+- Document honest comparison against prior art (Nature 2023 utility paper, PRX Quantum 2024 dynamic circuit benchmarks).
+- Commit code, hardware outputs, and push to GitHub.

@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "2.0.0",
-    "git_commit": "405de74032780d9f536b2a854d580d7982df5dd2",
-    "created_at_utc": "2026-11-13T18:31:08.749448+00:00",
+    "git_commit": "68ef93f3ec151c8a575ba5c3c70a641d443a49ab",
+    "created_at_utc": "2026-11-13T19:13:39.598585+00:00",
     "hash_algorithm": "SHA-256",
     "provenance": "simulation",
     "total_tracked_files": 11
   },
   "files": {
-    "configs/suite.yaml": "f440020d7f4f7eb15e03ec43a6b6d19257316521f5f8b0fcb15571aa5f016339",
+    "configs/suite.yaml": "e220b7a104eb4f0cde32a7cd0288a917da5eb60d0742dc5b16b3bf2bda7d55f8",
     "data/suite_results.json": "8f9776e345ead19a927c9326a9268efff907f5be068c73d941ed23297fc3c9c6",
     "data/manifest.json": "6c5ac51f625705906fc4b0cc7728b3ed385ff01146faa9c47e5b3574d38a8fac",
     "papers/tables/table_1.tex": "1e56584129ef121ad87de268356592ca00a87af8fa8b38cc6a5a7887a50589ce",

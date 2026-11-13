@@ -696,6 +696,9 @@ def benchmark_vs_mwpm(
     return {
         "uf_error_rate": uf_ler,
         "mwpm_error_rate": mwpm_ler,
+        "uf_ler": uf_ler,
+        "mwpm_ler": mwpm_ler,
+        "ler_ratio": float(inflation),
         "uf_time_s": t_uf,
         "mwpm_time_s": t_mwpm,
         "ler_inflation_factor": float(inflation),

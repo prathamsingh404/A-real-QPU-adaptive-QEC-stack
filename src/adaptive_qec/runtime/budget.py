@@ -106,6 +106,9 @@ class ShotBudgetManager:
         self._allocation_log: list[AllocationRecord] = []
         self._session_start: Optional[float] = None
         self._warnings_issued: int = 0
+        self._ewma_shot_rate: float = 0.0
+        self._ewma_alpha: float = 0.3
+        self._last_allocation_time: Optional[float] = None
 
     @property
     def total_used(self) -> int:
@@ -210,6 +213,19 @@ class ShotBudgetManager:
         self._total_used += shots
         self._session_used += shots
 
+        now = time.time()
+        if self._last_allocation_time is not None:
+            dt = now - self._last_allocation_time
+            if dt > 1e-4:
+                instant_rate = shots / dt
+                if self._ewma_shot_rate <= 0.0:
+                    self._ewma_shot_rate = instant_rate
+                else:
+                    self._ewma_shot_rate = (1.0 - self._ewma_alpha) * self._ewma_shot_rate + self._ewma_alpha * instant_rate
+        else:
+            self._ewma_shot_rate = shots / max(self._config.estimated_shot_time_s * shots, 1e-3)
+        self._last_allocation_time = now
+
         record = AllocationRecord(
             timestamp=datetime.now(timezone.utc).isoformat(),
             shots_requested=shots,
@@ -228,6 +244,44 @@ class ShotBudgetManager:
 
         return record
 
+    def get_margin_status(self) -> dict[str, Any]:
+        """Return real-time safety margin and headroom metrics."""
+        effective_limit = max(1, self._config.max_total_shots - self._config.safety_margin)
+        margin_util = min(1.0, self._total_used / effective_limit)
+        return {
+            "safety_margin_shots": self._config.safety_margin,
+            "safety_margin_fraction": self._config.safety_margin / max(1, self._config.max_total_shots),
+            "safe_remaining_shots": self.total_remaining,
+            "margin_utilization": round(margin_util, 4),
+            "is_margin_breached": self._total_used > effective_limit,
+            "warning_active": self.utilization >= self._config.warning_threshold,
+        }
+
+    def forecast_exhaustion(self, future_shots_per_sec: Optional[float] = None) -> dict[str, Any]:
+        """
+        Forecast remaining execution horizon and total projected cost using EWMA burn rate.
+
+        Args:
+            future_shots_per_sec: Optional assumed future burn rate. Defaults to EWMA rate.
+
+        Returns:
+            Dictionary containing projected duration, costs, and exhaustion forecast.
+        """
+        burn_rate = future_shots_per_sec if future_shots_per_sec is not None else self._ewma_shot_rate
+        if burn_rate <= 0:
+            burn_rate = 1.0 / max(self._config.estimated_shot_time_s, 1e-4)
+
+        projected_time_s = self.total_remaining / burn_rate if burn_rate > 0 else float("inf")
+        projected_cost = (self._config.max_total_shots - self._config.safety_margin) * self._config.cost_per_shot
+
+        return {
+            "burn_rate_shots_per_s": round(burn_rate, 2),
+            "projected_remaining_seconds": round(projected_time_s, 2),
+            "projected_total_cost": round(projected_cost, 4),
+            "current_cost": round(self.estimated_cost, 4),
+            "safe_remaining_shots": self.total_remaining,
+        }
+
     def new_session(self) -> None:
         """Reset session counter for a new Runtime session."""
         self._session_used = 0
@@ -239,7 +293,9 @@ class ShotBudgetManager:
         )
 
     def summary(self) -> dict[str, Any]:
-        """Return budget summary."""
+        """Return budget summary with margin tracking and cost forecasts."""
+        margin_status = self.get_margin_status()
+        forecast = self.forecast_exhaustion()
         return {
             "total_used": self._total_used,
             "total_budget": self._config.max_total_shots,
@@ -254,6 +310,9 @@ class ShotBudgetManager:
             ),
             "allocations": len(self._allocation_log),
             "warnings_issued": self._warnings_issued,
+            "burn_rate_shots_per_s": forecast["burn_rate_shots_per_s"],
+            "margin_status": margin_status,
+            "forecast": forecast,
         }
 
     def export_log(self, path: Optional[str] = None) -> str:

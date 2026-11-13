@@ -109,6 +109,32 @@ class TestShotBudgetManager:
         assert "total_used" in summary
         assert "utilization" in summary
         assert "estimated_cost" in summary
+        assert "margin_status" in summary
+        assert "forecast" in summary
+
+    def test_ewma_cost_forecasting_and_margin_tracking(self):
+        config = BudgetConfig(max_total_shots=50000, safety_margin=5000, cost_per_shot=0.002)
+        manager = ShotBudgetManager(config=config)
+
+        # Before usage
+        margin = manager.get_margin_status()
+        assert margin["safety_margin_shots"] == 5000
+        assert margin["safe_remaining_shots"] == 45000
+        assert margin["margin_utilization"] == 0.0
+        assert not margin["is_margin_breached"]
+
+        # Record multiple allocations to exercise EWMA rate update
+        manager.record_usage(5000, source="batch_1")
+        manager.record_usage(5000, source="batch_2")
+
+        forecast = manager.forecast_exhaustion()
+        assert forecast["burn_rate_shots_per_s"] > 0
+        assert forecast["projected_remaining_seconds"] > 0
+        assert forecast["projected_total_cost"] == pytest.approx(45000 * 0.002)
+        assert forecast["current_cost"] == pytest.approx(10000 * 0.002)
+
+        margin_after = manager.get_margin_status()
+        assert margin_after["margin_utilization"] == pytest.approx(10000 / 45000, rel=1e-3)
 
     def test_export_log(self):
         manager = ShotBudgetManager()

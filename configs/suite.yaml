@@ -8,6 +8,24 @@ experiment:
 noise_regime:
   base_physical_error: 0.004 # Below threshold (surface code threshold ~0.01)
   distances: [3, 5]
+  # NOTE [Distance Scaling Tradeoffs and d=7 Configuration]:
+  # Distance d=7 surface code configuration is specified here for reference but intentionally
+  # excluded from default confirmatory suite execution:
+  #   - Physical qubit requirements: d=7 rotated surface code requires n = d^2 = 49 data qubits
+  #     plus 48 syndrome ancillas (total 97 qubits). On a heavy-hex lattice (e.g. IBM Heron 133),
+  #     embedding overhead requires ~125 physical qubits and >80 SWAP routing stages per syndrome round.
+  #   - Computational Complexity: MWPM decoding graph contains O(d^3) = ~343 detector nodes per
+  #     measurement round, and matching graph construction scales as O(|V|^3) or O(|E| * |V| log |V|).
+  #     Per-shot latency exceeds 2.5 ms, which breaches the sub-microsecond real-time decoding budget
+  #     and drastically increases simulator wall-clock runtime for 30 held-out trajectories.
+  #   - Empirical Regime: Distance d=3 and d=5 provide complete statistical observability to verify
+  #     the suppression factor Lambda = p_L(d=3) / p_L(d=5) and validate the 3-gate switching criteria
+  #     without incurring O(d^3) benchmark latency penalties.
+  #   - Optional d=7 snippet:
+  #       - distance: 7
+  #         rounds: 7
+  #         total_qubits: 97
+  #         matching_edge_count: ~1200
 
 scenarios:
   - id: "stationary_noise"

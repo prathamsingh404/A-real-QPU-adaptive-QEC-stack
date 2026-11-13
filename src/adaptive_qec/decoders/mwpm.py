@@ -42,6 +42,17 @@ class MWPMDecoder(Decoder):
     def name(self) -> str:
         return "mwpm"
 
+    @property
+    def is_configured(self) -> bool:
+        """Whether the decoder has been configured with matching weights."""
+        return self._matching is not None
+
+    def __repr__(self) -> str:
+        return (
+            f"MWPMDecoder(configured={self.is_configured}, "
+            f"detectors={self._num_detectors}, observables={self._num_observables})"
+        )
+
     def configure(self, **kwargs: Any) -> None:
         """
         Configure with a DetectorErrorModel or Stim Circuit.
@@ -99,6 +110,81 @@ class MWPMDecoder(Decoder):
         return Correction(
             observable_corrections=predictions,
         )
+
+    def decode_with_timing(
+        self,
+        syndromes: np.ndarray,
+        exact_per_shot: bool = False,
+    ) -> tuple[Correction, dict[str, Any]]:
+        """
+        Decode syndromes while measuring per-shot latency distribution and throughput.
+
+        Args:
+            syndromes: shape (num_detectors,) or (shots, num_detectors).
+            exact_per_shot: If True, times each shot individually with high resolution.
+
+        Returns:
+            Tuple of (Correction, timing_stats_dict).
+        """
+        if not self.is_configured:
+            raise RuntimeError("Decoder not configured. Call configure() first.")
+
+        syn = np.asarray(syndromes, dtype=np.uint8)
+        if syn.ndim == 1:
+            syn = syn[np.newaxis, :]
+            single_input = True
+        else:
+            single_input = False
+
+        shots = syn.shape[0]
+        if shots == 0:
+            return (
+                Correction(observable_corrections=np.empty((0, self._num_observables), dtype=np.uint8)),
+                {
+                    "shots": 0,
+                    "total_time_s": 0.0,
+                    "throughput_shots_per_s": 0.0,
+                    "latency_mean_us": 0.0,
+                    "latency_p50_us": 0.0,
+                    "latency_p95_us": 0.0,
+                    "latency_p99_us": 0.0,
+                    "per_shot_latency_us": np.array([], dtype=np.float64),
+                },
+            )
+
+        per_shot_times_us = np.zeros(shots, dtype=np.float64)
+
+        if exact_per_shot and shots <= 5000:
+            preds = []
+            t_start = time.perf_counter()
+            for i in range(shots):
+                t0 = time.perf_counter_ns()
+                pred = self._matching.decode(syn[i])
+                t1 = time.perf_counter_ns()
+                per_shot_times_us[i] = (t1 - t0) / 1000.0
+                preds.append(pred)
+            t_total = time.perf_counter() - t_start
+            all_preds = np.asarray(preds, dtype=np.uint8)
+        else:
+            t_start = time.perf_counter()
+            all_preds = np.asarray(self._matching.decode_batch(syn), dtype=np.uint8)
+            t_total = time.perf_counter() - t_start
+            avg_per_shot = (t_total / max(shots, 1)) * 1e6
+            per_shot_times_us.fill(avg_per_shot)
+
+        stats = {
+            "shots": shots,
+            "total_time_s": t_total,
+            "throughput_shots_per_s": float(shots / t_total) if t_total > 0 else 0.0,
+            "latency_mean_us": float(np.mean(per_shot_times_us)),
+            "latency_p50_us": float(np.percentile(per_shot_times_us, 50)),
+            "latency_p95_us": float(np.percentile(per_shot_times_us, 95)),
+            "latency_p99_us": float(np.percentile(per_shot_times_us, 99)),
+            "per_shot_latency_us": per_shot_times_us,
+        }
+
+        output_corr = all_preds[0] if single_input else all_preds
+        return Correction(observable_corrections=output_corr), stats
 
     def decode_batch(
         self,

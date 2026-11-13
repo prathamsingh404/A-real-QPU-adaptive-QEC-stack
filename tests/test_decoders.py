@@ -110,8 +110,35 @@ class TestMWPMDecoder:
 
     def test_unconfigured_raises(self):
         decoder = MWPMDecoder()
+        assert not decoder.is_configured
+        assert "configured=False" in repr(decoder)
         with pytest.raises(RuntimeError):
             decoder.decode(np.zeros(10, dtype=np.uint8))
+        with pytest.raises(RuntimeError):
+            decoder.decode_with_timing(np.zeros((5, 10), dtype=np.uint8))
+
+    def test_decode_with_timing_batch_and_single(self):
+        circuit = self._make_circuit(p=0.01)
+        decoder = MWPMDecoder()
+        decoder.configure(circuit=circuit)
+        assert decoder.is_configured
+        assert "configured=True" in repr(decoder)
+
+        sampler = circuit.compile_detector_sampler()
+        detections = np.array(sampler.sample(shots=50, separate_observables=False), dtype=np.uint8)
+
+        # Batch decode with timing
+        corr, stats = decoder.decode_with_timing(detections, exact_per_shot=True)
+        assert corr.observable_corrections.shape == (50, 1)
+        assert stats["shots"] == 50
+        assert stats["total_time_s"] > 0
+        assert stats["throughput_shots_per_s"] > 0
+        assert stats["latency_p99_us"] >= stats["latency_p50_us"]
+
+        # Single shot decode with timing
+        corr_single, stats_single = decoder.decode_with_timing(detections[0])
+        assert corr_single.observable_corrections.shape == (1,)
+        assert stats_single["shots"] == 1
 
 
 class TestDecoderRegistry:

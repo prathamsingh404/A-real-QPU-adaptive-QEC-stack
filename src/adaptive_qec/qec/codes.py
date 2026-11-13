@@ -452,6 +452,34 @@ class UnrotatedSurfaceCode(QuantumCode):
         self.distance = distance
         self.rounds = rounds
 
+    @property
+    def coordinate_mappings(self) -> dict[int, tuple[float, float]]:
+        """Qubit coordinates from Stim circuit."""
+        circuit = self.generate_circuit()
+        coords: dict[int, tuple[float, float]] = {}
+        for inst in circuit.flattened():
+            if inst.name == "QUBIT_COORDS":
+                q = inst.targets_copy()[0].value
+                args = inst.gate_args_copy()
+                coords[q] = (float(args[0]), float(args[1])) if len(args) >= 2 else (float(args[0]), 0.0)
+        return coords
+
+    @property
+    def stabilizer_generators(self) -> list[str]:
+        """Stabilizer generators for unrotated surface code."""
+        d = self.distance
+        num_ancilla = 2 * d * (d - 1)
+        return [f"S_{i}" for i in range(num_ancilla)]
+
+    @property
+    def logical_operators(self) -> dict[str, str]:
+        """Logical operators for unrotated surface code."""
+        d = self.distance
+        return {
+            "X": " ".join(f"X{q}" for q in range(d)),
+            "Z": " ".join(f"Z{q * d}" for q in range(d)),
+        }
+
     def generate_circuit(
         self,
         noise: Optional[NoiseConfig] = None,

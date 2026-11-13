@@ -19,6 +19,7 @@ from adaptive_qec.noise.drift import (
     DriftReport,
     DriftStatus,
     EWMADriftDetector,
+    OrnsteinUhlenbeckDrift,
 )
 
 __all__ = [
@@ -36,4 +37,5 @@ __all__ = [
     "DriftReport",
     "DriftStatus",
     "EWMADriftDetector",
+    "OrnsteinUhlenbeckDrift",
 ]

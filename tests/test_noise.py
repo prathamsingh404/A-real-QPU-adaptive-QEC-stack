@@ -13,6 +13,7 @@ from adaptive_qec.noise.drift import (
     CUSUMDriftDetector,
     DriftStatus,
     EWMADriftDetector,
+    OrnsteinUhlenbeckDrift,
 )
 
 
@@ -167,3 +168,69 @@ class TestCompositeDriftDetector:
         # Should catch drift via at least one method
         assert report is not None
         assert report.status != DriftStatus.STABLE or report.magnitude > 0
+
+
+class TestOrnsteinUhlenbeckDrift:
+    """Test Ornstein-Uhlenbeck continuous-time drift process."""
+
+    def test_parameter_validation(self):
+        # theta must be > 0
+        with pytest.raises(ValueError, match="theta"):
+            OrnsteinUhlenbeckDrift(theta=0.0)
+        with pytest.raises(ValueError, match="theta"):
+            OrnsteinUhlenbeckDrift(theta=-0.5)
+
+        # sigma must be >= 0
+        with pytest.raises(ValueError, match="sigma"):
+            OrnsteinUhlenbeckDrift(sigma=-0.01)
+
+        # dt must be > 0
+        with pytest.raises(ValueError, match="dt"):
+            OrnsteinUhlenbeckDrift(dt=0.0)
+        with pytest.raises(ValueError, match="dt"):
+            OrnsteinUhlenbeckDrift(dt=-1.0)
+
+        # num_steps must be > 0
+        ou = OrnsteinUhlenbeckDrift(theta=0.5, mu=0.02, sigma=0.01)
+        with pytest.raises(ValueError, match="num_steps"):
+            ou.generate_trajectory(num_steps=0)
+
+    def test_generate_trajectory_shape_and_initial(self):
+        ou = OrnsteinUhlenbeckDrift(theta=0.2, mu=0.03, sigma=0.005, dt=0.5, seed=42)
+        traj = ou.generate_trajectory(num_steps=100, initial_value=0.08)
+        assert isinstance(traj, np.ndarray)
+        assert traj.shape == (100,)
+        assert np.isclose(traj[0], 0.08)
+
+        # single step trajectory
+        traj_single = ou.generate_trajectory(num_steps=1, initial_value=0.05)
+        assert traj_single.shape == (1,)
+        assert np.isclose(traj_single[0], 0.05)
+
+    def test_mean_reversion(self):
+        # Start far above mu, high theta, low sigma => should revert towards mu
+        ou = OrnsteinUhlenbeckDrift(theta=1.5, mu=0.02, sigma=0.001, dt=0.1, seed=42)
+        traj = ou.generate_trajectory(num_steps=200, initial_value=0.20)
+        # Final values should be close to mu (0.02)
+        assert np.abs(traj[-1] - 0.02) < 0.01
+        assert np.mean(traj[-50:]) < 0.05
+
+    def test_zero_volatility_deterministic_decay(self):
+        # When sigma = 0, deterministic exponential decay towards mu
+        theta = 0.5
+        dt = 0.1
+        mu = 0.01
+        x0 = 0.10
+        ou = OrnsteinUhlenbeckDrift(theta=theta, mu=mu, sigma=0.0, dt=dt)
+        traj = ou.generate_trajectory(num_steps=50, initial_value=x0)
+        for t in range(49):
+            expected = traj[t] + theta * (mu - traj[t]) * dt
+            assert np.isclose(traj[t + 1], expected)
+
+    def test_step_and_reset(self):
+        ou = OrnsteinUhlenbeckDrift(theta=0.5, mu=0.05, sigma=0.002, seed=123)
+        ou.reset(initial_value=0.10)
+        assert np.isclose(ou.current_value, 0.10)
+        next_val = ou.step()
+        assert ou.current_value == next_val
+

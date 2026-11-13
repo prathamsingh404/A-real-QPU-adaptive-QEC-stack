@@ -134,6 +134,51 @@ class HeavyHexTopology:
         """Alias for ibm_heron_133."""
         return cls.ibm_heron_133()
 
+    def get_tunable_coupler_layout(self) -> list[dict[str, Any]]:
+        """
+        Return the tunable coupler mapping for all two-qubit coupling links.
+
+        For IBM Heron architecture, all 2Q links utilize tunable couplers that enable
+        fast dynamic CZ interactions with static ZZ suppression (< 10 kHz).
+        """
+        couplers = []
+        for idx, (u, v) in enumerate(self.edges):
+            c_u = self.qubit_coordinates.get(u, (0.0, 0.0))
+            c_v = self.qubit_coordinates.get(v, (0.0, 0.0))
+            is_horizontal = (c_u[1] == c_v[1])
+            couplers.append({
+                "coupler_id": f"tc_{u}_{v}",
+                "qubits": (u, v),
+                "orientation": "horizontal" if is_horizontal else "vertical_bridge",
+                "center_coords": ((c_u[0] + c_v[0]) / 2.0, (c_u[1] + c_v[1]) / 2.0),
+                "cz_supported": True,
+                "nominal_gate_time_ns": 45.0,
+            })
+        return couplers
+
+    def get_patch_subgraph(self, num_qubits: int, start_qubit: int = 0) -> list[int]:
+        """
+        Find a compact, connected subgraph of the heavy-hex lattice suitable for a QEC patch.
+        Uses BFS order from start_qubit to ensure geometric locality.
+        """
+        from collections import deque
+        if num_qubits <= 0 or num_qubits > self.num_qubits:
+            raise ValueError(f"num_qubits must be between 1 and {self.num_qubits}")
+
+        visited: list[int] = []
+        seen = {start_qubit}
+        queue = deque([start_qubit])
+
+        while queue and len(visited) < num_qubits:
+            node = queue.popleft()
+            visited.append(node)
+            for neighbor in sorted(self.adjacency.get(node, set())):
+                if neighbor not in seen and len(visited) + len(queue) < num_qubits:
+                    seen.add(neighbor)
+                    queue.append(neighbor)
+
+        return visited
+
     def validate_qubit_coordinate_mapping(
         self,
         coords: Optional[dict[int, tuple[float, float]]] = None,

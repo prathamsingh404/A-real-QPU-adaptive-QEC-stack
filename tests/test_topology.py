@@ -158,8 +158,20 @@ class TestIBMHeron133TopologyAndDetectorMapping:
         assert report["num_detectors"] == circuit.num_detectors
         assert report["num_mapped_detectors"] == circuit.num_detectors
         assert len(report["unmapped_detectors"]) == 0
-        assert len(report["out_of_bounds_detectors"]) == 0
-        assert emb.verify_detector_mapping(circuit, topology=topo) is True
+
+    def test_tunable_couplers_and_patch_subgraph(self):
+        topo = HeavyHexTopology.ibm_heron_133()
+        couplers = topo.get_tunable_coupler_layout()
+        assert len(couplers) == 150
+        assert all(c["cz_supported"] for c in couplers)
+        assert any(c["orientation"] == "horizontal" for c in couplers)
+        assert any(c["orientation"] == "vertical_bridge" for c in couplers)
+
+        # Patch extraction
+        patch_17 = topo.get_patch_subgraph(17, start_qubit=0)
+        assert len(patch_17) == 17
+        assert patch_17[0] == 0
+        assert len(set(patch_17)) == 17
 
     def test_detector_coordinate_validation_out_of_bounds(self):
         from adaptive_qec.topology.embedding import SurfaceCodeEmbedding

@@ -122,3 +122,90 @@ class TestCodeFactory:
     def test_invalid_type(self):
         with pytest.raises(ValueError):
             create_code("invalid_code", distance=3, rounds=3)
+
+
+class TestCircuitBuildersAndScheduling:
+    """Tests for enhanced circuit builders and customizable stabilizer scheduling."""
+
+    def test_build_repetition_code_memory(self):
+        from adaptive_qec.qec.circuits import build_repetition_code_memory
+
+        circuit = build_repetition_code_memory(distance=3, rounds=4, p_error=0.005)
+        assert isinstance(circuit, stim.Circuit)
+        assert circuit.num_detectors > 0
+        assert circuit.num_observables == 1
+
+        dem = circuit.detector_error_model(decompose_errors=True)
+        assert dem.num_detectors == circuit.num_detectors
+
+        sampler = circuit.compile_detector_sampler()
+        samples, obs = sampler.sample(shots=20, separate_observables=True)
+        assert samples.shape == (20, circuit.num_detectors)
+        assert obs.shape == (20, 1)
+
+    def test_build_repetition_code_memory_validation(self):
+        from adaptive_qec.qec.circuits import build_repetition_code_memory
+
+        with pytest.raises(ValueError):
+            build_repetition_code_memory(distance=2, rounds=2)
+        with pytest.raises(ValueError):
+            build_repetition_code_memory(distance=3, rounds=0)
+
+    def test_build_rotated_surface_code_cx_vs_cz(self):
+        from adaptive_qec.qec.circuits import build_rotated_surface_code
+
+        c_cx = build_rotated_surface_code(distance=3, rounds=2, schedule="cx")
+        c_cz = build_rotated_surface_code(distance=3, rounds=2, schedule="cz")
+        c_pipe = build_rotated_surface_code(distance=3, rounds=2, schedule="pipelined_cz")
+
+        # CX circuit should contain CX gates
+        op_names_cx = [inst.name for inst in c_cx.flattened()]
+        assert "CX" in op_names_cx
+        assert "CZ" not in op_names_cx
+
+        # CZ circuit should replace CX with CZ
+        op_names_cz = [inst.name for inst in c_cz.flattened()]
+        assert "CZ" in op_names_cz
+        assert "CX" not in op_names_cz
+
+        # Pipelined CZ should also contain CZ and TICK
+        op_names_pipe = [inst.name for inst in c_pipe.flattened()]
+        assert "CZ" in op_names_pipe
+        assert "CX" not in op_names_pipe
+        assert "TICK" in op_names_pipe
+
+        # All schedules should preserve detector counts and produce valid DEMs
+        assert c_cx.num_detectors == c_cz.num_detectors == c_pipe.num_detectors
+        dem_cx = c_cx.detector_error_model(decompose_errors=True)
+        dem_cz = c_cz.detector_error_model(decompose_errors=True)
+        dem_pipe = c_pipe.detector_error_model(decompose_errors=True)
+        assert dem_cx.num_detectors == dem_cz.num_detectors == dem_pipe.num_detectors
+
+    def test_build_rotated_surface_code_validation(self):
+        from adaptive_qec.qec.circuits import build_rotated_surface_code
+
+        with pytest.raises(ValueError):
+            build_rotated_surface_code(distance=4, rounds=2)  # Even distance
+        with pytest.raises(ValueError):
+            build_rotated_surface_code(distance=3, rounds=0)  # Invalid rounds
+        with pytest.raises(ValueError):
+            build_rotated_surface_code(distance=3, rounds=2, schedule="unsupported")
+
+    def test_circuit_generator_scheduling_and_qiskit(self):
+        from adaptive_qec.config import QECConfig
+        from adaptive_qec.qec.circuits import CircuitGenerator
+
+        config = QECConfig(distance=3, rounds=2)
+        gen = CircuitGenerator(config, schedule="pipelined_cz")
+        assert gen.schedule == "pipelined_cz"
+
+        circuit = gen.generate_stim_circuit()
+        op_names = [inst.name for inst in circuit.flattened()]
+        assert "CZ" in op_names
+        assert "CX" not in op_names
+
+        # Convert to Qiskit
+        qc = gen.stim_to_qiskit(circuit)
+        ops = dict(qc.count_ops())
+        assert "cz" in ops
+

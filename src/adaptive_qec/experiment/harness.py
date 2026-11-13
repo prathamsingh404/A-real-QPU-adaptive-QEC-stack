@@ -78,6 +78,33 @@ class WindowResult:
         }
 
 
+def get_environment_reproducibility_metadata() -> dict[str, Any]:
+    """Capture runtime environment metadata for scientific reproducibility."""
+    import platform
+    import sys
+    meta = {
+        "python_version": sys.version,
+        "platform": platform.platform(),
+        "numpy_version": np.__version__,
+        "stim_version": getattr(stim, "__version__", "unknown"),
+    }
+    try:
+        import pymatching
+        meta["pymatching_version"] = getattr(pymatching, "__version__", "unknown")
+    except ImportError:
+        pass
+    try:
+        import subprocess
+        git_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
+        git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
+        meta["git_commit"] = git_hash
+        meta["git_branch"] = git_branch
+    except Exception:
+        meta["git_commit"] = "unknown"
+        meta["git_branch"] = "unknown"
+    return meta
+
+
 @dataclass
 class ExperimentRunResult:
     """Complete result from an experiment run."""
@@ -90,6 +117,9 @@ class ExperimentRunResult:
     start_time: str
     end_time: str
     total_windows: int
+    environment_metadata: dict[str, Any] = field(default_factory=dict)
+    random_seed: Optional[int] = None
+    reproducibility_hash: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -102,6 +132,9 @@ class ExperimentRunResult:
             "start_time": self.start_time,
             "end_time": self.end_time,
             "total_windows": self.total_windows,
+            "environment_metadata": self.environment_metadata,
+            "random_seed": self.random_seed,
+            "reproducibility_hash": self.reproducibility_hash,
         }
 
 
@@ -449,6 +482,7 @@ class ExperimentHarness:
                 logger.info(f"Completed window {window_idx + 1}/{num_windows}")
 
         end_time = datetime.now(timezone.utc).isoformat()
+        env_meta = get_environment_reproducibility_metadata()
 
         # Build aggregate metrics per controller
         aggregate: dict[str, Any] = {}
@@ -464,6 +498,16 @@ class ExperimentHarness:
                 "mean_reward": float(np.mean(rewards)),
                 "total_windows": len(ctrl_results),
             }
+
+        import hashlib
+        hash_payload = json.dumps({
+            "exp_id": exp_id,
+            "dist": self._config.qec.distance,
+            "rounds": self._config.qec.rounds,
+            "aggregate": aggregate,
+            "env": env_meta,
+        }, sort_keys=True, default=str)
+        repro_hash = hashlib.sha256(hash_payload.encode()).hexdigest()
 
         result = ExperimentRunResult(
             experiment_id=exp_id,
@@ -482,6 +526,9 @@ class ExperimentHarness:
             start_time=start_time,
             end_time=end_time,
             total_windows=num_windows,
+            environment_metadata=env_meta,
+            random_seed=getattr(self._config, "seed", None),
+            reproducibility_hash=repro_hash,
         )
 
         # Save results

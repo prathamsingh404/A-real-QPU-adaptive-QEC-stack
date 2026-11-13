@@ -69,6 +69,16 @@ def test_compute_adaptation_efficiency():
     assert eff_harm.efficiency < 0.0
     assert eff_harm.is_valid_range is False
 
+    # Sequence / array inputs across multiple trajectories
+    eff_seq = compute_adaptation_efficiency(
+        static_ler=[0.20, 0.20, 0.20],
+        deployable_ler=np.array([0.17, 0.18, 0.175]),
+        oracle_ler=[0.15, 0.15, 0.15],
+    )
+    assert pytest.approx(eff_seq.efficiency, rel=1e-2) == 0.50
+    assert eff_seq.is_valid_range is True
+
+
 
 def test_empirical_regret_tracker():
     """Verify cumulative regret tracking against oracle with switching penalties."""

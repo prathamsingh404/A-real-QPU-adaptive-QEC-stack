@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from scipy import stats
@@ -88,16 +88,22 @@ class AdaptationEfficiencyReport:
 
 
 def compute_adaptation_efficiency(
-    static_ler: float,
-    deployable_ler: float,
-    oracle_ler: float,
+    static_ler: Union[float, Sequence[float], np.ndarray],
+    deployable_ler: Union[float, Sequence[float], np.ndarray],
+    oracle_ler: Union[float, Sequence[float], np.ndarray],
 ) -> AdaptationEfficiencyReport:
     """
     Compute adaptation efficiency:
         eta_adapt = (LER_static - LER_deployable) / (LER_static - LER_oracle)
+
+    Supports both scalar LER values and sequences/arrays of LERs across trajectories.
     """
-    gain_deployable = static_ler - deployable_ler
-    gain_oracle = static_ler - oracle_ler
+    s_val = float(np.mean(static_ler))
+    d_val = float(np.mean(deployable_ler))
+    o_val = float(np.mean(oracle_ler))
+
+    gain_deployable = s_val - d_val
+    gain_oracle = s_val - o_val
 
     if gain_oracle <= 1e-12:
         # No headroom to improve over static baseline
@@ -108,9 +114,9 @@ def compute_adaptation_efficiency(
     valid = 0.0 <= eff <= 1.0
 
     return AdaptationEfficiencyReport(
-        static_ler=static_ler,
-        deployable_ler=deployable_ler,
-        oracle_ler=oracle_ler,
+        static_ler=s_val,
+        deployable_ler=d_val,
+        oracle_ler=o_val,
         gain_deployable=gain_deployable,
         gain_oracle=gain_oracle,
         efficiency=float(eff),

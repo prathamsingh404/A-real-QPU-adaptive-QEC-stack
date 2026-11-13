@@ -258,9 +258,10 @@ class DEMCalibrator:
         # (most DEM edges involve both gate and measurement operations)
         ratio = np.sqrt(ratio_2q * ratio_ro)
 
+        max_p = min(self._max_probability, 0.4999)
         new_edges: list[DEMEdge] = []
         for edge in self._base_edges:
-            new_prob = np.clip(edge.probability * ratio, self._min_probability, self._max_probability)
+            new_prob = np.clip(edge.probability * ratio, self._min_probability, max_p)
             new_edge = DEMEdge(
                 detector_a=edge.detector_a,
                 detector_b=edge.detector_b,
@@ -297,7 +298,12 @@ class DEMCalibrator:
         readout_error_rates : dict[int, float]
             Measured readout error rate per physical qubit.
         """
-        # For now, fall back to global calibration using the mean rates
+        # TODO: Implement full per-qubit coordinate-to-edge mapping.
+        # The correct approach extracts coordinate annotations from DETECTOR instructions in the DEM,
+        # identifies the physical data and syndrome qubits involved in each detector pair (u, v),
+        # computes the localized physical error rate product (or sum) for that pair, and scales
+        # edge (u, v) by the ratio of localized measured rates to nominal design rates.
+        # Currently falls back to global calibration using the mean rates.
         mean_p_2q = float(np.mean(list(qubit_error_rates.values()))) if qubit_error_rates else self._nominal_p_2q
         mean_p_ro = float(np.mean(list(readout_error_rates.values()))) if readout_error_rates else self._nominal_p_ro
 
@@ -401,6 +407,137 @@ class DEMCalibrator:
             calibration_timestamp=calibration_timestamp,
             source=f"spitz_covariance(shots={num_shots})",
         )
+
+    def calibrate_from_syndromes_windowed(
+        self,
+        syndrome_windows: list[np.ndarray] | np.ndarray,
+        ewma_alpha: float = 0.2,
+        calibration_timestamp: str = "",
+    ) -> CalibratedDEM:
+        """Streaming windowed Spitz calibration that incrementally updates edge probabilities using EWMA.
+
+        Parameters
+        ----------
+        syndrome_windows : list[np.ndarray] | np.ndarray
+            Sequence of syndrome batches (each shape [W, num_detectors]).
+        ewma_alpha : float
+            Smoothing weight for the new window estimate in (0, 1].
+        calibration_timestamp : str
+            Timestamp metadata.
+
+        Returns
+        -------
+        CalibratedDEM
+            Calibrated DEM with EWMA-converged edge weights.
+        """
+        if isinstance(syndrome_windows, np.ndarray) and syndrome_windows.ndim == 3:
+            windows_list = [syndrome_windows[i] for i in range(syndrome_windows.shape[0])]
+        elif isinstance(syndrome_windows, (list, tuple)):
+            windows_list = list(syndrome_windows)
+        else:
+            windows_list = [np.asarray(syndrome_windows)]
+
+        if len(windows_list) == 0:
+            return CalibratedDEM(
+                num_detectors=self._base_dem.num_detectors,
+                num_observables=self._base_dem.num_observables,
+                edges=list(self._base_edges),
+                calibration_timestamp=calibration_timestamp,
+                source="windowed_empty_fallback",
+            )
+
+        current_probs: dict[tuple[int, int], float] = {
+            (e.detector_a, e.detector_b): e.probability for e in self._base_edges
+        }
+
+        for window in windows_list:
+            if len(window) == 0:
+                continue
+            window_cal = self.calibrate_from_syndromes(window, smoothing=0.0)
+            for e in window_cal.edges:
+                key = (e.detector_a, e.detector_b)
+                p_old = current_probs.get(key, e.probability)
+                current_probs[key] = (1.0 - ewma_alpha) * p_old + ewma_alpha * e.probability
+
+        max_p = min(self._max_probability, 0.4999)
+        new_edges: list[DEMEdge] = []
+        for e in self._base_edges:
+            key = (e.detector_a, e.detector_b)
+            p_final = float(np.clip(current_probs.get(key, e.probability), self._min_probability, max_p))
+            new_edge = DEMEdge(
+                detector_a=e.detector_a,
+                detector_b=e.detector_b,
+                probability=p_final,
+                observables=list(e.observables),
+            )
+            new_edge.compute_weight()
+            new_edges.append(new_edge)
+
+        return CalibratedDEM(
+            num_detectors=self._base_dem.num_detectors,
+            num_observables=self._base_dem.num_observables,
+            edges=new_edges,
+            calibration_timestamp=calibration_timestamp,
+            source=f"windowed_ewma(windows={len(windows_list)}, alpha={ewma_alpha})",
+        )
+
+    def estimate_weight_uncertainty(
+        self,
+        syndromes: np.ndarray,
+        n_bootstraps: int = 50,
+        confidence: float = 0.95,
+        seed: int = 42,
+    ) -> dict[tuple[int, int], dict[str, float]]:
+        """Estimate DEM edge weight uncertainties using bootstrap resampling of syndrome shots.
+
+        Parameters
+        ----------
+        syndromes : np.ndarray
+            Binary syndrome array (shots, num_detectors).
+        n_bootstraps : int
+            Number of bootstrap replicates.
+        confidence : float
+            Confidence level for the bootstrap intervals (e.g. 0.95).
+        seed : int
+            RNG seed.
+
+        Returns
+        -------
+        dict[tuple[int, int], dict[str, float]]
+            Mapping (u, v) -> {'weight_mean', 'weight_std', 'ci_low', 'ci_high', 'prob_mean'}
+        """
+        shots = syndromes.shape[0]
+        if shots < 2:
+            raise ValueError("Need at least 2 shots for bootstrap uncertainty estimation")
+
+        rng = np.random.default_rng(seed)
+        edge_weights_boot: dict[tuple[int, int], list[float]] = {}
+        edge_probs_boot: dict[tuple[int, int], list[float]] = {}
+
+        for _ in range(n_bootstraps):
+            sample_idx = rng.choice(shots, size=shots, replace=True)
+            resampled = syndromes[sample_idx]
+            cal = self.calibrate_from_syndromes(resampled, smoothing=0.0)
+            for e in cal.edges:
+                key = (min(e.detector_a, e.detector_b), max(e.detector_a, e.detector_b))
+                edge_weights_boot.setdefault(key, []).append(e.weight)
+                edge_probs_boot.setdefault(key, []).append(e.probability)
+
+        alpha = 1.0 - confidence
+        results: dict[tuple[int, int], dict[str, float]] = {}
+        for key, weights in edge_weights_boot.items():
+            w_arr = np.array(weights)
+            p_arr = np.array(edge_probs_boot[key])
+            ci_low = float(np.percentile(w_arr, 100.0 * (alpha / 2.0)))
+            ci_high = float(np.percentile(w_arr, 100.0 * (1.0 - alpha / 2.0)))
+            results[key] = {
+                "weight_mean": float(np.mean(w_arr)),
+                "weight_std": float(np.std(w_arr, ddof=1)) if len(w_arr) > 1 else 0.0,
+                "ci_low": ci_low,
+                "ci_high": ci_high,
+                "prob_mean": float(np.mean(p_arr)),
+            }
+        return results
 
 
 def calibrate_spitz_matching(

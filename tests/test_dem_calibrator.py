@@ -146,3 +146,34 @@ class TestDEMCalibrator:
         assert calibrated_matching is not None
         assert calibrated_matching.num_detectors == base_matching.num_detectors
         assert calibrated_matching.num_fault_ids == base_matching.num_fault_ids
+
+    def test_windowed_spitz_calibration(self):
+        calibrator = DEMCalibrator()
+        w1 = np.zeros((50, 24), dtype=np.uint8)
+        w2 = np.zeros((50, 24), dtype=np.uint8)
+        w1[:5, 0] = 1
+        w2[:10, 0] = 1
+        res = calibrator.calibrate_from_syndromes_windowed([w1, w2], ewma_alpha=0.3)
+        assert len(res.edges) > 0
+        assert "windowed_ewma" in res.source
+
+    def test_estimate_weight_uncertainty(self):
+        calibrator = DEMCalibrator()
+        syndromes = np.zeros((100, 24), dtype=np.uint8)
+        syndromes[:20, 0] = 1
+        syndromes[:20, 1] = 1
+        unc = calibrator.estimate_weight_uncertainty(syndromes, n_bootstraps=10, confidence=0.90)
+        assert len(unc) > 0
+        for edge, data in unc.items():
+            assert "weight_mean" in data
+            assert "ci_low" in data
+            assert "ci_high" in data
+            assert data["ci_low"] <= data["ci_high"]
+
+    def test_proportional_calibration_large_ratio_clamped(self):
+        calibrator = DEMCalibrator()
+        res = calibrator.calibrate(measured_p_2q=0.45, measured_p_ro=0.45)
+        for e in res.edges:
+            assert e.probability < 0.5
+            assert e.weight > 0.0
+

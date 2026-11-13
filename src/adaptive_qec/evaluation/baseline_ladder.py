@@ -54,15 +54,35 @@ class BaselineArm:
 class BaselineLadder:
     """
     Standard evaluation hierarchy for comparing adaptive and static QEC strategies.
+
+    This ladder establishes a rigorous 7-rung benchmarking continuum from uncalibrated
+    static baselines up to the theoretical hindsight oracle:
+
+    - B0 (Factory MWPM): Standard PyMatching initialized with design-time nominal DEM.
+    - B1 (Optimized Static MWPM): Fixed weights tuned to initial pre-experiment calibration.
+    - B2 (True Union-Find): Linear-time heuristic cluster growth (Delfosse & Nickerson).
+    - B3 (Online Reweighted MWPM): Continuously reweighted MWPM via sliding-window syndrome covariance (Bhardwaj et al.).
+    - B4 (Naive Adaptive Policy): Unconstrained reactive switching whenever sample mean improves.
+    - B5 (Selective CG-CCADS): 3-gate confidence-gated policy with deadzone and switching tax control.
+    - B6 (Oracle Policy): Theoretical upper bound with instantaneous zero-cost access to true latent noise parameters.
+
+    Attributes:
+        circuit: The reference Stim QEC circuit.
+        arms: Mapping from BaselineRung to configured BaselineArm instances.
     """
 
     def __init__(self, circuit: stim.Circuit) -> None:
+        """Initialize the baseline ladder with the target QEC circuit.
+
+        Args:
+            circuit: Stim circuit defining the lattice topology and measurement sequence.
+        """
         self.circuit = circuit
         self.arms: dict[BaselineRung, BaselineArm] = {}
         self._initialize_ladder()
 
     def _initialize_ladder(self) -> None:
-        """Instantiate and configure all ladder decoders."""
+        """Instantiate and configure static and standard adaptive ladder decoders."""
         # B0: Factory MWPM (default circuit DEM)
         b0_dec = MWPMDecoder()
         b0_dec.configure(circuit=self.circuit)
@@ -102,8 +122,21 @@ class BaselineLadder:
             is_adaptive=True,
         )
 
-    def register_adaptive_arm(self, rung: BaselineRung, decoder: Decoder, description: str, is_oracle: bool = False) -> None:
-        """Register dynamic arms like B4 (naive), B5 (CG-CCADS), and B6 (oracle)."""
+    def register_adaptive_arm(
+        self,
+        rung: BaselineRung,
+        decoder: Decoder,
+        description: str,
+        is_oracle: bool = False,
+    ) -> None:
+        """Register dynamic arms like B4 (naive), B5 (CG-CCADS), and B6 (oracle).
+
+        Args:
+            rung: The BaselineRung identifier to register.
+            decoder: Configured Decoder instance.
+            description: Human-readable specification.
+            is_oracle: Whether this arm possesses privileged latent noise access.
+        """
         self.arms[rung] = BaselineArm(
             rung=rung,
             decoder=decoder,
@@ -112,8 +145,41 @@ class BaselineLadder:
             is_adaptive=True,
         )
 
+    def get_arm(self, rung: BaselineRung) -> BaselineArm:
+        """Retrieve a specific ladder arm by its enum rung."""
+        if rung not in self.arms:
+            raise KeyError(f"Rung '{rung}' is not configured in the baseline ladder")
+        return self.arms[rung]
+
+    def list_rungs(self) -> list[str]:
+        """List string names of all currently registered ladder rungs."""
+        return [r.value for r in self.arms]
+
+    def summary(self) -> dict[str, Any]:
+        """Return a structured summary of ladder composition and arm configurations."""
+        return {
+            "total_arms": len(self.arms),
+            "configured_rungs": [r.value for r in self.arms],
+            "arms": {
+                r.value: {
+                    "decoder": arm.decoder.name,
+                    "description": arm.description,
+                    "is_adaptive": arm.is_adaptive,
+                    "is_oracle": arm.is_oracle,
+                }
+                for r, arm in self.arms.items()
+            },
+        }
+
+    def __repr__(self) -> str:
+        return f"BaselineLadder(configured_arms={len(self.arms)}, rungs={list(self.arms.keys())})"
+
     def to_counterfactual_engine(self) -> CounterfactualEngine:
-        """Create a CounterfactualEngine wired to all ladder arms."""
+        """Create a CounterfactualEngine wired to all ladder arms.
+
+        Returns:
+            CounterfactualEngine instance configured with all registered arms.
+        """
         engine = CounterfactualEngine(reference_arm=BaselineRung.B0_FACTORY_MWPM.value)
         for rung, arm in self.arms.items():
             engine.register_decoder(rung.value, arm.decoder)

@@ -57,3 +57,12 @@ def test_baseline_ladder_instantiation_and_counterfactual_eval():
     assert disagreement.get(b0_name, b0_name) == 0.0
     assert 0.0 <= disagreement.get(b0_name, b2_name) <= 1.0
     assert disagreement.get(b0_name, b2_name) == disagreement.get(b2_name, b0_name)
+
+    # Test new ladder helper methods
+    arm = ladder.get_arm(BaselineRung.B0_FACTORY_MWPM)
+    assert arm.rung == BaselineRung.B0_FACTORY_MWPM
+    assert "b0_factory_mwpm" in ladder.list_rungs()
+    summ = ladder.summary()
+    assert summ["total_arms"] >= 4
+    assert "BaselineLadder" in repr(ladder)
+

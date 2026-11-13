@@ -102,11 +102,13 @@ class ConfidenceGatedReweightingController:
 
     def reset_reference(
         self,
+        new_reference: Optional[float] = None,
         new_reference_rate: Optional[float] = None,
         new_reference_samples: Optional[np.ndarray] = None,
     ) -> None:
         """Reset the reference defect rate baseline and optional reference samples."""
-        self.reference_defect_rate = new_reference_rate
+        rate = new_reference if new_reference is not None else new_reference_rate
+        self.reference_defect_rate = rate
         self.reference_shot_defect_rates = (
             np.asarray(new_reference_samples, dtype=np.float64)
             if new_reference_samples is not None
@@ -115,10 +117,14 @@ class ConfidenceGatedReweightingController:
 
     def get_telemetry(self) -> dict[str, Any]:
         """Return a complete telemetry snapshot of controller state and decisions."""
+        total_evals = self.total_stays + self.total_reweights + self.total_resets
+        abstention = self.total_stays / max(total_evals, 1)
         return {
+            "total_evaluations": total_evals,
             "total_stays": self.total_stays,
             "total_reweights": self.total_reweights,
             "total_resets": self.total_resets,
+            "abstention_rate": abstention,
             "is_reweighted": self.is_reweighted,
             "reference_defect_rate": self.reference_defect_rate,
             "z_crit": self.z_crit,

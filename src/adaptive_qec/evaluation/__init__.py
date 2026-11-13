@@ -12,6 +12,11 @@ from adaptive_qec.evaluation.baseline_ladder import (
     BaselineLadder,
     BaselineArm,
     BaselineRung,
+    BaselineLevel,
+    BaselineLevelInfo,
+    BASELINE_LEVEL_REGISTRY,
+    BaselineDeltaBenchmark,
+    compute_baseline_deltas,
 )
 
 __all__ = [
@@ -22,4 +27,9 @@ __all__ = [
     "BaselineLadder",
     "BaselineArm",
     "BaselineRung",
+    "BaselineLevel",
+    "BaselineLevelInfo",
+    "BASELINE_LEVEL_REGISTRY",
+    "BaselineDeltaBenchmark",
+    "compute_baseline_deltas",
 ]

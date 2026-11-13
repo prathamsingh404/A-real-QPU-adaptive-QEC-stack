@@ -102,6 +102,7 @@ class SPRTEngine:
         max_samples: int = 100,
         p0: Optional[float] = None,
         p1: Optional[float] = None,
+        min_confidence: float = 0.80,
     ) -> None:
         self.alpha = alpha
         self.beta = beta
@@ -109,10 +110,47 @@ class SPRTEngine:
         self.max_samples = max_samples
         self.p0 = p0
         self.p1 = p1
+        self.min_confidence = min_confidence
 
         # Wald boundaries
         self._upper = math.log((1.0 - beta) / alpha)
         self._lower = math.log(beta / (1.0 - alpha))
+
+    def _evaluate_truncated_decision(self, state: SPRTState) -> str:
+        """Evaluate decision at truncated horizon using posterior confidence."""
+        llr = state.log_likelihood_ratio
+        clamped_llr = max(min(llr, 50.0), -50.0)
+        post_prob = 1.0 / (1.0 + math.exp(-clamped_llr))
+        if llr > 0 and post_prob >= self.min_confidence:
+            state.decision = "switch"
+        else:
+            state.decision = "stay"
+        return state.decision
+
+    def get_telemetry(self, state: Optional[SPRTState] = None) -> dict[str, Any]:
+        """Return full telemetry dictionary for SPRT diagnostics."""
+        llr = state.log_likelihood_ratio if state is not None else 0.0
+        clamped_llr = max(min(llr, 50.0), -50.0)
+        post_prob = 1.0 / (1.0 + math.exp(-clamped_llr))
+        obs = state.observations if state is not None else 0
+        samples = state.samples_seen if state is not None else 0
+        decision = state.decision if state is not None else "undecided"
+        return {
+            "llr": llr,
+            "observations": obs,
+            "samples_seen": samples,
+            "upper_bound": self._upper,
+            "lower_bound": self._lower,
+            "decision": decision,
+            "posterior_switch_prob": post_prob,
+            "confidence": max(post_prob, 1.0 - post_prob),
+            "min_confidence": self.min_confidence,
+            "is_truncated": obs >= self.max_samples or samples >= self.max_samples,
+            "max_samples": self.max_samples,
+            "alpha": self.alpha,
+            "beta": self.beta,
+            "delta": self.delta,
+        }
 
     def update(
         self,
@@ -140,8 +178,7 @@ class SPRTEngine:
                 state.decision = "stay"
                 return "stay"
             elif state.observations >= self.max_samples:
-                state.decision = "switch" if state.log_likelihood_ratio > 0 else "stay"
-                return state.decision
+                return self._evaluate_truncated_decision(state)
             return "continue"
 
         if current_reward is None or challenger_reward is None:
@@ -179,12 +216,7 @@ class SPRTEngine:
             state.decision = "stay"
             return "stay"
         elif state.samples_seen >= self.max_samples:
-            if state.log_likelihood_ratio > 0:
-                state.decision = "switch"
-                return "switch"
-            else:
-                state.decision = "stay"
-                return "stay"
+            return self._evaluate_truncated_decision(state)
 
         return "continue"
 
@@ -211,13 +243,21 @@ class SPRTController(BaseController):
         delta: float = 0.01,
         p0: Optional[float] = None,
         p1: Optional[float] = None,
+        min_confidence: float = 0.80,
         eval_interval: int = 10,
         cooldown: int = 20,
         weights: Optional[CostWeights] = None,
     ) -> None:
         super().__init__(weights=weights)
 
-        self._sprt = SPRTEngine(alpha=alpha, beta=beta, delta=delta, p0=p0, p1=p1)
+        self._sprt = SPRTEngine(
+            alpha=alpha,
+            beta=beta,
+            delta=delta,
+            p0=p0,
+            p1=p1,
+            min_confidence=min_confidence,
+        )
 
         # Arms
         if arms is not None:
@@ -390,4 +430,17 @@ class SPRTController(BaseController):
         base["sprt_beta"] = self._sprt.beta
         base["sprt_delta"] = self._sprt.delta
         return base
+
+    def get_telemetry(self) -> dict[str, Any]:
+        """Return comprehensive telemetry of controller state and active SPRT test."""
+        return {
+            "step": self._step,
+            "current_arm": self._current_arm,
+            "in_eval": self._in_eval,
+            "challenger_arm": self._challenger_arm,
+            "cooldown_remaining": self._cooldown_remaining,
+            "switch_count": self._switch_count,
+            "eval_count": self._eval_count,
+            "sprt_engine": self._sprt.get_telemetry(self._sprt_state),
+        }
 

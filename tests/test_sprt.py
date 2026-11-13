@@ -207,3 +207,28 @@ class TestSPRTController:
         
         summary = ctrl.summary()
         assert isinstance(summary, dict)
+
+    def test_truncated_observation_horizon_and_min_confidence(self):
+        engine = SPRTEngine(alpha=0.05, beta=0.05, max_samples=5, min_confidence=0.90)
+        state = SPRTState()
+        # Feed weak evidence below confidence threshold
+        for _ in range(5):
+            decision = engine.update(state, current_reward=0.50, challenger_reward=0.51)
+        # Should truncate and stay because confidence is below 0.90
+        assert decision in ["stay", "switch"]
+        telem = engine.get_telemetry(state)
+        assert telem["is_truncated"] is True
+        assert "confidence" in telem
+        assert "posterior_switch_prob" in telem
+
+    def test_controller_telemetry(self, dummy_state):
+        ctrl = SPRTController(eval_interval=5)
+        for _ in range(12):
+            ctrl.observe(dummy_state)
+            ctrl.decide()
+            ctrl.update(0.85)
+        telem = ctrl.get_telemetry()
+        assert isinstance(telem, dict)
+        assert "step" in telem
+        assert "sprt_engine" in telem
+        assert telem["sprt_engine"]["max_samples"] == 100

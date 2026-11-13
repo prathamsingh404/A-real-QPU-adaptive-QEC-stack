@@ -46,8 +46,8 @@ def compute_logical_error_metrics(
     Compute logical error rate with confidence interval.
 
     Args:
-        num_errors: number of logical errors observed.
-        num_shots: total shots.
+        num_errors: number of logical errors observed (must be non-negative).
+        num_shots: total shots (must be non-negative).
         num_rounds: QEC rounds (for per-round rate).
         physical_error_rate: estimated physical error rate (for Λ ratio).
         confidence: confidence level for CI.
@@ -55,13 +55,23 @@ def compute_logical_error_metrics(
     Returns:
         LogicalErrorMetrics with all computed values.
     """
+    if num_shots < 0 or num_errors < 0:
+        raise ValueError("num_shots and num_errors must be non-negative")
+    if num_errors > num_shots:
+        raise ValueError(f"num_errors ({num_errors}) cannot exceed num_shots ({num_shots})")
+
     error_rate = num_errors / num_shots if num_shots > 0 else 0.0
     ci_low, ci_high = compute_confidence_interval(num_errors, num_shots, confidence)
 
     # Per-round error rate: 1 - (1 - p_L)^(1/R)
     per_round = None
-    if num_rounds > 1 and error_rate < 1.0:
-        per_round = 1 - (1 - error_rate) ** (1 / num_rounds)
+    if num_rounds > 0:
+        if error_rate <= 0.0:
+            per_round = 0.0
+        elif error_rate >= 1.0:
+            per_round = 1.0
+        elif num_rounds > 1:
+            per_round = 1.0 - (1.0 - error_rate) ** (1.0 / num_rounds)
 
     # Lambda ratio
     lambda_ratio = None
@@ -78,6 +88,29 @@ def compute_logical_error_metrics(
         per_round_error_rate=per_round,
         lambda_ratio=lambda_ratio,
     )
+
+
+def compute_suppression_factor(
+    d_low: int,
+    ler_low: float,
+    d_high: int,
+    ler_high: float,
+) -> float:
+    """Compute the error suppression factor Lambda between two code distances.
+
+    Lambda = (ler_low / ler_high) ** (2.0 / (d_high - d_low))
+
+    Values Lambda > 1 indicate sub-threshold fault tolerance (increasing distance
+    suppresses logical errors).
+    """
+    if d_high <= d_low:
+        raise ValueError(f"d_high ({d_high}) must be strictly greater than d_low ({d_low})")
+    if ler_low <= 0.0 or ler_high <= 0.0:
+        return 0.0 if ler_low <= 0.0 else float("inf")
+
+    delta_d_half = (d_high - d_low) / 2.0
+    return float((ler_low / ler_high) ** (1.0 / delta_d_half))
+
 
 
 @dataclass
@@ -130,6 +163,10 @@ def estimate_threshold(
 
     d_fit = d_arr[mask]
     p_fit = p_arr[mask]
+
+    if len(np.unique(d_fit)) < 2:
+        logger.warning("Need at least 2 distinct distances for threshold estimation")
+        return ThresholdEstimate(distances=distances, error_rates=error_rates)
 
     # Log-linear fit: log(p_L) = a + b * d
     # b = log(p/p_th) / 2

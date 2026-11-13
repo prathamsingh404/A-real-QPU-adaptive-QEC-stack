@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import numpy as np
 from scipy import stats
@@ -313,39 +313,119 @@ class SignificanceTester:
 
     @staticmethod
     def benjamini_hochberg(
-        p_values: list[float],
+        p_values: Sequence[float],
         alpha: float = 0.05,
     ) -> list[bool]:
         """Benjamini-Hochberg FDR correction for multiple comparisons.
 
         Returns a boolean mask: True = reject null at controlled FDR.
         """
-        n = len(p_values)
-        if n == 0:
-            return []
+        return benjamini_hochberg_correction(p_values, q=alpha)
 
-        # Sort p-values
-        sorted_indices = np.argsort(p_values)
-        sorted_p = np.array(p_values)[sorted_indices]
+    @staticmethod
+    def holm_bonferroni(
+        p_values: Sequence[float],
+        alpha: float = 0.05,
+    ) -> list[bool]:
+        """Holm-Bonferroni FWER step-down correction for multiple comparisons.
 
-        # BH threshold: p_(k) ≤ (k/n) * α
-        thresholds = np.arange(1, n + 1) / n * alpha
-        rejected = sorted_p <= thresholds
+        Returns a boolean mask: True = reject null at controlled FWER.
+        """
+        return holm_bonferroni_correction(p_values, alpha=alpha)
 
-        # Find the largest k such that p_(k) ≤ threshold
-        if not np.any(rejected):
-            return [False] * n
 
-        max_rejected = np.max(np.where(rejected)[0])
-        rejected[:max_rejected + 1] = True
-        rejected[max_rejected + 1:] = False
+def holm_bonferroni_correction(
+    p_values: Sequence[float],
+    alpha: float = 0.05,
+) -> list[bool]:
+    """
+    Holm-Bonferroni step-down multiple testing correction.
 
-        # Map back to original order
-        result = [False] * n
-        for i, orig_idx in enumerate(sorted_indices):
-            result[orig_idx] = bool(rejected[i])
+    Controls the Family-Wise Error Rate (FWER) at level alpha under arbitrary
+    or positive dependence.
+    Sorts p-values in ascending order p_(1) <= ... <= p_(m) and applies
+    step-down criterion: rejects H_(k) if p_(k) <= alpha / (m - k + 1)
+    for all j <= k.
 
-        return result
+    Args:
+        p_values: Sequence of p-values to correct.
+        alpha: Family-wise significance level (default 0.05).
+
+    Returns:
+        list[bool]: Boolean mask in original input order (True = reject H0).
+    """
+    m = len(p_values)
+    if m == 0:
+        return []
+
+    sorted_indices = np.argsort(p_values)
+    sorted_p = np.asarray(p_values, dtype=np.float64)[sorted_indices]
+
+    rejected_sorted = [False] * m
+    for k_idx, p_val in enumerate(sorted_p):
+        k = k_idx + 1  # 1-based rank
+        threshold = alpha / (m - k + 1)
+        if p_val <= threshold:
+            rejected_sorted[k_idx] = True
+        else:
+            # Step-down stops at first non-rejection
+            break
+
+    result = [False] * m
+    for orig_pos, sorted_idx in enumerate(sorted_indices):
+        result[sorted_idx] = rejected_sorted[orig_pos]
+
+    return result
+
+
+def benjamini_hochberg_correction(
+    p_values: Sequence[float],
+    q: float = 0.05,
+    alpha: Optional[float] = None,
+) -> list[bool]:
+    """
+    Benjamini-Hochberg False Discovery Rate (FDR) control procedure.
+
+    Controls the expected proportion of false discoveries at level q.
+    Sorts p-values p_(1) <= ... <= p_(m) and finds the largest k such that
+    p_(k) <= (k / m) * q, rejecting all H_(1) through H_(k).
+
+    Args:
+        p_values: Sequence of p-values to correct.
+        q: False discovery rate target (default 0.05).
+        alpha: Alias for q if provided.
+
+    Returns:
+        list[bool]: Boolean mask in original input order (True = reject H0).
+    """
+    if alpha is not None:
+        q = alpha
+
+    m = len(p_values)
+    if m == 0:
+        return []
+
+    sorted_indices = np.argsort(p_values)
+    sorted_p = np.asarray(p_values, dtype=np.float64)[sorted_indices]
+
+    thresholds = (np.arange(1, m + 1) / m) * q
+    below = sorted_p <= thresholds
+
+    if not np.any(below):
+        return [False] * m
+
+    # Find largest k such that p_(k) <= (k/m)*q
+    max_k_idx = int(np.max(np.where(below)[0]))
+
+    rejected_sorted = [False] * m
+    for i in range(max_k_idx + 1):
+        rejected_sorted[i] = True
+
+    result = [False] * m
+    for sorted_rank, orig_idx in enumerate(sorted_indices):
+        result[orig_idx] = rejected_sorted[sorted_rank]
+
+    return result
 
     @staticmethod
     def holm_bonferroni(

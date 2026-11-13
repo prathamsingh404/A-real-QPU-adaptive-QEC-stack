@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -63,6 +63,10 @@ class RegretAnalysis:
     reward_p5: float
     reward_p95: float
 
+    # Dynamic & theoretical bounds
+    dynamic_cumulative_regret: float = 0.0
+    theoretical_bound: float = 0.0
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "controller_name": self.controller_name,
@@ -79,6 +83,8 @@ class RegretAnalysis:
             "reward_std": self.reward_std,
             "reward_p5": self.reward_p5,
             "reward_p95": self.reward_p95,
+            "dynamic_cumulative_regret": self.dynamic_cumulative_regret,
+            "theoretical_bound": self.theoretical_bound,
         }
 
 
@@ -196,6 +202,28 @@ class RegretAnalyzer:
 
         switch_regret = switches * self._switch_penalty
 
+        # Theoretical regret bound (piecewise-stationary MAB bound)
+        num_k = self.num_arms if self.num_arms is not None else max(len(arm_rewards), 1)
+        bounds = compute_cumulative_regret_bounds(
+            total_steps=T,
+            num_arms=num_k,
+            num_change_points=max(1, switches),
+            switch_cost=self._switch_penalty,
+        )
+        theoretical_bound = bounds["piecewise_stationary_bound"]
+
+        # Dynamic oracle: per-step best arm across available arms
+        dynamic_cum_regret = 0.0
+        if arm_rewards:
+            min_len = min(len(v) for v in arm_rewards.values())
+            if min_len >= T:
+                step_oracles = [max(arm_rewards[a][t] for a in arm_rewards) for t in range(T)]
+                dynamic_cum_regret = float(np.sum(np.maximum(0.0, np.array(step_oracles) - rewards))) + switch_regret
+            else:
+                dynamic_cum_regret = cumulative_regret
+        else:
+            dynamic_cum_regret = cumulative_regret
+
         return RegretAnalysis(
             controller_name=controller_name,
             total_steps=T,
@@ -212,6 +240,8 @@ class RegretAnalyzer:
             reward_std=float(np.std(rewards)),
             reward_p5=float(np.percentile(rewards, 5)),
             reward_p95=float(np.percentile(rewards, 95)),
+            dynamic_cumulative_regret=dynamic_cum_regret,
+            theoretical_bound=theoretical_bound,
         )
 
     def compare(self) -> dict[str, RegretAnalysis]:
@@ -244,3 +274,82 @@ class RegretAnalyzer:
         lines.append(f"Oracle arm: {list(analyses.values())[0].oracle_arm if analyses else 'N/A'}")
 
         return "\n".join(lines)
+
+
+def compute_cumulative_regret_bounds(
+    total_steps: int,
+    num_arms: int = 5,
+    num_change_points: int = 1,
+    switch_cost: float = 0.001,
+) -> Dict[str, float]:
+    """
+    Compute theoretical cumulative regret bounds for multi-armed bandit controllers.
+
+    Includes:
+        - Exp3 minimax adversarial bound: 2 * sqrt(K * T * log(K))
+        - Piecewise-stationary switching bound:
+          sqrt(S * K * T * log(max(2, T))) + S * switch_cost
+        - Sublinear rate: sqrt(K * T)
+
+    Args:
+        total_steps: Total horizon T.
+        num_arms: Number of arms K.
+        num_change_points: Number of non-stationary environment switches S.
+        switch_cost: Fixed penalty per switch C_switch.
+
+    Returns:
+        Dict[str, float]: Theoretical upper bounds on cumulative regret.
+    """
+    if total_steps <= 0:
+        return {
+            "exp3_bound": 0.0,
+            "piecewise_stationary_bound": 0.0,
+            "sublinear_bound": 0.0,
+        }
+
+    K = max(1, num_arms)
+    T = total_steps
+    S = max(1, num_change_points)
+
+    exp3_bound = float(2.0 * np.sqrt(K * T * np.log(max(2, K))))
+    piecewise_bound = float(
+        np.sqrt(S * K * T * np.log(max(2, T))) + S * switch_cost
+    )
+    sublinear_bound = float(np.sqrt(K * T))
+
+    return {
+        "exp3_bound": exp3_bound,
+        "piecewise_stationary_bound": piecewise_bound,
+        "sublinear_bound": sublinear_bound,
+    }
+
+
+def compute_dynamic_regret(
+    controller_losses: Sequence[float],
+    oracle_losses: Sequence[float],
+    switch_cost: float = 0.0,
+    switches: int = 0,
+) -> Tuple[float, List[float]]:
+    """
+    Compute empirical dynamic regret against per-step optimal oracle.
+
+    R_T = sum_{t=1}^T [ loss_{controller}(t) - loss_{oracle}(t) ] + switches * switch_cost
+
+    Args:
+        controller_losses: Sequence of losses/errors incurred by controller.
+        oracle_losses: Sequence of best counterfactual losses at each step.
+        switch_cost: Penalty incurred per mode switch.
+        switches: Total count of controller switches.
+
+    Returns:
+        (cumulative_regret, regret_curve)
+    """
+    c = np.asarray(controller_losses, dtype=np.float64)
+    o = np.asarray(oracle_losses, dtype=np.float64)
+    if len(c) != len(o):
+        raise ValueError(f"Length mismatch: {len(c)} vs {len(o)}")
+
+    inst_regret = np.maximum(0.0, c - o)
+    curve = list(np.cumsum(inst_regret))
+    total = float(curve[-1] if len(curve) > 0 else 0.0) + switches * switch_cost
+    return (total, curve)

@@ -75,53 +75,127 @@ def compute_adaptation_values(
     )
 
 
-@dataclass(frozen=True)
-class AdaptationEfficiencyReport:
-    """Quantification of observable policy gain relative to oracle optimum."""
+class AdaptationEfficiencyReport(float):
+    """
+    Quantification of observable policy gain relative to oracle optimum.
+
+    Inherits from float so compute_adaptation_efficiency can be used directly as a
+    numeric float bounded in [-1, 1], while retaining structured report attributes.
+    """
+    efficiency: float
     static_ler: float
     deployable_ler: float
     oracle_ler: float
-    gain_deployable: float            # G_observable = LER_static - LER_deployable
-    gain_oracle: float                # G_oracle = LER_static - LER_oracle
-    efficiency: float                 # eta = G_observable / G_oracle
-    is_valid_range: bool              # True if efficiency in [0, 1]
+    gain_deployable: float
+    gain_oracle: float
+    is_valid_range: bool
+
+    def __new__(
+        cls,
+        efficiency: float,
+        static_ler: float,
+        deployable_ler: float,
+        oracle_ler: float,
+        gain_deployable: float,
+        gain_oracle: float,
+        is_valid_range: bool,
+    ):
+        obj = super().__new__(cls, efficiency)
+        obj.efficiency = float(efficiency)
+        obj.static_ler = float(static_ler)
+        obj.deployable_ler = float(deployable_ler)
+        obj.oracle_ler = float(oracle_ler)
+        obj.gain_deployable = float(gain_deployable)
+        obj.gain_oracle = float(gain_oracle)
+        obj.is_valid_range = bool(is_valid_range)
+        return obj
+
+    def __repr__(self) -> str:
+        return (
+            f"AdaptationEfficiencyReport(efficiency={self.efficiency:.4f}, "
+            f"gain_deployable={self.gain_deployable:.4f}, "
+            f"gain_oracle={self.gain_oracle:.4f}, is_valid_range={self.is_valid_range})"
+        )
 
 
 def compute_adaptation_efficiency(
-    static_ler: Union[float, Sequence[float], np.ndarray],
-    deployable_ler: Union[float, Sequence[float], np.ndarray],
-    oracle_ler: Union[float, Sequence[float], np.ndarray],
+    ler_adaptive: Optional[Any] = None,
+    ler_static: Optional[Any] = None,
+    ler_oracle: Optional[Any] = None,
+    *,
+    static_ler: Optional[Any] = None,
+    deployable_ler: Optional[Any] = None,
+    oracle_ler: Optional[Any] = None,
 ) -> AdaptationEfficiencyReport:
     """
     Compute adaptation efficiency:
-        eta_adapt = (LER_static - LER_deployable) / (LER_static - LER_oracle)
+        eta_adapt = (ler_static - ler_adaptive) / max(ler_static - ler_oracle, 1e-9)
+    bounded in [-1, 1].
 
-    Supports both scalar LER values and sequences/arrays of LERs across trajectories.
+    Supports both:
+        compute_adaptation_efficiency(ler_adaptive, ler_static, ler_oracle)
+    and keyword arguments (e.g. static_ler, deployable_ler, oracle_ler),
+    as well as scalar floats, lists, or numpy arrays across trajectories.
     """
-    s_val = float(np.mean(static_ler))
-    d_val = float(np.mean(deployable_ler))
-    o_val = float(np.mean(oracle_ler))
+    if static_ler is not None:
+        ler_static = static_ler
+    if deployable_ler is not None:
+        ler_adaptive = deployable_ler
+    if oracle_ler is not None:
+        ler_oracle = oracle_ler
+
+    if ler_adaptive is None or ler_static is None or ler_oracle is None:
+        raise ValueError("Must provide ler_adaptive, ler_static, and ler_oracle")
+
+    s_val = float(np.mean(ler_static))
+    d_val = float(np.mean(ler_adaptive))
+    o_val = float(np.mean(ler_oracle))
 
     gain_deployable = s_val - d_val
     gain_oracle = s_val - o_val
 
-    if gain_oracle <= 1e-12:
-        # No headroom to improve over static baseline
-        eff = 1.0 if abs(gain_deployable) <= 1e-12 else 0.0
-    else:
-        eff = gain_deployable / gain_oracle
-
-    valid = 0.0 <= eff <= 1.0
+    denom = max(gain_oracle, 1e-9)
+    raw_eff = gain_deployable / denom
+    eff_bounded = float(np.clip(raw_eff, -1.0, 1.0))
+    valid = (0.0 <= raw_eff <= 1.0)
 
     return AdaptationEfficiencyReport(
+        efficiency=eff_bounded,
         static_ler=s_val,
         deployable_ler=d_val,
         oracle_ler=o_val,
         gain_deployable=gain_deployable,
         gain_oracle=gain_oracle,
-        efficiency=float(eff),
         is_valid_range=valid,
     )
+
+
+def compute_false_switching_cost(
+    switches: int | float | Sequence[Any] | np.ndarray,
+    cost_per_switch: float,
+    lcb_benefit: float = 0.0,
+) -> float:
+    """
+    Compute net false-switching cost:
+        cost = max(0.0, switches * cost_per_switch - lcb_benefit)
+
+    Args:
+        switches: Number of switches (or sequence/array of switch events).
+        cost_per_switch: Cost incurred per switch.
+        lcb_benefit: Lower confidence bound benefit gained from switching.
+
+    Returns:
+        float: Net cost of false switching (non-negative).
+    """
+    if isinstance(switches, (int, float, np.integer, np.floating)):
+        n_switches = float(switches)
+    elif isinstance(switches, (list, tuple, np.ndarray)):
+        n_switches = float(np.sum(switches))
+    else:
+        n_switches = float(len(switches))
+
+    total_cost = n_switches * cost_per_switch
+    return float(max(0.0, total_cost - lcb_benefit))
 
 
 @dataclass
@@ -242,6 +316,8 @@ class AnalyticalProofsAndBounds:
     Analytical theorems and bounds for Adaptive QEC.
     Tasks: TASK-088, TASK-089, TASK-090, TASK-091.
     """
+
+    compute_false_switching_cost = staticmethod(compute_false_switching_cost)
 
     @staticmethod
     def evaluate_switching_condition(

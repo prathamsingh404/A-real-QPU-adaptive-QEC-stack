@@ -11,6 +11,7 @@ from adaptive_qec.analysis.adaptation_metrics import (
     EmpiricalRegretTracker,
     compute_adaptation_efficiency,
     compute_adaptation_values,
+    compute_false_switching_cost,
 )
 
 
@@ -163,3 +164,59 @@ def test_analytical_proofs_and_bounds():
         c_switch=0.01,
     )
     assert bound > 0.0
+
+
+def test_adaptation_efficiency_positional_and_bounds():
+    """Verify compute_adaptation_efficiency(ler_adaptive, ler_static, ler_oracle) with [-1, 1] bounds."""
+    # Positional invocation: adaptive=0.15, static=0.20, oracle=0.10
+    # (0.20 - 0.15) / (0.20 - 0.10) = 0.05 / 0.10 = 0.50
+    eff = compute_adaptation_efficiency(0.15, 0.20, 0.10)
+    assert eff == pytest.approx(0.50)
+    assert isinstance(eff, float)
+    assert eff.efficiency == pytest.approx(0.50)
+
+    # Perfect adaptation = 1.0
+    eff_perf = compute_adaptation_efficiency(0.10, 0.20, 0.10)
+    assert eff_perf == pytest.approx(1.0)
+
+    # Zero gain = 0.0
+    eff_zero = compute_adaptation_efficiency(0.20, 0.20, 0.10)
+    assert eff_zero == pytest.approx(0.0)
+
+    # Harmful adaptation clipped at -1.0
+    # (0.20 - 0.40) / (0.20 - 0.10) = -0.20 / 0.10 = -2.0 -> clipped to -1.0
+    eff_harm = compute_adaptation_efficiency(0.40, 0.20, 0.10)
+    assert eff_harm == pytest.approx(-1.0)
+    assert -1.0 <= eff_harm <= 1.0
+
+    # Overperforming / noisy overshoot clipped at 1.0
+    # (0.20 - 0.05) / (0.20 - 0.10) = 0.15 / 0.10 = 1.5 -> clipped to 1.0
+    eff_over = compute_adaptation_efficiency(0.05, 0.20, 0.10)
+    assert eff_over == pytest.approx(1.0)
+    assert -1.0 <= eff_over <= 1.0
+
+
+def test_compute_false_switching_cost():
+    """Verify false-switching cost computation under various scenarios."""
+    # Standard false switch: 5 switches at 0.002 cost each, but only 0.003 LCB benefit
+    # Cost = 5 * 0.002 - 0.003 = 0.010 - 0.003 = 0.007
+    cost = compute_false_switching_cost(switches=5, cost_per_switch=0.002, lcb_benefit=0.003)
+    assert cost == pytest.approx(0.007)
+
+    # Switch sequence / array: 3 switches out of 5 steps
+    switch_events = [True, False, True, True, False]
+    cost_arr = compute_false_switching_cost(switch_events, cost_per_switch=0.004, lcb_benefit=0.002)
+    # 3 * 0.004 - 0.002 = 0.012 - 0.002 = 0.010
+    assert cost_arr == pytest.approx(0.010)
+
+    # Fully justified switch (benefit exceeds switching cost) -> zero false-switching cost
+    cost_justified = compute_false_switching_cost(switches=2, cost_per_switch=0.005, lcb_benefit=0.020)
+    assert cost_justified == 0.0
+
+    # Zero switches -> zero cost
+    assert compute_false_switching_cost(0, cost_per_switch=0.01, lcb_benefit=0.0) == 0.0
+
+    # AnalyticalProofsAndBounds alias
+    cost_alias = AnalyticalProofsAndBounds.compute_false_switching_cost(3, 0.005, 0.005)
+    assert cost_alias == pytest.approx(0.010)
+

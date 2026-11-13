@@ -1,0 +1,150 @@
+"""
+Tests for Regret Analysis Framework (tests/test_regret_analysis.py).
+"""
+
+import pytest
+import numpy as np
+from adaptive_qec.analysis.regret import RegretAnalyzer, RegretAnalysis
+
+
+def test_regret_analyzer_basic_accumulation():
+    """Verify cumulative regret and time-averaged regret on a deterministic trajectory."""
+    # Controller pulls arm A with reward 0.8
+    # All results show arm A has 0.8 and arm B has 1.0
+    results = [
+        {
+            "controller_name": "agent_a",
+            "action": {"decoder": "mwpm", "dd_policy": "none"},
+            "reward": 0.8,
+        }
+        for _ in range(10)
+    ]
+    # Add an arm B result so oracle knows arm B is better
+    results.append({
+        "controller_name": "oracle_agent",
+        "action": {"decoder": "uf", "dd_policy": "none"},
+        "reward": 1.0,
+    })
+
+    analyzer = RegretAnalyzer(results, switch_penalty=0.01)
+    analysis = analyzer.analyze("agent_a")
+
+    assert analysis.controller_name == "agent_a"
+    assert analysis.total_steps == 10
+    assert analysis.total_switches == 0
+    assert analysis.switch_regret == 0.0
+    assert analysis.controller_total_reward == pytest.approx(8.0)
+    assert analysis.controller_mean_reward == pytest.approx(0.8)
+    assert len(analysis.regret_curve) == 10
+
+
+def test_regret_analyzer_switching_penalty():
+    """Verify that switching between decoders correctly increments switches and penalty."""
+    results = []
+    decoders = ["mwpm", "uf", "mwpm", "uf", "mwpm"]  # 4 switches
+    for dec in decoders:
+        results.append({
+            "controller_name": "switcher",
+            "action": {"decoder": dec, "dd_policy": "xy4"},
+            "reward": 0.9,
+        })
+
+    analyzer = RegretAnalyzer(results, switch_penalty=0.05)
+    analysis = analyzer.analyze("switcher")
+
+    assert analysis.total_switches == 4
+    assert analysis.switch_regret == pytest.approx(4 * 0.05)
+
+
+def test_regret_analyzer_multi_controller_comparison():
+    """Verify comparing multiple controllers and finding the empirical oracle arm."""
+    results = []
+    # static_mwpm always chooses mwpm (reward 0.7)
+    for _ in range(20):
+        results.append({
+            "controller_name": "static_mwpm",
+            "action": {"decoder": "mwpm", "dd_policy": "none"},
+            "reward": 0.7,
+        })
+    # adaptive chooses uf (reward 0.95)
+    for _ in range(20):
+        results.append({
+            "controller_name": "adaptive_ccads",
+            "action": {"decoder": "uf", "dd_policy": "cpmg"},
+            "reward": 0.95,
+        })
+
+    analyzer = RegretAnalyzer(results, switch_penalty=0.002)
+    comparison = analyzer.compare()
+
+    assert "static_mwpm" in comparison
+    assert "adaptive_ccads" in comparison
+
+    analysis_static = comparison["static_mwpm"]
+    analysis_adapt = comparison["adaptive_ccads"]
+
+    # Adaptive should have higher mean reward and lower cumulative regret
+    assert analysis_adapt.controller_mean_reward > analysis_static.controller_mean_reward
+    assert analysis_static.cumulative_regret > analysis_adapt.cumulative_regret
+    assert analysis_adapt.oracle_arm == "uf:cpmg"
+
+
+def test_regret_analyzer_summary_table_format():
+    """Verify that summary_table renders headers, sorted controllers, and oracle arm."""
+    analyzer = RegretAnalyzer(switch_penalty=0.01)
+    analyzer.add_result({
+        "controller_name": "arm1",
+        "action": {"decoder": "mwpm", "dd_policy": "none"},
+        "reward": 0.5,
+    })
+    analyzer.add_result({
+        "controller_name": "arm2",
+        "action": {"decoder": "uf", "dd_policy": "none"},
+        "reward": 0.9,
+    })
+
+    table = analyzer.summary_table()
+    assert "Controller" in table
+    assert "Avg Reward" in table
+    assert "Cum. Regret" in table
+    assert "arm1" in table
+    assert "arm2" in table
+    assert "Oracle arm:" in table
+
+
+def test_regret_analyzer_missing_controller_raises():
+    """Verify analyze raises ValueError when queried controller was not recorded."""
+    analyzer = RegretAnalyzer()
+    analyzer.add_result({
+        "controller_name": "c1",
+        "action": {"decoder": "mwpm", "dd_policy": "none"},
+        "reward": 0.5,
+    })
+    with pytest.raises(ValueError, match="No results for controller: nonexistent"):
+        analyzer.analyze("nonexistent")
+
+
+def test_regret_analysis_serialization():
+    """Verify to_dict returns serializable dictionary with all required metrics."""
+    results = [
+        {
+            "controller_name": "test_ctrl",
+            "action": {"decoder": "mwpm", "dd_policy": "none"},
+            "reward": 0.75,
+        }
+    ]
+    analyzer = RegretAnalyzer(results)
+    analysis = analyzer.analyze("test_ctrl")
+    d = analysis.to_dict()
+
+    expected_keys = [
+        "controller_name", "total_steps", "cumulative_regret",
+        "time_averaged_regret", "normalized_regret", "oracle_arm",
+        "oracle_total_reward", "controller_total_reward",
+        "controller_mean_reward", "total_switches", "switch_regret",
+        "reward_std", "reward_p5", "reward_p95",
+    ]
+    for key in expected_keys:
+        assert key in d, f"Missing key {key} in analysis dict"
+    assert d["controller_name"] == "test_ctrl"
+    assert d["total_steps"] == 1

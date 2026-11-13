@@ -85,9 +85,10 @@ class BurstAnalysis:
     baseline_defect_rate: float
     bursts_detected: list[BurstEvent] = field(default_factory=list)
     burst_rate_per_round: float = 0.0
+    dynamic_thresholds: list[float] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "total_rounds": self.total_rounds,
             "total_detectors": self.total_detectors,
             "baseline_defect_rate": round(self.baseline_defect_rate, 6),
@@ -95,17 +96,23 @@ class BurstAnalysis:
             "burst_rate_per_round": round(self.burst_rate_per_round, 8),
             "bursts": [b.to_dict() for b in self.bursts_detected],
         }
+        if self.dynamic_thresholds:
+            data["dynamic_thresholds"] = [round(t, 4) for t in self.dynamic_thresholds]
+        return data
 
 
 class BurstDetector:
     """
-    Spatiotemporal burst detector for QEC syndrome data.
+    Spatiotemporal burst detector for QEC syndrome data with adaptive EWMA thresholding.
 
     Scans the syndrome tensor S ∈ {0,1}^(R × N_d) for anomalous
-    spatiotemporal clusters using a sliding-window chi-squared test.
+    spatiotemporal clusters using a sliding-window chi-squared / Poisson test.
+    Supports dynamic thresholding via Exponentially Weighted Moving Average (EWMA)
+    of defect counts to track non-stationary background noise and maintain constant
+    burst sensitivity across drift regimes.
 
     Usage:
-        detector = BurstDetector(window_size=5, significance=0.001)
+        detector = BurstDetector(window_size=5, significance=0.001, adaptive_threshold=True)
         analysis = detector.analyze(syndrome_tensor, num_detectors_per_round=8)
     """
 
@@ -114,16 +121,32 @@ class BurstDetector:
         window_size: int = 5,
         significance: float = 0.001,
         min_defects_for_burst: int = 3,
+        adaptive_threshold: bool = True,
+        ewma_alpha: float = 0.15,
+        outlier_sigma_cutoff: float = 3.0,
     ) -> None:
         """
         Args:
             window_size: Number of rounds in the sliding window.
             significance: p-value threshold for burst detection (α).
             min_defects_for_burst: Minimum defects in a window to trigger.
+            adaptive_threshold: Whether to track background defect counts dynamically via EWMA.
+            ewma_alpha: EWMA smoothing parameter in (0, 1].
+            outlier_sigma_cutoff: Standard deviations to clamp severe burst rounds during EWMA update.
         """
         self.window_size = window_size
         self.significance = significance
         self.min_defects = min_defects_for_burst
+        self.adaptive_threshold = adaptive_threshold
+        self.ewma_alpha = float(ewma_alpha)
+        self.outlier_sigma_cutoff = float(outlier_sigma_cutoff)
+
+    def compute_dynamic_threshold(self, expected_defects: float) -> float:
+        """Compute the critical defect count cutoff at the given significance level."""
+        if expected_defects <= 0:
+            return float(self.min_defects)
+        q = stats.poisson.ppf(1.0 - self.significance, expected_defects)
+        return float(max(self.min_defects, q))
 
     def analyze(
         self,
@@ -146,33 +169,49 @@ class BurstDetector:
             f"Expected {num_detectors_per_round} detectors/round, got {N_d}"
         )
 
-        # Compute baseline defect rate (excluding obvious outlier rounds)
+        # Compute baseline defect rate (trimmed mean to be robust against burst outliers,
+        # avoiding zero baseline when median is 0 in sparse detection regimes)
         round_rates = syndrome_tensor.mean(axis=1)
+        trimmed_len = max(int(len(round_rates) * 0.8), 1)
+        sorted_rates = np.sort(round_rates)
+        trimmed_mean_rate = float(np.mean(sorted_rates[:trimmed_len]))
         median_rate = float(np.median(round_rates))
-        baseline_rate = max(median_rate, 1e-6)
+        baseline_rate = max(median_rate, trimmed_mean_rate, 1e-6)
+
+        round_defects = syndrome_tensor.sum(axis=1)
+        current_ewma_defects = float(baseline_rate * N_d)
 
         # Sliding window burst detection
         bursts: list[BurstEvent] = []
+        dynamic_thresholds: list[float] = []
         w = min(self.window_size, max(R, 1))
-
-        # Expected defects per window under null hypothesis
-        expected_per_window = baseline_rate * N_d * w
 
         round_idx = 0
         while round_idx <= R - w:
             window = syndrome_tensor[round_idx:round_idx + w]
             total_defects = int(window.sum())
 
+            if self.adaptive_threshold:
+                expected_per_window = max(w * current_ewma_defects, 1e-6)
+            else:
+                expected_per_window = baseline_rate * N_d * w
+
+            thresh = self.compute_dynamic_threshold(expected_per_window)
+            dynamic_thresholds.append(thresh)
+
             if total_defects < self.min_defects:
+                # Update EWMA on non-burst round
+                if self.adaptive_threshold:
+                    c_r = float(round_defects[round_idx])
+                    current_ewma_defects = (
+                        self.ewma_alpha * c_r + (1.0 - self.ewma_alpha) * current_ewma_defects
+                    )
                 round_idx += 1
                 continue
 
-            # Chi-squared test: is observed defect count significantly
-            # above expected under independent Bernoulli model?
-            # H0: defects ~ Binomial(N_d * w, baseline_rate)
-            # Use Poisson approximation for large N_d * w
+            # Chi-squared / Poisson test: is observed defect count significantly
+            # above expected under independent model?
             if expected_per_window > 0:
-                # One-sided Poisson test
                 p_value = 1.0 - stats.poisson.cdf(
                     total_defects - 1, expected_per_window
                 )
@@ -224,9 +263,15 @@ class BurstDetector:
                     f"type={burst_type.value}"
                 )
 
-                # Skip past this burst
+                # Skip past this burst without corrupting EWMA baseline
                 round_idx = t_end + 1
             else:
+                # Not a burst: update EWMA with current round
+                if self.adaptive_threshold:
+                    c_r = float(round_defects[round_idx])
+                    current_ewma_defects = (
+                        self.ewma_alpha * c_r + (1.0 - self.ewma_alpha) * current_ewma_defects
+                    )
                 round_idx += 1
 
         burst_rate = len(bursts) / max(R, 1)
@@ -237,6 +282,7 @@ class BurstDetector:
             baseline_defect_rate=baseline_rate,
             bursts_detected=bursts,
             burst_rate_per_round=burst_rate,
+            dynamic_thresholds=dynamic_thresholds,
         )
 
     @staticmethod

@@ -8,6 +8,12 @@ from adaptive_qec.noise.statistics import (
     compute_temporal_correlation,
     compute_spatial_correlation,
 )
+from adaptive_qec.noise.characterization import (
+    TLSDefectState,
+    TLSEnsemble,
+    TLSFluctuator,
+    TLSTelegraphNoise,
+)
 from adaptive_qec.noise.drift import (
     CompositeDriftDetector,
     CUSUMDriftDetector,
@@ -233,4 +239,81 @@ class TestOrnsteinUhlenbeckDrift:
         assert np.isclose(ou.current_value, 0.10)
         next_val = ou.step()
         assert ou.current_value == next_val
+
+
+class TestTLSFluctuator:
+    """Test Two-Level System (TLS) defect telegraph fluctuator model."""
+
+    def test_parameter_validation(self):
+        with pytest.raises(ValueError, match="Switching rates"):
+            TLSFluctuator(rate_01=-0.1)
+        with pytest.raises(ValueError, match="Decoherence rates"):
+            TLSFluctuator(gamma_0=-1.0)
+        with pytest.raises(ValueError, match="dt"):
+            TLSFluctuator(dt=0.0)
+        with pytest.raises(ValueError, match="initial_state"):
+            TLSFluctuator(initial_state=2)
+
+    def test_steady_state_and_properties(self):
+        tls = TLSFluctuator(
+            rate_01=0.02,
+            rate_10=0.08,
+            gamma_0=1e4,
+            gamma_1=5e4,
+            dt=1.0,
+        )
+        # p0 = 0.08 / 0.10 = 0.80, p1 = 0.02 / 0.10 = 0.20
+        assert np.isclose(tls.p_state_0_steady, 0.80)
+        assert np.isclose(tls.p_state_1_steady, 0.20)
+        assert np.isclose(tls.correlation_time, 10.0)
+        expected_mean = 0.8 * 1e4 + 0.2 * 5e4
+        assert np.isclose(tls.effective_mean_rate, expected_mean)
+
+    def test_trajectory_generation(self):
+        tls = TLSFluctuator(
+            rate_01=0.1,
+            rate_10=0.1,
+            gamma_0=1e4,
+            gamma_1=3e4,
+            dt=0.5,
+            seed=42,
+        )
+        states, rates = tls.generate_trajectory(num_steps=500, initial_state=0)
+        assert states.shape == (500,)
+        assert rates.shape == (500,)
+        assert set(np.unique(states)).issubset({0, 1})
+        # Discrete rates match state
+        assert np.all(rates[states == 0] == 1e4)
+        assert np.all(rates[states == 1] == 3e4)
+        # Both states should be visited over 500 steps
+        assert 0 in states and 1 in states
+
+    def test_zero_switching_rate_frozen(self):
+        tls = TLSFluctuator(rate_01=0.0, rate_10=0.0, gamma_0=1e4, gamma_1=5e4, initial_state=1)
+        states, rates = tls.generate_trajectory(num_steps=50)
+        assert np.all(states == 1)
+        assert np.all(rates == 5e4)
+
+    def test_telegraph_noise_convenience(self):
+        tls = TLSTelegraphNoise(rate_01=0.05, rate_10=0.05, gamma_0=10.0, gamma_1=20.0, seed=10)
+        noise = tls.generate_telegraph_noise(num_steps=100)
+        assert noise.shape == (100,)
+        assert np.all(np.isin(noise, [10.0, 20.0]))
+
+    def test_tls_ensemble(self):
+        ensemble = TLSEnsemble.create_dutta_horn_ensemble(
+            num_fluctuators=5,
+            min_rate=0.01,
+            max_rate=0.5,
+            gamma_defect=1e3,
+            base_rate=1e4,
+            seed=42,
+        )
+        traj = ensemble.generate_trajectory(num_steps=100)
+        assert traj.shape == (100,)
+        # All rates >= base_rate
+        assert np.all(traj >= 1e4)
+        # Some variation over time
+        assert np.std(traj) > 0.0
+
 

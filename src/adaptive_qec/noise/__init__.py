@@ -13,6 +13,14 @@ from adaptive_qec.noise.leakage import (
     LeakageRateEstimator,
     LeakedQubit,
 )
+from adaptive_qec.noise.characterization import (
+    NoiseCharacterizer,
+    NoiseProfile,
+    TLSDefectState,
+    TLSEnsemble,
+    TLSFluctuator,
+    TLSTelegraphNoise,
+)
 from adaptive_qec.noise.drift import (
     CompositeDriftDetector,
     CUSUMDriftDetector,
@@ -32,6 +40,12 @@ __all__ = [
     "LeakageDetector",
     "LeakageRateEstimator",
     "LeakedQubit",
+    "NoiseCharacterizer",
+    "NoiseProfile",
+    "TLSDefectState",
+    "TLSEnsemble",
+    "TLSFluctuator",
+    "TLSTelegraphNoise",
     "CompositeDriftDetector",
     "CUSUMDriftDetector",
     "DriftReport",

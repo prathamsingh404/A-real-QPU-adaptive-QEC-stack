@@ -79,8 +79,37 @@ class TestThresholdAnalyzer:
         assert fit.is_below_threshold is True
         assert fit.p_threshold > 0.003  # Threshold should be higher than physical error rate
         assert fit.A > 0
+        assert fit.r_squared > 0.95  # Exponential decay fits well
+        assert fit.p_threshold_ci[0] <= fit.p_threshold <= fit.p_threshold_ci[1]
+        assert "r_squared" in fit.to_dict()
+        assert "p_threshold_ci" in fit.to_dict()
+        assert "fit_method" in fit.to_dict()
         assert "d3_to_d5" in fit.lambda_ratios
         assert "d5_to_d7" in fit.lambda_ratios
+
+    def test_find_threshold_crossing(self):
+        # Physical error rates across threshold
+        p_phys = [0.004, 0.008, 0.012, 0.016]
+        # At p=0.004, 0.008 (below p_th ~ 0.010): d=5 has lower LER than d=3
+        # At p=0.012, 0.016 (above p_th ~ 0.010): d=5 has higher LER than d=3
+        ler_matrix = [
+            [0.010, 0.018, 0.026, 0.035],  # d=3
+            [0.004, 0.014, 0.032, 0.055],  # d=5
+        ]
+        p_cross = ThresholdAnalyzer.find_threshold_crossing(
+            distances=[3, 5],
+            physical_error_rates=p_phys,
+            logical_error_matrix=ler_matrix,
+        )
+        assert p_cross is not None
+        assert 0.008 < p_cross < 0.012
+
+        # Non-crossing case (always below threshold)
+        ler_below = [
+            [0.020, 0.030],
+            [0.005, 0.010],
+        ]
+        assert ThresholdAnalyzer.find_threshold_crossing([3, 5], [0.001, 0.002], ler_below) is None
 
     def test_scaling_table(self):
         analyzer = ThresholdAnalyzer()

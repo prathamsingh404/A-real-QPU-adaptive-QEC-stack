@@ -18,11 +18,52 @@ from adaptive_qec.evaluation.empirical_scaling_and_ablation import (
 
 
 def test_distance_scaling():
-    """Verify code distance scaling d in {3, 5} and Lambda calculation."""
+    """Verify code distance scaling d in {3, 5} and Lambda calculation with bootstrap CIs."""
     res = compute_distance_scaling(distances=(3, 5))
     assert res.distances == [3, 5]
     assert "3->5" in res.lambda_static
     assert res.lambda_static["3->5"] > 0.0
+    assert "3->5" in res.lambda_adaptive
+    assert "3->5" in res.suppression_gain
+
+    # Verify 95% bootstrap confidence intervals are reported
+    assert "3->5" in res.lambda_static_ci95
+    ci_stat_low, ci_stat_high = res.lambda_static_ci95["3->5"]
+    assert 0.0 < ci_stat_low <= ci_stat_high
+
+    assert "3->5" in res.lambda_adaptive_ci95
+    ci_adapt_low, ci_adapt_high = res.lambda_adaptive_ci95["3->5"]
+    assert 0.0 < ci_adapt_low <= ci_adapt_high
+
+    assert "3->5" in res.suppression_gain_ci95
+    gain_low, gain_high = res.suppression_gain_ci95["3->5"]
+    assert 0.0 < gain_low <= gain_high
+
+
+def test_distance_scaling_custom_samples():
+    """Verify distance scaling with custom sample distributions."""
+    static_samples = {
+        3: [0.012, 0.011, 0.013, 0.012, 0.011],
+        5: [0.006, 0.005, 0.006, 0.005, 0.006],
+    }
+    adaptive_samples = {
+        3: [0.010, 0.009, 0.010, 0.011, 0.010],
+        5: [0.004, 0.004, 0.003, 0.004, 0.004],
+    }
+    res = compute_distance_scaling(
+        distances=(3, 5),
+        static_lers={3: 0.0118, 5: 0.0056},
+        adaptive_lers={3: 0.0100, 5: 0.0038},
+        static_samples=static_samples,
+        adaptive_samples=adaptive_samples,
+        n_bootstrap=500,
+        seed=123,
+    )
+    assert res.lambda_static["3->5"] > 1.5
+    assert res.lambda_adaptive["3->5"] > 2.0
+    assert res.suppression_gain["3->5"] > 1.0
+    low, high = res.lambda_static_ci95["3->5"]
+    assert 1.5 <= low <= high <= 3.0
 
 
 def test_comprehensive_metrics_structure():
@@ -71,6 +112,42 @@ def test_pareto_frontier_analysis():
     assert "CG_CCADS" in names
     assert "Heavy_Neural" in names
     assert "Naive_Adaptive" not in names  # Strictly dominated
+
+
+def test_multiobjective_pareto_front():
+    """Verify 3D multi-objective Pareto front computation (LER vs latency vs memory)."""
+    points = [
+        # Point A: Best LER, high latency, moderate memory
+        ParetoPoint("DeepNeural", ler=0.005, latency_us=200.0, memory_kb=512.0),
+        # Point B: Moderate LER, ultra-low latency, low memory
+        ParetoPoint("FastUF", ler=0.015, latency_us=5.0, memory_kb=64.0),
+        # Point C: Balanced LER, low latency, ultra-low memory
+        ParetoPoint("LightweightMWPM", ler=0.010, latency_us=25.0, memory_kb=16.0),
+        # Point D: Dominated by LightweightMWPM (worse LER, worse latency, worse memory)
+        ParetoPoint("BloatedStatic", ler=0.012, latency_us=30.0, memory_kb=32.0),
+        # Point E: Dominated by DeepNeural (same latency, worse LER, worse memory)
+        ParetoPoint("SlowHeavy", ler=0.008, latency_us=200.0, memory_kb=1024.0),
+    ]
+
+    front = ParetoFrontierAnalyzer.identify_multiobjective_pareto_front(
+        points, objectives=("ler", "latency_us", "memory_kb")
+    )
+    front_names = {p.config_name for p in front}
+
+    assert "DeepNeural" in front_names
+    assert "FastUF" in front_names
+    assert "LightweightMWPM" in front_names
+    assert "BloatedStatic" not in front_names
+    assert "SlowHeavy" not in front_names
+
+    # Check tradeoff summary helper
+    summary = ParetoFrontierAnalyzer.compute_tradeoff_summary(
+        points, objectives=("ler", "latency_us", "memory_kb")
+    )
+    assert len(summary) == 3
+    for s in summary:
+        assert s["is_pareto_optimal"] is True
+        assert "ler" in s and "latency_us" in s and "memory_kb" in s
 
 
 def test_adaptation_phase_diagram():

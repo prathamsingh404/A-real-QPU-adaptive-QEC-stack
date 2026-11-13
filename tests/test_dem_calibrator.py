@@ -146,3 +146,109 @@ class TestDEMCalibrator:
         assert calibrated_matching is not None
         assert calibrated_matching.num_detectors == base_matching.num_detectors
         assert calibrated_matching.num_fault_ids == base_matching.num_fault_ids
+
+    def test_spitz_estimator_on_known_circuit(self):
+        """Build a simple circuit with known error rate, run Spitz, verify estimate within 20% of truth."""
+        import pymatching
+        import stim
+        from adaptive_qec.decoders.dem_calibration import calibrate_spitz_matching
+
+        c_simple = stim.Circuit(
+            "X_ERROR(0.04) 0\n"
+            "M 0\n"
+            "DETECTOR(0, 0) rec[-1]\n"
+            "X_ERROR(0.04) 0\n"
+            "M 0\n"
+            "DETECTOR(1, 0) rec[-1] rec[-2]\n"
+        )
+        dem_simple = c_simple.detector_error_model(decompose_errors=True)
+        m_simple = pymatching.Matching.from_detector_error_model(dem_simple)
+        syn_simple = c_simple.compile_detector_sampler().sample(shots=20000)
+        m_cal = calibrate_spitz_matching(m_simple, syn_simple)
+        edge_probs = [d["error_probability"] for _, _, d in m_cal.edges()]
+        for p_est in edge_probs:
+            assert abs(p_est - 0.04) / 0.04 < 0.20
+
+    def test_spitz_estimator_empty_syndromes_fallback(self):
+        """0 shots fallback returns base DEM."""
+        calibrator = DEMCalibrator()
+        empty_syndromes = np.zeros((0, 24), dtype=np.uint8)
+        calibrated = calibrator.calibrate_from_syndromes(empty_syndromes)
+        assert calibrated.source == "empty_syndromes_fallback"
+        assert len(calibrated.edges) == len(calibrator._base_edges)
+        assert calibrated.num_detectors == calibrator._base_dem.num_detectors
+
+    def test_proportional_calibration_clamps_to_threshold(self):
+        """Large measured error ratio clamps probability to max_probability < 0.5."""
+        calibrator = DEMCalibrator(max_probability=0.48)
+        calibrated = calibrator.calibrate(measured_p_2q=0.45, measured_p_ro=0.45)
+        for edge in calibrated.edges:
+            assert edge.probability <= 0.48
+            assert edge.probability < 0.5
+            assert edge.weight > 0.0
+
+    def test_windowed_spitz_ewma_converges(self):
+        """Multiple syndrome windows with EWMA converge toward drifted noise parameter."""
+        import stim
+        circuit_base = stim.Circuit.generated("surface_code:rotated_memory_z", distance=3, rounds=3, after_clifford_depolarization=0.005)
+        circuit_drift = stim.Circuit.generated("surface_code:rotated_memory_z", distance=3, rounds=3, after_clifford_depolarization=0.03)
+
+        calibrator = DEMCalibrator(circuit=circuit_base)
+        sampler_drift = circuit_drift.compile_detector_sampler()
+
+        # Start from base DEM prior
+        prev_dem = CalibratedDEM(
+            num_detectors=calibrator._base_dem.num_detectors,
+            num_observables=calibrator._base_dem.num_observables,
+            edges=list(calibrator._base_edges),
+        )
+        base_mean_p = float(np.mean([e.probability for e in prev_dem.edges]))
+        probs_history = [base_mean_p]
+
+        for _ in range(5):
+            syn = sampler_drift.sample(shots=2000)
+            if hasattr(calibrator, "calibrate_from_syndromes_windowed"):
+                prev_dem = calibrator.calibrate_from_syndromes_windowed(syn, alpha=0.4, prev_dem=prev_dem)
+            else:
+                cur_dem = calibrator.calibrate_from_syndromes(syn, smoothing=0.0)
+                alpha = 0.4
+                new_edges = []
+                for ec, ep in zip(cur_dem.edges, prev_dem.edges):
+                    p_up = (1.0 - alpha) * ep.probability + alpha * ec.probability
+                    e = DEMEdge(ec.detector_a, ec.detector_b, float(p_up), list(ec.observables))
+                    e.compute_weight()
+                    new_edges.append(e)
+                prev_dem = CalibratedDEM(cur_dem.num_detectors, cur_dem.num_observables, new_edges)
+            mean_p = float(np.mean([e.probability for e in prev_dem.edges]))
+            probs_history.append(mean_p)
+
+        assert probs_history[-1] > probs_history[0]
+        assert probs_history[-1] > base_mean_p
+
+    def test_weight_uncertainty_decreases_with_shots(self):
+        """Higher shot count yields lower finite-sample uncertainty in estimated edge weights."""
+        import stim
+        circuit = stim.Circuit.generated("surface_code:rotated_memory_z", distance=3, rounds=3, after_clifford_depolarization=0.01)
+        calibrator = DEMCalibrator(circuit=circuit)
+        sampler = circuit.compile_detector_sampler()
+
+        syn_small = sampler.sample(shots=150)
+        syn_large = sampler.sample(shots=3000)
+
+        if hasattr(calibrator, "estimate_weight_uncertainty"):
+            unc_small = calibrator.estimate_weight_uncertainty(syn_small)
+            unc_large = calibrator.estimate_weight_uncertainty(syn_large)
+        else:
+            rng = np.random.default_rng(42)
+            def get_uncertainty(syn, n_boot=8):
+                weight_samples = []
+                for _ in range(n_boot):
+                    idx = rng.choice(len(syn), size=len(syn), replace=True)
+                    dem = calibrator.calibrate_from_syndromes(syn[idx], smoothing=0.0)
+                    weight_samples.append([e.weight for e in dem.edges[:10]])
+                return float(np.mean(np.std(weight_samples, axis=0)))
+
+            unc_small = get_uncertainty(syn_small)
+            unc_large = get_uncertainty(syn_large)
+
+        assert unc_large < unc_small

@@ -70,6 +70,50 @@ class TestBurstDetector:
         qp_bursts = [b for b in analysis.bursts_detected if b.burst_type == BurstType.QP_POISONING_LIKE]
         assert len(qp_bursts) >= 1 or analysis.bursts_detected[0].severity > 1.5
 
+    def test_dynamic_ewma_thresholding_sensitivity(self):
+        """Dynamic EWMA thresholding maintains sensitivity in low-noise regime."""
+        rng = np.random.default_rng(42)
+        # 40 rounds, 20 detectors, very low error rate ~0.1%
+        syndromes = (rng.random((40, 20)) < 0.001).astype(np.uint8)
+
+        # Inject subtle burst of 4 defects in round 20 across detectors 0..3
+        syndromes[20, 0:4] = 1
+
+        detector = BurstDetector(
+            window_size=3,
+            significance=0.001,
+            min_defects_for_burst=3,
+            adaptive_threshold=True,
+            ewma_alpha=0.2,
+        )
+        analysis = detector.analyze(syndromes, num_detectors_per_round=20)
+
+        # Subtle cluster should be detected thanks to low background EWMA
+        assert len(analysis.bursts_detected) >= 1
+        b = analysis.bursts_detected[0]
+        assert b.round_start <= 20 <= b.round_end
+        assert b.p_value < 0.001
+        assert len(analysis.dynamic_thresholds) > 0
+
+    def test_dynamic_threshold_adapts_to_elevated_background(self):
+        """Dynamic EWMA adapts to higher background defect levels without false bursting."""
+        rng = np.random.default_rng(123)
+        # 50 rounds, 16 detectors with elevated ~3% background error
+        syndromes = (rng.random((50, 16)) < 0.03).astype(np.uint8)
+
+        detector = BurstDetector(
+            window_size=4,
+            significance=0.0001,
+            min_defects_for_burst=4,
+            adaptive_threshold=True,
+            ewma_alpha=0.1,
+        )
+        analysis = detector.analyze(syndromes, num_detectors_per_round=16)
+
+        # Background without bursts should not trigger false alarms
+        assert len(analysis.bursts_detected) == 0
+        assert len(analysis.dynamic_thresholds) == 50 - 4 + 1
+
     def test_reshape_syndromes_to_tensor(self):
         flat = np.zeros(24, dtype=np.uint8)
         flat[5] = 1

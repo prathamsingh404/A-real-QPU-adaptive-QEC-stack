@@ -16,12 +16,15 @@ import numpy as np
 import pytest
 
 from adaptive_qec.engine.scenarios import (
+    IBM_HERON_CALIBRATION_SPECS,
+    IBMHeronCalibrationMetadata,
     NoiseScenarioFactory,
     NoiseSnapshot,
     ScenarioConfig,
     ScenarioType,
     burst_scenario,
     drift_scenario,
+    get_scenario_calibration_metadata,
     multi_phase_scenario,
     stationary_scenario,
 )
@@ -137,3 +140,74 @@ class TestConvenienceConstructors:
     def test_multi_phase_constructor(self):
         factory = multi_phase_scenario(total_steps=50)
         assert isinstance(factory, NoiseScenarioFactory)
+
+
+class TestIBMHeronCalibrationMetadata:
+    """Tests for physical IBM Heron calibration metadata and relaxation times."""
+
+    def test_scenario_metadata_structure(self):
+        factory = stationary_scenario(total_steps=100)
+        meta = factory.get_metadata()
+        assert "scenario_type" in meta
+        assert "ibm_heron_calibration" in meta
+        assert "relaxation_times" in meta
+
+        cal = meta["ibm_heron_calibration"]
+        assert cal["processor_family"] == "IBM Heron r1/r2"
+        assert cal["coupling_architecture"] == "heavy-hex"
+        assert "t1_us" in cal
+        assert "t2_us" in cal
+        assert cal["t1_us"]["min"] <= cal["t1_us"]["median"] <= cal["t1_us"]["max"]
+
+    def test_drift_levels_relaxation_times_mapping(self):
+        # Pristine regime (T1 >= 200 us)
+        cal_pristine = get_scenario_calibration_metadata(ScenarioType.DO_NOTHING, t1_us=250.0)
+        assert cal_pristine.regime == "pristine"
+        assert cal_pristine.t1_median_us == 240.0
+        assert cal_pristine.t2_median_us == 160.0
+
+        # Nominal regime (150 <= T1 < 200 us)
+        cal_nominal = get_scenario_calibration_metadata(ScenarioType.STATIONARY, t1_us=180.0)
+        assert cal_nominal.regime == "nominal"
+        assert cal_nominal.t1_median_us == 180.0
+        assert cal_nominal.t2_median_us == 120.0
+
+        # Moderate drift regime (100 <= T1 < 150 us)
+        cal_moderate = get_scenario_calibration_metadata(ScenarioType.LINEAR_DRIFT, t1_us=130.0)
+        assert cal_moderate.regime == "moderate_drift"
+        assert cal_moderate.t1_median_us == 130.0
+        assert cal_moderate.t2_median_us == 80.0
+
+        # Severe drift regime (70 <= T1 < 100 us)
+        cal_severe = get_scenario_calibration_metadata(ScenarioType.OBVIOUS_ADAPTATION, t1_us=85.0)
+        assert cal_severe.regime == "severe_drift"
+        assert cal_severe.t1_median_us == 90.0
+        assert cal_severe.t2_median_us == 55.0
+
+        # Burst regime (T1 < 70 us)
+        cal_burst = get_scenario_calibration_metadata(ScenarioType.BURST, t1_us=45.0)
+        assert cal_burst.regime == "burst"
+        assert cal_burst.t1_median_us == 50.0
+        assert cal_burst.t2_median_us == 30.0
+
+    def test_noise_snapshot_physical_calibration(self):
+        snap = NoiseSnapshot(
+            gate_error_1q=0.0004,
+            gate_error_2q=0.003,
+            readout_error=0.012,
+            t1_us=180.0,
+            t2_us=120.0,
+        )
+        cal = snap.physical_calibration
+        assert isinstance(cal, IBMHeronCalibrationMetadata)
+        assert cal.regime == "nominal"
+        assert cal.t1_min_us <= 180.0 <= cal.t1_max_us
+
+    def test_scenario_config_physical_calibration(self):
+        config = ScenarioConfig(
+            scenario_type=ScenarioType.LINEAR_DRIFT,
+            total_steps=50,
+            baseline_t1_us=140.0,
+        )
+        assert config.physical_calibration.regime == "moderate_drift"
+

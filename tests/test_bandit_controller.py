@@ -265,3 +265,31 @@ class TestBanditIntegration:
             ctrl.update(0.5)
         
         assert len(ctrl.telemetry) == 50
+
+    def test_ucb1_controller_round_robin_and_learning(self, arms, dummy_state):
+        from adaptive_qec.controller.bandit import UCB1Controller
+        ctrl = UCB1Controller(arms=arms, c=1.0)
+        assert ctrl.name == "ucb1"
+
+        # First K steps must explore each arm once
+        for i in range(len(arms)):
+            ctrl.observe(dummy_state)
+            act = ctrl.decide()
+            # Reward arm 0 with 0.95, others with 0.1
+            reward = 0.95 if i == 0 else 0.1
+            ctrl.update(reward)
+
+        # In subsequent steps, arm 0 should be pulled most often
+        pulls = [0] * len(arms)
+        for _ in range(30):
+            ctrl.observe(dummy_state)
+            act = ctrl.decide()
+            arm_idx = ctrl._last_arm_idx
+            pulls[arm_idx] += 1
+            reward = 0.95 if arm_idx == 0 else 0.1
+            ctrl.update(reward)
+
+        assert pulls[0] > max(pulls[1:])
+        summ = ctrl.summary()
+        assert len(summ["arm_pull_counts"]) == len(arms)
+

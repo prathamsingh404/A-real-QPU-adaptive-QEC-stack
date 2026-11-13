@@ -638,3 +638,107 @@ class DriftAdaptiveBandit:
         self.arm_rewards[arm] = list(rewards)
 
 
+class UCB1Controller(BaseController):
+    """Canonical Upper Confidence Bound (UCB1) multi-armed bandit controller.
+
+    Implements Auer, Cesa-Bianchi, Fischer (2002):
+        UCB_i(t) = \\bar{x}_i + c * \\sqrt{2 \\ln(t) / n_i}
+
+    Parameters
+    ----------
+    arms : list[BanditArm], optional
+        Arm set to select from. Defaults to build_arm_set().
+    c : float
+        Exploration parameter multiplier on upper confidence bound (default 1.0).
+    weights : CostWeights, optional
+        Telemetry cost weights.
+    """
+
+    def __init__(
+        self,
+        arms: Optional[list[BanditArm]] = None,
+        c: float = 1.0,
+        weights: Optional[CostWeights] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(weights=weights)
+        self._arms = arms if arms is not None else build_arm_set()
+        self._K = len(self._arms)
+        self._c = c
+        self._arm_pull_counts = np.zeros(self._K, dtype=np.int64)
+        self._arm_reward_sums = np.zeros(self._K, dtype=np.float64)
+        self._last_arm_idx: int = 0
+        self._t: int = 0
+
+    @property
+    def name(self) -> str:
+        return "ucb1"
+
+    def observe(self, state: HardwareState) -> None:
+        self._current_state = state
+
+    def decide(self) -> ControlAction:
+        self._t += 1
+        # Round-robin initialization: pull each arm once
+        for i in range(self._K):
+            if self._arm_pull_counts[i] == 0:
+                self._last_arm_idx = i
+                return self._build_action(i, "UCB1 init pull")
+
+        # Compute UCBs
+        means = self._arm_reward_sums / np.maximum(self._arm_pull_counts, 1)
+        bonuses = self._c * np.sqrt(2.0 * np.log(self._t) / np.maximum(self._arm_pull_counts, 1))
+        ucbs = means + bonuses
+
+        self._last_arm_idx = int(np.argmax(ucbs))
+        return self._build_action(self._last_arm_idx, f"UCB1 max={ucbs[self._last_arm_idx]:.4f}")
+
+    def _build_action(self, arm_idx: int, notes: str) -> ControlAction:
+        arm = self._arms[arm_idx]
+        burst_mit = (
+            self._current_state is not None
+            and self._current_state.burst_active
+        )
+        dec_str = arm.decoder.value if hasattr(arm.decoder, "value") else str(arm.decoder)
+        dd_seq = getattr(arm, "dd_sequence", None) or (arm.dd_policy.value if hasattr(arm.dd_policy, "value") else str(arm.dd_policy))
+        sched = getattr(arm, "schedule", "balanced")
+
+        action = ControlAction(
+            decoder=dec_str,
+            dd_policy=arm.dd_policy,
+            burst_mitigation=burst_mit,
+            request_recalibration=False,
+            dd_sequence=dd_seq,
+            schedule=sched,
+            notes=f"{notes} arm={arm.label}",
+        )
+        self._record_action(action)
+        return action
+
+    def update(self, reward: float) -> None:
+        self._arm_pull_counts[self._last_arm_idx] += 1
+        self._arm_reward_sums[self._last_arm_idx] += reward
+
+        if self._telemetry:
+            self._telemetry[-1].cost = -reward
+            self._telemetry[-1].extras["arm_idx"] = self._last_arm_idx
+            self._telemetry[-1].extras["pull_counts"] = self._arm_pull_counts.tolist()
+
+    def reset(self) -> None:
+        super().reset()
+        self._arm_pull_counts = np.zeros(self._K, dtype=np.int64)
+        self._arm_reward_sums = np.zeros(self._K, dtype=np.float64)
+        self._t = 0
+
+    def summary(self) -> dict[str, Any]:
+        base = super().summary()
+        base["arm_labels"] = [a.label for a in self._arms]
+        base["arm_pull_counts"] = self._arm_pull_counts.tolist()
+        base["arm_mean_rewards"] = [
+            float(self._arm_reward_sums[i] / max(self._arm_pull_counts[i], 1))
+            for i in range(self._K)
+        ]
+        return base
+
+
+

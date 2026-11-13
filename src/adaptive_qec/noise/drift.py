@@ -23,6 +23,98 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+class OrnsteinUhlenbeckDrift:
+    """
+    Continuous-time mean-reverting stochastic process (Ornstein-Uhlenbeck).
+
+    Governed by the stochastic differential equation:
+        dX_t = theta * (mu - X_t) dt + sigma * dW_t
+
+    where:
+        theta: rate of mean reversion (theta > 0)
+        mu: long-term asymptotic mean
+        sigma: volatility / noise amplitude (sigma >= 0)
+        dt: discrete time step (dt > 0)
+        dW_t ~ Normal(0, dt) is standard Wiener increment
+    """
+
+    def __init__(
+        self,
+        theta: float = 0.1,
+        mu: float = 0.0,
+        sigma: float = 0.01,
+        dt: float = 1.0,
+        seed: Optional[int] = None,
+    ) -> None:
+        if theta <= 0:
+            raise ValueError(f"theta must be positive, got {theta}")
+        if sigma < 0:
+            raise ValueError(f"sigma must be non-negative, got {sigma}")
+        if dt <= 0:
+            raise ValueError(f"dt must be positive, got {dt}")
+
+        self.theta = float(theta)
+        self.mu = float(mu)
+        self.sigma = float(sigma)
+        self.dt = float(dt)
+        self._rng = np.random.default_rng(seed)
+        self._current_value: float = self.mu
+
+    @property
+    def current_value(self) -> float:
+        return self._current_value
+
+    def step(self, current_value: Optional[float] = None) -> float:
+        """Advance the process by one time step dt."""
+        if current_value is not None:
+            self._current_value = float(current_value)
+        dW = self._rng.normal(0.0, np.sqrt(self.dt))
+        dX = self.theta * (self.mu - self._current_value) * self.dt + self.sigma * dW
+        self._current_value += dX
+        return self._current_value
+
+    def generate_trajectory(
+        self,
+        num_steps: int,
+        initial_value: Optional[float] = None,
+    ) -> np.ndarray:
+        """
+        Generate a full trajectory of length num_steps.
+
+        Args:
+            num_steps: Number of points in the trajectory (num_steps >= 1).
+            initial_value: Starting value X_0. If None, defaults to long-term mean mu.
+
+        Returns:
+            1D numpy array of shape (num_steps,).
+        """
+        if num_steps <= 0:
+            raise ValueError(f"num_steps must be positive, got {num_steps}")
+
+        x0 = float(self.mu if initial_value is None else initial_value)
+        trajectory = np.empty(num_steps, dtype=np.float64)
+        trajectory[0] = x0
+
+        if num_steps == 1:
+            self._current_value = x0
+            return trajectory
+
+        sqrt_dt = np.sqrt(self.dt)
+        dW = self._rng.normal(0.0, sqrt_dt, size=num_steps - 1)
+
+        for t in range(num_steps - 1):
+            x_curr = trajectory[t]
+            dx = self.theta * (self.mu - x_curr) * self.dt + self.sigma * dW[t]
+            trajectory[t + 1] = x_curr + dx
+
+        self._current_value = float(trajectory[-1])
+        return trajectory
+
+    def reset(self, initial_value: Optional[float] = None) -> None:
+        """Reset the internal process state."""
+        self._current_value = float(self.mu if initial_value is None else initial_value)
+
+
 class DriftStatus(str, Enum):
     STABLE = "stable"
     WARNING = "warning"

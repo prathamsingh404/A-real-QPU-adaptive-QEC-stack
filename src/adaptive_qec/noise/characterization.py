@@ -26,6 +26,244 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class TLSDefectState:
+    """State of a Two-Level System (TLS) defect fluctuator."""
+    state: int  # 0: off-resonance (low decoherence) or 1: on-resonance (high decoherence)
+    current_decoherence_rate: float
+    time_in_state: float = 0.0
+
+
+class TLSFluctuator:
+    """
+    Two-Level System (TLS) defect switching model (random telegraph noise).
+
+    Models a microscopic fluctuator (e.g., in a Josephson junction dielectric
+    or substrate interface) switching stochastically between two discrete decoherence
+    rates (gamma_0 and gamma_1) via a continuous-time Markov jump process.
+
+    Governed by:
+        Transition 0 -> 1 with switching rate rate_01: P(0 -> 1) = 1 - exp(-rate_01 * dt)
+        Transition 1 -> 0 with switching rate rate_10: P(1 -> 0) = 1 - exp(-rate_10 * dt)
+
+    Attributes:
+        rate_01: Switching rate from state 0 to 1 (Hz or 1/rounds). Must be >= 0.
+        rate_10: Switching rate from state 1 to 0 (Hz or 1/rounds). Must be >= 0.
+        gamma_0: Discrete decoherence rate in state 0 (e.g., baseline 1/T1 or 1/T2).
+        gamma_1: Discrete decoherence rate in state 1 (elevated rate due to defect resonance).
+        dt: Time step duration. Must be > 0.
+    """
+
+    def __init__(
+        self,
+        rate_01: float = 0.05,
+        rate_10: float = 0.05,
+        gamma_0: float = 1e4,
+        gamma_1: float = 5e4,
+        dt: float = 1.0,
+        initial_state: int = 0,
+        seed: Optional[int] = None,
+    ) -> None:
+        if rate_01 < 0 or rate_10 < 0:
+            raise ValueError(f"Switching rates must be non-negative: rate_01={rate_01}, rate_10={rate_10}")
+        if gamma_0 < 0 or gamma_1 < 0:
+            raise ValueError(f"Decoherence rates must be non-negative: gamma_0={gamma_0}, gamma_1={gamma_1}")
+        if dt <= 0:
+            raise ValueError(f"dt must be positive, got {dt}")
+        if initial_state not in (0, 1):
+            raise ValueError(f"initial_state must be 0 or 1, got {initial_state}")
+
+        self.rate_01 = float(rate_01)
+        self.rate_10 = float(rate_10)
+        self.gamma_0 = float(gamma_0)
+        self.gamma_1 = float(gamma_1)
+        self.dt = float(dt)
+        self._state = int(initial_state)
+        self._rng = np.random.default_rng(seed)
+
+    @property
+    def state(self) -> int:
+        return self._state
+
+    @property
+    def current_decoherence_rate(self) -> float:
+        return self.gamma_1 if self._state == 1 else self.gamma_0
+
+    @property
+    def current_rate(self) -> float:
+        """Alias for current_decoherence_rate."""
+        return self.current_decoherence_rate
+
+    @property
+    def p_state_1_steady(self) -> float:
+        """Steady-state occupation probability for state 1."""
+        denom = self.rate_01 + self.rate_10
+        return self.rate_01 / denom if denom > 0 else 0.5
+
+    @property
+    def p_state_0_steady(self) -> float:
+        """Steady-state occupation probability for state 0."""
+        denom = self.rate_01 + self.rate_10
+        return self.rate_10 / denom if denom > 0 else 0.5
+
+    @property
+    def correlation_time(self) -> float:
+        """Autocorrelation decay time tau_c = 1 / (rate_01 + rate_10)."""
+        denom = self.rate_01 + self.rate_10
+        return 1.0 / denom if denom > 0 else float("inf")
+
+    @property
+    def effective_mean_rate(self) -> float:
+        """Ensemble steady-state expected decoherence rate."""
+        return self.p_state_0_steady * self.gamma_0 + self.p_state_1_steady * self.gamma_1
+
+    def step(self) -> tuple[int, float]:
+        """
+        Advance the fluctuator by one time step dt.
+
+        Returns:
+            Tuple of (new_state, current_decoherence_rate).
+        """
+        if self._state == 0:
+            p_switch = 1.0 - np.exp(-self.rate_01 * self.dt)
+            if self._rng.random() < p_switch:
+                self._state = 1
+        else:
+            p_switch = 1.0 - np.exp(-self.rate_10 * self.dt)
+            if self._rng.random() < p_switch:
+                self._state = 0
+
+        return self._state, self.current_decoherence_rate
+
+    def generate_trajectory(
+        self,
+        num_steps: int,
+        initial_state: Optional[int] = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Simulate a telegraph switching trajectory.
+
+        Args:
+            num_steps: Number of discrete steps.
+            initial_state: Starting state (0 or 1).
+
+        Returns:
+            Tuple of (states, decoherence_rates), each of shape (num_steps,).
+        """
+        if num_steps <= 0:
+            raise ValueError(f"num_steps must be positive, got {num_steps}")
+
+        if initial_state is not None:
+            if initial_state not in (0, 1):
+                raise ValueError(f"initial_state must be 0 or 1, got {initial_state}")
+            self._state = int(initial_state)
+
+        states = np.empty(num_steps, dtype=np.uint8)
+        rates = np.empty(num_steps, dtype=np.float64)
+
+        p_01 = 1.0 - np.exp(-self.rate_01 * self.dt)
+        p_10 = 1.0 - np.exp(-self.rate_10 * self.dt)
+
+        draws = self._rng.random(num_steps)
+
+        curr = self._state
+        states[0] = curr
+        rates[0] = self.gamma_1 if curr == 1 else self.gamma_0
+
+        for t in range(1, num_steps):
+            if curr == 0:
+                if draws[t] < p_01:
+                    curr = 1
+            else:
+                if draws[t] < p_10:
+                    curr = 0
+            states[t] = curr
+            rates[t] = self.gamma_1 if curr == 1 else self.gamma_0
+
+        self._state = curr
+        return states, rates
+
+    def generate_telegraph_noise(
+        self,
+        num_steps: int,
+        initial_state: Optional[int] = None,
+    ) -> np.ndarray:
+        """Convenience method returning decoherence rate trajectory array."""
+        _, rates = self.generate_trajectory(num_steps, initial_state)
+        return rates
+
+    def reset(self, initial_state: int = 0) -> None:
+        """Reset the fluctuator to initial state."""
+        if initial_state not in (0, 1):
+            raise ValueError(f"initial_state must be 0 or 1, got {initial_state}")
+        self._state = initial_state
+
+
+# Alias for telegraph noise model
+TLSTelegraphNoise = TLSFluctuator
+
+
+class TLSEnsemble:
+    """
+    Ensemble of multiple independent Two-Level System (TLS) fluctuators.
+
+    Produces 1/f-like telegraph noise when switching rates are log-uniformly
+    distributed (standard Dutta-Horn model for 1/f noise in solid-state devices).
+    """
+
+    def __init__(
+        self,
+        fluctuators: list[TLSFluctuator],
+        base_rate: float = 0.0,
+    ) -> None:
+        if not fluctuators:
+            raise ValueError("fluctuators list cannot be empty")
+        self.fluctuators = fluctuators
+        self.base_rate = float(base_rate)
+
+    @classmethod
+    def create_dutta_horn_ensemble(
+        cls,
+        num_fluctuators: int = 10,
+        min_rate: float = 1e-4,
+        max_rate: float = 1e-1,
+        gamma_defect: float = 1e4,
+        base_rate: float = 1e4,
+        dt: float = 1.0,
+        seed: Optional[int] = None,
+    ) -> TLSEnsemble:
+        """Create a log-uniformly distributed ensemble yielding 1/f telegraph noise."""
+        log_rates = np.linspace(np.log10(min_rate), np.log10(max_rate), num_fluctuators)
+        rates = 10 ** log_rates
+        fluctuators = []
+        for i, r in enumerate(rates):
+            f_seed = None if seed is None else seed + i
+            fluctuators.append(
+                TLSFluctuator(
+                    rate_01=float(r),
+                    rate_10=float(r),
+                    gamma_0=0.0,
+                    gamma_1=float(gamma_defect / np.sqrt(num_fluctuators)),
+                    dt=dt,
+                    seed=f_seed,
+                )
+            )
+        return cls(fluctuators=fluctuators, base_rate=base_rate)
+
+    def step(self) -> float:
+        total = self.base_rate
+        for f in self.fluctuators:
+            _, r = f.step()
+            total += r
+        return total
+
+    def generate_trajectory(self, num_steps: int) -> np.ndarray:
+        traj = np.full(num_steps, self.base_rate, dtype=np.float64)
+        for f in self.fluctuators:
+            traj += f.generate_telegraph_noise(num_steps)
+        return traj
+
+
+@dataclass
 class NoiseProfile:
     """
     Complete noise profile combining calibration and experimental data.
@@ -56,6 +294,7 @@ class NoiseProfile:
     estimated_depolarizing_rate: Optional[float] = None
     correlated_noise_detected: bool = False
     leakage_detected: bool = False
+    tls_switching_detected: bool = False
 
     # Summary
     summary: dict[str, Any] = field(default_factory=dict)
@@ -70,6 +309,7 @@ class NoiseProfile:
             "estimated_depolarizing_rate": self.estimated_depolarizing_rate,
             "correlated_noise_detected": self.correlated_noise_detected,
             "leakage_detected": self.leakage_detected,
+            "tls_switching_detected": self.tls_switching_detected,
         }
 
         if self.detector_stats:

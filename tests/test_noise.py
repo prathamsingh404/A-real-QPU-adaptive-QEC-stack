@@ -8,11 +8,18 @@ from adaptive_qec.noise.statistics import (
     compute_temporal_correlation,
     compute_spatial_correlation,
 )
+from adaptive_qec.noise.characterization import (
+    TLSDefectState,
+    TLSEnsemble,
+    TLSFluctuator,
+    TLSTelegraphNoise,
+)
 from adaptive_qec.noise.drift import (
     CompositeDriftDetector,
     CUSUMDriftDetector,
     DriftStatus,
     EWMADriftDetector,
+    OrnsteinUhlenbeckDrift,
 )
 
 
@@ -200,4 +207,145 @@ class TestOrnsteinUhlenbeckAndHeron:
         assert len(res["cz_error"]) == 80
         assert res["reference_qv"] == 512
         assert "Heron" in res["device_architecture"]
+
+
+class TestOrnsteinUhlenbeckDrift:
+    """Test Ornstein-Uhlenbeck continuous-time drift process."""
+
+    def test_parameter_validation(self):
+        # theta must be > 0
+        with pytest.raises(ValueError, match="theta"):
+            OrnsteinUhlenbeckDrift(theta=0.0)
+        with pytest.raises(ValueError, match="theta"):
+            OrnsteinUhlenbeckDrift(theta=-0.5)
+
+        # sigma must be >= 0
+        with pytest.raises(ValueError, match="sigma"):
+            OrnsteinUhlenbeckDrift(sigma=-0.01)
+
+        # dt must be > 0
+        with pytest.raises(ValueError, match="dt"):
+            OrnsteinUhlenbeckDrift(dt=0.0)
+        with pytest.raises(ValueError, match="dt"):
+            OrnsteinUhlenbeckDrift(dt=-1.0)
+
+        # num_steps must be > 0
+        ou = OrnsteinUhlenbeckDrift(theta=0.5, mu=0.02, sigma=0.01)
+        with pytest.raises(ValueError, match="num_steps"):
+            ou.generate_trajectory(num_steps=0)
+
+    def test_generate_trajectory_shape_and_initial(self):
+        ou = OrnsteinUhlenbeckDrift(theta=0.2, mu=0.03, sigma=0.005, dt=0.5, seed=42)
+        traj = ou.generate_trajectory(num_steps=100, initial_value=0.08)
+        assert isinstance(traj, np.ndarray)
+        assert traj.shape == (100,)
+        assert np.isclose(traj[0], 0.08)
+
+        # single step trajectory
+        traj_single = ou.generate_trajectory(num_steps=1, initial_value=0.05)
+        assert traj_single.shape == (1,)
+        assert np.isclose(traj_single[0], 0.05)
+
+    def test_mean_reversion(self):
+        # Start far above mu, high theta, low sigma => should revert towards mu
+        ou = OrnsteinUhlenbeckDrift(theta=1.5, mu=0.02, sigma=0.001, dt=0.1, seed=42)
+        traj = ou.generate_trajectory(num_steps=200, initial_value=0.20)
+        # Final values should be close to mu (0.02)
+        assert np.abs(traj[-1] - 0.02) < 0.01
+        assert np.mean(traj[-50:]) < 0.05
+
+    def test_zero_volatility_deterministic_decay(self):
+        # When sigma = 0, deterministic exponential decay towards mu
+        theta = 0.5
+        dt = 0.1
+        mu = 0.01
+        x0 = 0.10
+        ou = OrnsteinUhlenbeckDrift(theta=theta, mu=mu, sigma=0.0, dt=dt)
+        traj = ou.generate_trajectory(num_steps=50, initial_value=x0)
+        for t in range(49):
+            expected = traj[t] + theta * (mu - traj[t]) * dt
+            assert np.isclose(traj[t + 1], expected)
+
+    def test_step_and_reset(self):
+        ou = OrnsteinUhlenbeckDrift(theta=0.5, mu=0.05, sigma=0.002, seed=123)
+        ou.reset(initial_value=0.10)
+        assert np.isclose(ou.current_value, 0.10)
+        next_val = ou.step()
+        assert ou.current_value == next_val
+
+
+class TestTLSFluctuator:
+    """Test Two-Level System (TLS) defect telegraph fluctuator model."""
+
+    def test_parameter_validation(self):
+        with pytest.raises(ValueError, match="Switching rates"):
+            TLSFluctuator(rate_01=-0.1)
+        with pytest.raises(ValueError, match="Decoherence rates"):
+            TLSFluctuator(gamma_0=-1.0)
+        with pytest.raises(ValueError, match="dt"):
+            TLSFluctuator(dt=0.0)
+        with pytest.raises(ValueError, match="initial_state"):
+            TLSFluctuator(initial_state=2)
+
+    def test_steady_state_and_properties(self):
+        tls = TLSFluctuator(
+            rate_01=0.02,
+            rate_10=0.08,
+            gamma_0=1e4,
+            gamma_1=5e4,
+            dt=1.0,
+        )
+        # p0 = 0.08 / 0.10 = 0.80, p1 = 0.02 / 0.10 = 0.20
+        assert np.isclose(tls.p_state_0_steady, 0.80)
+        assert np.isclose(tls.p_state_1_steady, 0.20)
+        assert np.isclose(tls.correlation_time, 10.0)
+        expected_mean = 0.8 * 1e4 + 0.2 * 5e4
+        assert np.isclose(tls.effective_mean_rate, expected_mean)
+
+    def test_trajectory_generation(self):
+        tls = TLSFluctuator(
+            rate_01=0.1,
+            rate_10=0.1,
+            gamma_0=1e4,
+            gamma_1=3e4,
+            dt=0.5,
+            seed=42,
+        )
+        states, rates = tls.generate_trajectory(num_steps=500, initial_state=0)
+        assert states.shape == (500,)
+        assert rates.shape == (500,)
+        assert set(np.unique(states)).issubset({0, 1})
+        # Discrete rates match state
+        assert np.all(rates[states == 0] == 1e4)
+        assert np.all(rates[states == 1] == 3e4)
+        # Both states should be visited over 500 steps
+        assert 0 in states and 1 in states
+
+    def test_zero_switching_rate_frozen(self):
+        tls = TLSFluctuator(rate_01=0.0, rate_10=0.0, gamma_0=1e4, gamma_1=5e4, initial_state=1)
+        states, rates = tls.generate_trajectory(num_steps=50)
+        assert np.all(states == 1)
+        assert np.all(rates == 5e4)
+
+    def test_telegraph_noise_convenience(self):
+        tls = TLSTelegraphNoise(rate_01=0.05, rate_10=0.05, gamma_0=10.0, gamma_1=20.0, seed=10)
+        noise = tls.generate_telegraph_noise(num_steps=100)
+        assert noise.shape == (100,)
+        assert np.all(np.isin(noise, [10.0, 20.0]))
+
+    def test_tls_ensemble(self):
+        ensemble = TLSEnsemble.create_dutta_horn_ensemble(
+            num_fluctuators=5,
+            min_rate=0.01,
+            max_rate=0.5,
+            gamma_defect=1e3,
+            base_rate=1e4,
+            seed=42,
+        )
+        traj = ensemble.generate_trajectory(num_steps=100)
+        assert traj.shape == (100,)
+        # All rates >= base_rate
+        assert np.all(traj >= 1e4)
+        # Some variation over time
+        assert np.std(traj) > 0.0
 

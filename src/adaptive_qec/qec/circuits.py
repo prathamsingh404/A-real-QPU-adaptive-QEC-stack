@@ -212,3 +212,37 @@ class CircuitGenerator:
             mapping["detector_coords"][int(det_id)] = list(coords)
 
         return mapping
+
+
+def build_repetition_code_circuit(
+    distance: int,
+    rounds: int,
+    noise_rate: float = 0.001,
+    basis: str = "z",
+) -> stim.Circuit:
+    """Build a standard 1D repetition code circuit with Stim.
+
+    Args:
+        distance: Number of data qubits (distance d >= 2).
+        rounds: Number of syndrome extraction rounds (rounds >= 1).
+        noise_rate: Physical error rate for depolarizing and measurement channels.
+        basis: Stabilizer basis: 'z' for bit-flip protection, 'x' for phase-flip.
+
+    Returns:
+        stim.Circuit with full detector and logical observable annotations.
+    """
+    if distance < 2:
+        raise ValueError(f"Repetition code distance must be >= 2, got {distance}")
+    if rounds < 1:
+        raise ValueError(f"Repetition code rounds must be >= 1, got {rounds}")
+
+    return stim.Circuit.generated(
+        "repetition_code:memory",
+        distance=distance,
+        rounds=rounds,
+        after_clifford_depolarization=noise_rate,
+        before_round_data_depolarization=noise_rate,
+        after_reset_flip_probability=noise_rate,
+        before_measure_flip_probability=noise_rate,
+    )
+

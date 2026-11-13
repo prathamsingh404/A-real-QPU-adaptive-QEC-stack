@@ -122,3 +122,11 @@ class TestCodeFactory:
     def test_invalid_type(self):
         with pytest.raises(ValueError):
             create_code("invalid_code", distance=3, rounds=3)
+
+    def test_build_repetition_code_circuit_utility(self):
+        from adaptive_qec.qec.circuits import build_repetition_code_circuit
+        c = build_repetition_code_circuit(distance=4, rounds=3, noise_rate=0.002)
+        assert isinstance(c, stim.Circuit)
+        assert c.num_detectors > 0
+        assert c.num_observables == 1
+

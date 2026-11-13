@@ -119,6 +119,19 @@ class TestCodeFactory:
         code = create_code("surface", distance=3, rounds=3)
         assert isinstance(code, SurfaceCode)
 
+    def test_create_unrotated_surface_and_color(self):
+        from adaptive_qec.qec.codes import UnrotatedSurfaceCode, ColorCode
+        u_code = create_code("unrotated_surface", distance=3, rounds=2)
+        assert isinstance(u_code, UnrotatedSurfaceCode)
+        c_u = u_code.generate_circuit()
+        assert c_u.num_detectors > 0
+
+        color_code = create_code("color", distance=3, rounds=2)
+        assert isinstance(color_code, ColorCode)
+        c_color = color_code.generate_circuit()
+        assert c_color.num_detectors > 0
+
+
     def test_invalid_type(self):
         with pytest.raises(ValueError):
             create_code("invalid_code", distance=3, rounds=3)

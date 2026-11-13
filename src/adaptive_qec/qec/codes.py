@@ -310,12 +310,126 @@ class SurfaceCode(QECCode):
         return result
 
 
+class UnrotatedSurfaceCode(QECCode):
+    """Unrotated (standard planar) surface code implementation."""
+
+    def __init__(self, distance: int, rounds: int) -> None:
+        if distance < 3 or distance % 2 == 0:
+            raise ValueError(f"Distance must be an odd integer >= 3, got {distance}")
+        if rounds < 1:
+            raise ValueError(f"Rounds must be >= 1, got {rounds}")
+        self.distance = distance
+        self.rounds = rounds
+
+    def generate_circuit(
+        self,
+        noise: Optional[NoiseConfig] = None,
+        embedding: Optional[Any] = None,
+    ) -> stim.Circuit:
+        p = noise.gate.two_qubit if noise and noise.gate else 0.0
+        if p > 0:
+            return stim.Circuit.generated(
+                "surface_code:unrotated_memory_z",
+                distance=self.distance,
+                rounds=self.rounds,
+                after_clifford_depolarization=p,
+                before_round_data_depolarization=p,
+                before_measure_flip_probability=p,
+                after_reset_flip_probability=p,
+            )
+        return stim.Circuit.generated(
+            "surface_code:unrotated_memory_z",
+            distance=self.distance,
+            rounds=self.rounds,
+        )
+
+    def get_info(self) -> CodeInfo:
+        d = self.distance
+        num_data = d * d + (d - 1) * (d - 1)
+        num_ancilla = 2 * d * (d - 1)
+        return CodeInfo(
+            name="unrotated_surface",
+            distance=d,
+            rounds=self.rounds,
+            num_data_qubits=num_data,
+            num_ancilla_qubits=num_ancilla,
+            num_detectors=num_ancilla * self.rounds,
+            num_observables=1,
+        )
+
+    def get_detector_coordinates(self) -> np.ndarray:
+        circuit = self.generate_circuit()
+        coord_dict = circuit.get_detector_coordinates()
+        result = np.zeros((len(coord_dict), 3))
+        for det_id, coord in coord_dict.items():
+            if det_id < len(result):
+                result[det_id, :len(coord)] = coord[:3]
+        return result
+
+
+class ColorCode(QECCode):
+    """2D triangular color code (cycles X, Y, Z stabilizer measurements)."""
+
+    def __init__(self, distance: int, rounds: int) -> None:
+        if distance < 3 or distance % 2 == 0:
+            raise ValueError(f"Distance must be an odd integer >= 3, got {distance}")
+        if rounds < 1:
+            raise ValueError(f"Rounds must be >= 1, got {rounds}")
+        self.distance = distance
+        self.rounds = rounds
+
+    def generate_circuit(
+        self,
+        noise: Optional[NoiseConfig] = None,
+        embedding: Optional[Any] = None,
+    ) -> stim.Circuit:
+        p = noise.gate.two_qubit if noise and noise.gate else 0.0
+        if p > 0:
+            return stim.Circuit.generated(
+                "color_code:memory_xyz",
+                distance=self.distance,
+                rounds=self.rounds,
+                after_clifford_depolarization=p,
+                before_round_data_depolarization=p,
+                before_measure_flip_probability=p,
+                after_reset_flip_probability=p,
+            )
+        return stim.Circuit.generated(
+            "color_code:memory_xyz",
+            distance=self.distance,
+            rounds=self.rounds,
+        )
+
+    def get_info(self) -> CodeInfo:
+        d = self.distance
+        num_data = (3 * d * d + 1) // 4
+        num_ancilla = num_data - 1
+        return CodeInfo(
+            name="color",
+            distance=d,
+            rounds=self.rounds,
+            num_data_qubits=num_data,
+            num_ancilla_qubits=num_ancilla,
+            num_detectors=num_ancilla * self.rounds,
+            num_observables=1,
+        )
+
+    def get_detector_coordinates(self) -> np.ndarray:
+        circuit = self.generate_circuit()
+        coord_dict = circuit.get_detector_coordinates()
+        result = np.zeros((len(coord_dict), 3))
+        for det_id, coord in coord_dict.items():
+            if det_id < len(result):
+                result[det_id, :len(coord)] = coord[:3]
+        return result
+
+
 def create_code(code_type: str, distance: int, rounds: int) -> QECCode:
     """
     Factory function to create a QEC code.
 
     Args:
-        code_type: "repetition" or "surface"
+        code_type: "repetition", "surface", "unrotated_surface", or "color"
         distance: Code distance (must be odd, >= 3)
         rounds: Number of QEC rounds
 
@@ -325,6 +439,8 @@ def create_code(code_type: str, distance: int, rounds: int) -> QECCode:
     codes = {
         "repetition": RepetitionCode,
         "surface": SurfaceCode,
+        "unrotated_surface": UnrotatedSurfaceCode,
+        "color": ColorCode,
     }
 
     if code_type not in codes:

@@ -294,3 +294,24 @@ class TestRegistryIntegration:
     def test_get_by_uppercase(self):
         decoder = get_decoder("UNION_FIND")
         assert decoder.name == "union_find"
+
+    def test_is_configured_and_repr(self):
+        decoder = UnionFindDecoder()
+        assert not decoder.is_configured
+        assert "unconfigured" in repr(decoder)
+        
+        circuit = stim.Circuit.generated("surface_code:rotated_memory_z", distance=3, rounds=2, after_clifford_depolarization=0.01)
+        decoder.configure(circuit=circuit)
+        assert decoder.is_configured
+        assert "configured" in repr(decoder)
+
+    def test_benchmark_vs_mwpm_utility(self):
+        from adaptive_qec.decoders.union_find import benchmark_vs_mwpm
+        circuit = stim.Circuit.generated("surface_code:rotated_memory_z", distance=3, rounds=2, after_clifford_depolarization=0.01)
+        dem = circuit.detector_error_model(decompose_errors=True)
+        res = benchmark_vs_mwpm(dem, shots=50, seed=123)
+        assert "uf_error_rate" in res
+        assert "mwpm_error_rate" in res
+        assert "ler_inflation_factor" in res
+        assert res["shots"] == 50
+

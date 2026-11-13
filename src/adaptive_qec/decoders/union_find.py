@@ -97,8 +97,11 @@ class UnionFindForest:
         return x
 
     def obs_to_root(self, x: int) -> np.ndarray:
-        """Get observable XOR from x to its root. Calls find() first."""
-        self.find(x)  # Ensure path is compressed
+        """Get observable XOR from x to its root with full path compression for x."""
+        root = self.find(x)
+        if self.parent[x] != root:
+            self.obs_to_parent[x] ^= self.obs_to_parent[self.parent[x]]
+            self.parent[x] = root
         return self.obs_to_parent[x].copy()
 
     def union(self, x: int, y: int, edge_obs_mask: int = 0) -> int:
@@ -358,7 +361,7 @@ class UnionFindDecoder(Decoder):
 
     Compared to PyMatching MWPM (sparse blossom):
         - Complexity: O(k · |E| log |V|) where k is the defect count
-        - Accuracy: ~8-15% higher logical error rate (typical at d=3-7)
+        - Accuracy: empirically 25-100% higher LER at d=3-7 depending on noise structure
         - Memory: Lower; no dense matrix precomputation
     """
 
@@ -367,6 +370,17 @@ class UnionFindDecoder(Decoder):
         self._num_detectors: int = 0
         self._num_observables: int = 0
         self._sorted_edge_indices: Optional[np.ndarray] = None
+
+    @property
+    def is_configured(self) -> bool:
+        """Return whether the decoder has been configured with a DEM or circuit."""
+        return self._graph is not None
+
+    def __repr__(self) -> str:
+        status = "configured" if self.is_configured else "unconfigured"
+        dets = self._num_detectors if self.is_configured else 0
+        obs = self._num_observables if self.is_configured else 0
+        return f"UnionFindDecoder(status={status}, num_detectors={dets}, num_observables={obs})"
 
     @property
     def name(self) -> str:
@@ -640,4 +654,52 @@ class UnionFindDecoder(Decoder):
             f"P99={metrics.latency_p99_us:.1f}us"
         )
         return metrics
+
+
+def benchmark_vs_mwpm(
+    dem: stim.DetectorErrorModel,
+    shots: int = 1000,
+    seed: int = 42,
+) -> dict[str, Any]:
+    """Run a quick empirical comparison between UnionFindDecoder and PyMatching MWPM.
+
+    Args:
+        dem: Stim detector error model.
+        shots: Number of Monte Carlo shots.
+        seed: Random seed for sampling.
+
+    Returns:
+        Dict containing error rates, execution times, and inflation factor.
+    """
+    import pymatching
+
+    sampler = dem.compile_sampler(seed=seed)
+    syndromes, actual_obs, _ = sampler.sample(shots=shots, return_errors=False)
+
+    uf = UnionFindDecoder()
+    uf.configure(dem=dem)
+    t0 = time.perf_counter()
+    uf_preds = uf.decode_batch(syndromes)
+    t_uf = time.perf_counter() - t0
+    uf_errors = int(np.any(uf_preds != actual_obs, axis=1).sum())
+    uf_ler = uf_errors / max(shots, 1)
+
+    matching = pymatching.Matching.from_detector_error_model(dem)
+    t0 = time.perf_counter()
+    mwpm_preds = matching.decode_batch(syndromes)
+    t_mwpm = time.perf_counter() - t0
+    mwpm_errors = int(np.any(mwpm_preds != actual_obs, axis=1).sum())
+    mwpm_ler = mwpm_errors / max(shots, 1)
+
+    inflation = uf_ler / max(mwpm_ler, 1e-9)
+
+    return {
+        "uf_error_rate": uf_ler,
+        "mwpm_error_rate": mwpm_ler,
+        "uf_time_s": t_uf,
+        "mwpm_time_s": t_mwpm,
+        "ler_inflation_factor": float(inflation),
+        "shots": shots,
+    }
+
 

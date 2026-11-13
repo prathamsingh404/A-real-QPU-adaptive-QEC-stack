@@ -129,3 +129,44 @@ class TestDecoderRegistry:
         _ = get_decoder("mwpm")  # force registration
         decoders = list_decoders()
         assert "mwpm" in decoders
+        assert "union_find" in decoders
+        assert "lazy_mwpm" in decoders
+        assert "reweighted_mwpm" in decoders
+
+    def test_get_all_registered_decoders(self):
+        """All decoders in DECODER_REGISTRY can be retrieved and initialized."""
+        from adaptive_qec.decoders.base import Decoder
+
+        for name in list_decoders():
+            dec = get_decoder(name)
+            assert isinstance(dec, Decoder)
+            assert hasattr(dec, "configure")
+            assert hasattr(dec, "decode")
+
+    def test_case_and_whitespace_insensitivity(self):
+        """get_decoder handles surrounding whitespace and uppercase."""
+        dec1 = get_decoder("  MWPM  ")
+        assert dec1.name == "mwpm"
+        dec2 = get_decoder("UNION_FIND")
+        assert dec2.name == "union_find"
+
+    def test_register_and_retrieve_custom_decoder(self):
+        """Custom decoder class can be registered and retrieved."""
+        from adaptive_qec.decoders.base import Correction, Decoder
+        from adaptive_qec.decoders.registry import DECODER_REGISTRY
+
+        class DummyCustomDecoder(Decoder):
+            name = "dummy_custom"
+            def configure(self, *args, **kwargs): pass
+            def decode(self, syndrome): return Correction(observable_corrections=np.zeros(1))
+            def decode_batch(self, syndromes, observable_flips=None): return np.zeros((len(syndromes), 1))
+
+        DECODER_REGISTRY["dummy_custom"] = DummyCustomDecoder
+        try:
+            dec = get_decoder("dummy_custom")
+            assert isinstance(dec, DummyCustomDecoder)
+            assert dec.name == "dummy_custom"
+            assert "dummy_custom" in list_decoders()
+        finally:
+            DECODER_REGISTRY.pop("dummy_custom", None)
+

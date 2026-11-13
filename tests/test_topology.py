@@ -89,3 +89,93 @@ class TestEmbeddingFinder:
         assert isinstance(circuit, stim.Circuit)
         assert circuit.num_detectors > 0
         assert circuit.num_observables == 1
+
+
+class TestIBMHeron133TopologyAndDetectorMapping:
+    """Tests for IBM Heron 133-qubit heavy-hex topology and detector coordinate validation."""
+
+    def test_ibm_heron_133_properties(self):
+        topo = HeavyHexTopology.ibm_heron_133()
+        assert topo.num_qubits == 133
+        assert len(topo.edges) == 150
+        assert len(topo.qubit_coordinates) == 133
+
+        # Degree constraints: heavy-hex has degrees <= 3
+        metrics = topo.compute_metrics()
+        assert metrics.num_qubits == 133
+        assert metrics.num_edges == 150
+        assert metrics.max_degree <= 3
+        assert metrics.is_heavy_hex is True
+        assert metrics.diameter > 0
+
+        # Validate that the 2D layout mapping connects only adjacent qubits
+        coord_report = topo.validate_qubit_coordinate_mapping()
+        assert coord_report["valid"] is True
+        assert len(coord_report["unmapped_qubits"]) == 0
+        assert len(coord_report["inconsistent_edges"]) == 0
+
+    def test_heron_133_alias(self):
+        t1 = HeavyHexTopology.ibm_heron_133()
+        t2 = HeavyHexTopology.heron_133()
+        assert t1.num_qubits == t2.num_qubits == 133
+        assert len(t1.edges) == len(t2.edges) == 150
+
+    def test_surface_code_embedding_on_heron_133(self):
+        topo = HeavyHexTopology.ibm_heron_133()
+        finder = EmbeddingFinder(topo)
+
+        emb = finder.find_embedding(distance=3)
+        assert emb.distance == 3
+        assert len(emb.data_map) == 9
+        assert len(emb.ancilla_map) > 0
+
+        # All mapped qubits must be valid physical qubits on Heron (0 <= q < 133)
+        for (r, c), pq in emb.data_map.items():
+            assert 0 <= pq < 133
+        for (r, c), pq in emb.ancilla_map.items():
+            assert 0 <= pq < 133
+
+        qubits_used = emb.all_physical_qubits()
+        assert len(qubits_used) >= 13
+        assert all(0 <= q < 133 for q in qubits_used)
+
+    def test_detector_coordinate_validation_heron(self):
+        topo = HeavyHexTopology.ibm_heron_133()
+        finder = EmbeddingFinder(topo)
+        emb = finder.find_embedding(distance=3)
+
+        code = create_code("surface", distance=3, rounds=2)
+        circuit = code.generate_circuit(embedding=emb)
+
+        # Map detectors to physical qubits
+        det_map = emb.map_detectors_to_physical_qubits(circuit)
+        assert len(det_map) == circuit.num_detectors
+        assert all(0 <= q < 133 for q in det_map.values())
+
+        # Validate detector coordinates
+        report = emb.validate_detector_coordinates(circuit, topology=topo)
+        assert report["valid"] is True
+        assert report["num_detectors"] == circuit.num_detectors
+        assert report["num_mapped_detectors"] == circuit.num_detectors
+        assert len(report["unmapped_detectors"]) == 0
+        assert len(report["out_of_bounds_detectors"]) == 0
+        assert emb.verify_detector_mapping(circuit, topology=topo) is True
+
+    def test_detector_coordinate_validation_out_of_bounds(self):
+        from adaptive_qec.topology.embedding import SurfaceCodeEmbedding
+
+        # Intentionally corrupt physical qubit mapping
+        corrupt_emb = SurfaceCodeEmbedding(
+            distance=3,
+            data_map={(0, 0): 0},
+            ancilla_map={(0, 0): 999},  # Out of bounds for Heron (133 qubits)
+        )
+        code = create_code("surface", distance=3, rounds=2)
+        circuit = code.generate_circuit()
+
+        topo = HeavyHexTopology.ibm_heron_133()
+        report = corrupt_emb.validate_detector_coordinates(circuit, topology=topo)
+        assert report["valid"] is False
+        assert len(report["out_of_bounds_detectors"]) > 0
+        assert corrupt_emb.verify_detector_mapping(circuit, topology=topo) is False
+

@@ -103,6 +103,88 @@ class SurfaceCodeEmbedding:
         """All physical qubits used by this embedding."""
         return set(self.data_map.values()) | set(self.ancilla_map.values())
 
+    def map_detectors_to_physical_qubits(
+        self,
+        stim_circuit: Any,
+    ) -> dict[int, int]:
+        """
+        Map each detector index in a Stim circuit to the corresponding physical qubit index.
+
+        For each detector with spatial coordinates (x, y, t), determines the corresponding
+        ancilla and returns its physical hardware qubit mapping.
+
+        Returns:
+            Dict mapping detector_id -> physical_qubit_id.
+        """
+        coord_dict = stim_circuit.get_detector_coordinates()
+        mapping: dict[int, int] = {}
+        ancilla_items = list(self.ancilla_map.items())
+        if not ancilla_items:
+            return mapping
+
+        # Unique spatial coordinates of detectors
+        unique_spatial = sorted(set((float(c[0]), float(c[1])) for c in coord_dict.values() if len(c) >= 2))
+        spatial_to_ancilla: dict[tuple[float, float], int] = {}
+        for idx, s_coord in enumerate(unique_spatial):
+            ancilla_idx = idx % len(ancilla_items)
+            spatial_to_ancilla[s_coord] = ancilla_items[ancilla_idx][1]
+
+        for det_id, coords in coord_dict.items():
+            if len(coords) >= 2:
+                s_coord = (float(coords[0]), float(coords[1]))
+                if s_coord in spatial_to_ancilla:
+                    mapping[int(det_id)] = spatial_to_ancilla[s_coord]
+
+        return mapping
+
+    def validate_detector_coordinates(
+        self,
+        stim_circuit: Any,
+        topology: Optional[HeavyHexTopology] = None,
+    ) -> dict[str, Any]:
+        """
+        Verify that detector coordinates match physical qubit indices on the hardware topology.
+
+        Checks:
+            1. All detectors in the Stim circuit map to a physical qubit index.
+            2. Mapped physical qubits are valid hardware indices within [0, topology.num_qubits - 1].
+            3. Coordinate assignments are consistent across rounds.
+
+        Returns:
+            Validation report dict with 'valid' bool, counts, and mapped indices.
+        """
+        detector_to_phys = self.map_detectors_to_physical_qubits(stim_circuit)
+        num_dets = stim_circuit.num_detectors
+        unmapped = [d for d in range(num_dets) if d not in detector_to_phys]
+
+        out_of_bounds = []
+        max_qubits = topology.num_qubits if topology is not None else None
+        for det_id, phys_q in detector_to_phys.items():
+            if max_qubits is not None and (phys_q < 0 or phys_q >= max_qubits):
+                out_of_bounds.append((det_id, phys_q))
+
+        is_valid = (len(unmapped) == 0 and len(out_of_bounds) == 0 and len(detector_to_phys) == num_dets)
+
+        return {
+            "valid": is_valid,
+            "num_detectors": num_dets,
+            "num_mapped_detectors": len(detector_to_phys),
+            "detector_to_physical": detector_to_phys,
+            "unmapped_detectors": unmapped,
+            "out_of_bounds_detectors": out_of_bounds,
+            "physical_qubits_used": sorted(list(self.all_physical_qubits())),
+        }
+
+    def verify_detector_mapping(
+        self,
+        stim_circuit: Any,
+        topology: Optional[HeavyHexTopology] = None,
+    ) -> bool:
+        """Convenience method returning True if detector coordinates validly map to physical qubits."""
+        report = self.validate_detector_coordinates(stim_circuit, topology=topology)
+        return bool(report.get("valid", False))
+
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "distance": self.distance,

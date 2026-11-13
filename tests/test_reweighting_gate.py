@@ -118,3 +118,49 @@ def test_small_window_suppresses_reweighting(surface_code_fixture):
 
     # Should safely abstain (STAY)
     assert decision == GateDecision.STAY
+
+
+def test_empty_syndromes_evaluation(surface_code_fixture):
+    """Empty syndrome batch returns STAY with zero stats safely."""
+    _, base_matching, _ = surface_code_fixture
+    controller = ConfidenceGatedReweightingController(base_matching=base_matching)
+    empty = np.zeros((0, 0), dtype=np.uint8)
+    decision, m, stats = controller.evaluate_window(empty)
+    assert decision == GateDecision.STAY
+    assert stats.window_size == 0
+    assert m is base_matching
+
+
+def test_telemetry_and_state_serialization(surface_code_fixture):
+    """Telemetry export and state serialization/restoration preserves all counters."""
+    _, base_matching, sampler = surface_code_fixture
+    controller = ConfidenceGatedReweightingController(base_matching=base_matching)
+    syndromes, _ = sampler.sample(shots=200, separate_observables=True)
+    controller.evaluate_window(syndromes)
+
+    telemetry = controller.get_telemetry()
+    assert telemetry["total_evaluations"] == 1
+    assert telemetry["total_stays"] == 1
+    assert telemetry["abstention_rate"] == 1.0
+
+    state = controller.serialize_state()
+    assert state["total_stays"] == 1
+    assert "adaptation_tax" in state
+
+    new_controller = ConfidenceGatedReweightingController(base_matching=base_matching)
+    new_controller.load_state(state)
+    assert new_controller.total_stays == 1
+    assert new_controller.get_telemetry()["total_stays"] == 1
+
+
+def test_manual_reference_reset(surface_code_fixture):
+    """Manual reset of reference defect rate re-anchors the controller."""
+    _, base_matching, _ = surface_code_fixture
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        reference_defect_rate=0.010,
+    )
+    assert controller.reference_defect_rate == 0.010
+    controller.reset_reference(new_reference=0.025)
+    assert controller.reference_defect_rate == 0.025
+    assert not controller.is_reweighted

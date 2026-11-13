@@ -167,3 +167,37 @@ class TestCompositeDriftDetector:
         # Should catch drift via at least one method
         assert report is not None
         assert report.status != DriftStatus.STABLE or report.magnitude > 0
+
+
+class TestOrnsteinUhlenbeckAndHeron:
+    """Test Ornstein-Uhlenbeck drift trajectory and IBM Heron noise generator."""
+
+    def test_ou_drift_trajectory_bounds(self):
+        from adaptive_qec.engine.noise_models import DriftTrajectory
+        ou = DriftTrajectory(theta=0.1, mu=0.005, sigma=0.001, min_val=0.001, max_val=0.02)
+        path = ou.sample_path(steps=100, seed=42)
+        assert len(path) == 100
+        assert np.all(path >= 0.001)
+        assert np.all(path <= 0.02)
+        assert not np.isnan(path).any()
+
+    def test_burst_noise_model_injection(self):
+        from adaptive_qec.engine.noise_models import BurstNoiseModel
+        model = BurstNoiseModel(burst_probability_per_step=0.1, peak_error_multiplier=5.0)
+        base = np.full(50, 0.005)
+        perturbed, bursts = model.inject_bursts(base, seed=123)
+        assert len(perturbed) == 50
+        assert len(bursts) > 0
+        assert np.max(perturbed) > 0.005
+
+    def test_ibm_heron_noise_trajectory_generation(self):
+        from adaptive_qec.engine.noise_models import generate_ibm_heron_noise_trajectory
+        res = generate_ibm_heron_noise_trajectory(steps=80, include_bursts=True, seed=999)
+        assert "cz_error" in res
+        assert "readout_error" in res
+        assert "t1_us" in res
+        assert "t2_us" in res
+        assert len(res["cz_error"]) == 80
+        assert res["reference_qv"] == 512
+        assert "Heron" in res["device_architecture"]
+

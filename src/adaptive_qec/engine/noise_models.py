@@ -14,7 +14,8 @@ Do not confuse the two.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from dataclasses import dataclass
+from typing import Any, Optional
 
 import numpy as np
 import stim
@@ -194,3 +195,138 @@ class NoiseInjector:
             noisy = self.inject_readout_noise(noisy)
 
         return noisy
+
+
+@dataclass
+class DriftTrajectory:
+    """Generates realistic Ornstein-Uhlenbeck continuous-state (OUCS) noise trajectories.
+
+    Models physical drift from fluctuating two-level system (TLS) fluctuators and
+    cryogenic thermal fluctuations.
+
+    Parameters:
+        theta: Mean-reversion speed.
+        mu: Long-run asymptotic mean error rate.
+        sigma: Volatility / noise diffusion magnitude.
+        dt: Time increment step (e.g., in hours or round chunks).
+        initial_value: Starting error rate (defaults to mu if None).
+        min_val: Minimum probability clamp.
+        max_val: Maximum probability clamp.
+    """
+    theta: float = 0.1
+    mu: float = 0.005
+    sigma: float = 0.001
+    dt: float = 1.0
+    initial_value: Optional[float] = None
+    min_val: float = 1e-5
+    max_val: float = 0.49
+
+    def sample_path(self, steps: int, seed: Optional[int] = None) -> np.ndarray:
+        """Sample an OU trajectory of length `steps`."""
+        rng = np.random.default_rng(seed)
+        path = np.zeros(steps, dtype=np.float64)
+        x = self.initial_value if self.initial_value is not None else self.mu
+        x = float(np.clip(x, self.min_val, self.max_val))
+
+        sq_dt = np.sqrt(self.dt)
+        for t in range(steps):
+            path[t] = x
+            dx = self.theta * (self.mu - x) * self.dt + self.sigma * sq_dt * rng.normal()
+            x = float(np.clip(x + dx, self.min_val, self.max_val))
+        return path
+
+
+@dataclass
+class BurstNoiseModel:
+    """Models transient cosmic ray / quasiparticle burst events on superconducting QPUs.
+
+    Attributes:
+        burst_probability_per_step: Poisson/Bernoulli arrival probability per time window.
+        peak_error_multiplier: Factor by which error rates increase during peak burst (e.g., 5x-50x).
+        relaxation_half_life: Decay half-life steps back to baseline (exponential relaxation).
+        affected_qubit_fraction: Fraction of qubits correlatedly affected by localized substrate phonon burst.
+    """
+    burst_probability_per_step: float = 0.005
+    peak_error_multiplier: float = 10.0
+    relaxation_half_life: float = 5.0
+    affected_qubit_fraction: float = 0.5
+
+    def inject_bursts(self, base_trajectory: np.ndarray, seed: Optional[int] = None) -> tuple[np.ndarray, list[int]]:
+        """Inject bursts into an existing baseline error trajectory.
+
+        Returns:
+            (perturbed_trajectory, burst_start_indices)
+        """
+        rng = np.random.default_rng(seed)
+        steps = len(base_trajectory)
+        trajectory = base_trajectory.copy()
+        burst_indices: list[int] = []
+
+        decay_rate = np.log(2.0) / max(self.relaxation_half_life, 1e-5)
+        active_burst_intensity = 0.0
+
+        for t in range(steps):
+            if rng.random() < self.burst_probability_per_step:
+                burst_indices.append(t)
+                active_burst_intensity = max(active_burst_intensity, self.peak_error_multiplier - 1.0)
+
+            if active_burst_intensity > 1e-4:
+                trajectory[t] = min(0.49, trajectory[t] * (1.0 + active_burst_intensity))
+                active_burst_intensity *= np.exp(-decay_rate)
+
+        return trajectory, burst_indices
+
+
+def generate_ibm_heron_noise_trajectory(
+    steps: int = 100,
+    include_bursts: bool = True,
+    seed: int = 42,
+) -> dict[str, Any]:
+    """Generate realistic physical noise trajectories based on published IBM Heron calibration data.
+
+    Based on IBM Quantum Heron 133-qubit architecture specifications (e.g. ibm_torino / ibm_fez):
+    - Coherence times: T1 in [80, 300] μs (median ~160 μs), T2 in [50, 200] μs (median ~120 μs).
+    - Entangling gate error: Two-qubit CZ error in [0.0015, 0.015] (median ~0.004).
+    - Readout error: Single-shot measurement assignment error in [0.005, 0.03] (median ~0.012).
+    - Quantum Volume: QV >= 512 benchmark tier.
+
+    Args:
+        steps: Number of time steps / calibration windows.
+        include_bursts: Whether to include cosmic ray / quasiparticle burst events.
+        seed: Random seed for trajectory reproducibility.
+
+    Returns:
+        Dict containing arrays for 'cz_error', 'readout_error', 't1_us', 't2_us',
+        and metadata on burst events and Heron processor specifications.
+    """
+    # CZ two-qubit gate error drift: OU process centered at 0.0045, volatility 0.0008
+    cz_model = DriftTrajectory(theta=0.08, mu=0.0045, sigma=0.0008, dt=1.0, min_val=0.001, max_val=0.025)
+    cz_traj = cz_model.sample_path(steps, seed=seed)
+
+    # Readout error drift: OU process centered at 0.012, volatility 0.002
+    ro_model = DriftTrajectory(theta=0.05, mu=0.012, sigma=0.002, dt=1.0, min_val=0.004, max_val=0.045)
+    ro_traj = ro_model.sample_path(steps, seed=seed + 1)
+
+    burst_events: list[int] = []
+    if include_bursts:
+        burst_model = BurstNoiseModel(burst_probability_per_step=0.02, peak_error_multiplier=4.0, relaxation_half_life=3.0)
+        cz_traj, burst_events = burst_model.inject_bursts(cz_traj, seed=seed + 2)
+        ro_traj, _ = burst_model.inject_bursts(ro_traj, seed=seed + 3)
+
+    # Derive coherent times inversely correlated with drift
+    t1_base = 160.0  # us
+    t2_base = 120.0  # us
+    t1_us = np.clip(t1_base * (0.0045 / np.maximum(cz_traj, 1e-5)), 60.0, 320.0)
+    t2_us = np.clip(t2_base * (0.0045 / np.maximum(cz_traj, 1e-5)), 40.0, 220.0)
+
+    return {
+        "cz_error": cz_traj,
+        "readout_error": ro_traj,
+        "t1_us": t1_us,
+        "t2_us": t2_us,
+        "burst_events": burst_events,
+        "device_architecture": "IBM Heron (133-qubit heavy-hex, tunable coupler)",
+        "reference_qv": 512,
+        "steps": steps,
+    }
+

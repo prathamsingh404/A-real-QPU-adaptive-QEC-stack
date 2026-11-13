@@ -14,6 +14,30 @@ import numpy as np
 from scipy.optimize import curve_fit
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 
+from adaptive_qec.qec.codes import (
+    CodeInfo,
+    ColorCode,
+    QECCode,
+    QuantumCode,
+    RepetitionCode,
+    SurfaceCode,
+    create_code,
+)
+
+__all__ = [
+    "QuantumCode",
+    "QECCode",
+    "SurfaceCode",
+    "RepetitionCode",
+    "ColorCode",
+    "CodeInfo",
+    "create_code",
+    "build_422_code_circuit",
+    "build_dynamic_feedforward_circuit",
+    "build_multi_round_circuit",
+    "fit_logical_error_decay",
+]
+
 
 def build_422_code_circuit(insert_dd: bool = True) -> QuantumCircuit:
     """

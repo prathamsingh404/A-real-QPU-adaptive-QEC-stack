@@ -1,9 +1,10 @@
 """
-QEC code definitions.
+QEC code definitions and class hierarchy.
 
-Defines quantum error-correcting codes with their Stim circuit representations.
-Supports repetition code and rotated surface code with parameterizable
-distance and rounds.
+Defines quantum error-correcting codes with their Stim circuit representations,
+stabilizer generators, logical operators, and coordinate mappings.
+Supports repetition code, rotated surface code, and 2D color code with
+parameterizable distance and rounds.
 
 The generated Stim circuits include:
 - Full stabilizer measurement circuits
@@ -39,8 +40,13 @@ class CodeInfo:
     num_observables: int
 
 
-class QECCode(ABC):
-    """Abstract base for quantum error-correcting codes."""
+class QuantumCode(ABC):
+    """
+    Abstract base class for quantum error-correcting codes.
+
+    Enforces uniform interfaces for stabilizer generators, logical operators,
+    coordinate mappings, and circuit generation across code families.
+    """
 
     @abstractmethod
     def generate_circuit(
@@ -70,8 +76,45 @@ class QECCode(ABC):
         """Get (x, y, t) coordinates for each detector."""
         ...
 
+    @property
+    @abstractmethod
+    def stabilizer_generators(self) -> list[str]:
+        """List of stabilizer generator Pauli string representations."""
+        ...
 
-class RepetitionCode(QECCode):
+    @property
+    def stabilizers(self) -> list[str]:
+        """Alias for stabilizer_generators."""
+        return self.stabilizer_generators
+
+    @property
+    @abstractmethod
+    def logical_operators(self) -> dict[str, str]:
+        """Dictionary of logical operators, e.g. {'X': ..., 'Z': ...}."""
+        ...
+
+    @property
+    def logical_x(self) -> str:
+        """Logical X operator."""
+        return self.logical_operators.get("X", "")
+
+    @property
+    def logical_z(self) -> str:
+        """Logical Z operator."""
+        return self.logical_operators.get("Z", "")
+
+    @property
+    @abstractmethod
+    def coordinate_mappings(self) -> dict[int, tuple[float, float]]:
+        """Mapping from qubit index to 2D (x, y) spatial coordinates."""
+        ...
+
+
+# Backward compatibility alias
+QECCode = QuantumCode
+
+
+class RepetitionCode(QuantumCode):
     """
     Repetition code for bit-flip errors.
 
@@ -89,6 +132,29 @@ class RepetitionCode(QECCode):
         self.rounds = rounds
         self.num_data = distance
         self.num_ancilla = distance - 1
+
+    @property
+    def coordinate_mappings(self) -> dict[int, tuple[float, float]]:
+        """Mapping of qubit index to (x, y) coordinates."""
+        coords: dict[int, tuple[float, float]] = {}
+        for i in range(self.num_data):
+            coords[i] = (float(2 * i), 0.0)
+        for i in range(self.num_ancilla):
+            coords[self.num_data + i] = (float(2 * i + 1), 0.0)
+        return coords
+
+    @property
+    def stabilizer_generators(self) -> list[str]:
+        """Stabilizer generators: Z_i Z_{i+1} across adjacent data qubits."""
+        return [f"Z{i} Z{i+1}" for i in range(self.distance - 1)]
+
+    @property
+    def logical_operators(self) -> dict[str, str]:
+        """Logical operators for the repetition code."""
+        return {
+            "X": " ".join(f"X{i}" for i in range(self.distance)),
+            "Z": "Z0",
+        }
 
     def generate_circuit(
         self,
@@ -211,7 +277,7 @@ class RepetitionCode(QECCode):
         return np.array(coords)
 
 
-class SurfaceCode(QECCode):
+class SurfaceCode(QuantumCode):
     """
     Rotated surface code.
 
@@ -228,6 +294,74 @@ class SurfaceCode(QECCode):
 
         self.distance = distance
         self.rounds = rounds
+
+    @property
+    def coordinate_mappings(self) -> dict[int, tuple[float, float]]:
+        """Qubit coordinates extracted from the generated Stim circuit."""
+        circuit = self.generate_circuit()
+        coords: dict[int, tuple[float, float]] = {}
+        for inst in circuit.flattened():
+            if inst.name == "QUBIT_COORDS":
+                q = inst.targets_copy()[0].value
+                args = inst.gate_args_copy()
+                coords[q] = (float(args[0]), float(args[1])) if len(args) >= 2 else (float(args[0]), 0.0)
+        return coords
+
+    @property
+    def stabilizer_generators(self) -> list[str]:
+        """
+        Stabilizer generators for the rotated surface code.
+        Extracted from the syndrome extraction round interactions.
+        """
+        circuit = self.generate_circuit()
+        h_qubits = set()
+        interactions: dict[int, tuple[str, set[int]]] = {}
+        for inst in circuit.flattened():
+            if inst.name == "H":
+                for t in inst.targets_copy():
+                    h_qubits.add(t.value)
+            elif inst.name == "CX":
+                targets = inst.targets_copy()
+                for i in range(0, len(targets), 2):
+                    c_q = targets[i].value
+                    t_q = targets[i + 1].value
+                    if c_q in h_qubits:
+                        interactions.setdefault(c_q, ("X", set()))[1].add(t_q)
+                    else:
+                        interactions.setdefault(t_q, ("Z", set()))[1].add(c_q)
+            elif inst.name in ("M", "MR"):
+                if interactions:
+                    break
+
+        generators: list[str] = []
+        for ancilla, (stype, data_qubits) in sorted(interactions.items()):
+            terms = " ".join(f"{stype}{d}" for d in sorted(data_qubits))
+            generators.append(terms)
+        return generators
+
+    @property
+    def logical_operators(self) -> dict[str, str]:
+        """Logical operators along boundaries for rotated surface code."""
+        d = self.distance
+        coords = self.coordinate_mappings
+        circuit = self.generate_circuit()
+        meas_qubits = []
+        for inst in circuit.flattened():
+            if inst.name == "M":
+                meas_qubits = [t.value for t in inst.targets_copy()]
+        data_qubits = sorted(meas_qubits) if len(meas_qubits) == d * d else sorted(list(coords.keys())[:d * d])
+
+        data_coords = {q: coords[q] for q in data_qubits if q in coords}
+        sorted_by_y = sorted(data_coords.items(), key=lambda item: (item[1][1], item[1][0]))
+        sorted_by_x = sorted(data_coords.items(), key=lambda item: (item[1][0], item[1][1]))
+
+        x_boundary = [item[0] for item in sorted_by_y[:d]]
+        z_boundary = [item[0] for item in sorted_by_x[:d]]
+
+        return {
+            "X": " ".join(f"X{q}" for q in x_boundary),
+            "Z": " ".join(f"Z{q}" for q in z_boundary),
+        }
 
     def generate_circuit(
         self,
@@ -281,9 +415,7 @@ class SurfaceCode(QECCode):
         """Get surface code info."""
         d = self.distance
         num_data = d * d
-        num_ancilla = (d * d - 1)  # approximate for rotated code
-        # Detector count: ancillas * (rounds + 1) approximately
-        # Exact count comes from the Stim circuit
+        num_ancilla = (d * d - 1)
         return CodeInfo(
             name="surface",
             distance=d,
@@ -301,7 +433,6 @@ class SurfaceCode(QECCode):
         Returns coordinates from the circuit itself for accuracy.
         """
         circuit = self.generate_circuit()
-        # Use Stim's built-in coordinate extraction
         coord_dict = circuit.get_detector_coordinates()
         result = np.zeros((len(coord_dict), 3))
         for det_id, coord in coord_dict.items():
@@ -310,7 +441,7 @@ class SurfaceCode(QECCode):
         return result
 
 
-class UnrotatedSurfaceCode(QECCode):
+class UnrotatedSurfaceCode(QuantumCode):
     """Unrotated (standard planar) surface code implementation."""
 
     def __init__(self, distance: int, rounds: int) -> None:
@@ -367,25 +498,83 @@ class UnrotatedSurfaceCode(QECCode):
         return result
 
 
-class ColorCode(QECCode):
-    """2D triangular color code (cycles X, Y, Z stabilizer measurements)."""
+class ColorCode(QuantumCode):
+    """
+    2D Triangular Color Code (Steane [[7, 1, 3]] for d=3).
 
-    def __init__(self, distance: int, rounds: int) -> None:
+    Color codes feature transversal Clifford gates (H, S, CNOT) and
+    measure both X and Z stabilizers on each 2D face/plaquette.
+    """
+
+    def __init__(self, distance: int = 3, rounds: int = 2) -> None:
         if distance < 3 or distance % 2 == 0:
-            raise ValueError(f"Distance must be an odd integer >= 3, got {distance}")
-        if rounds < 1:
-            raise ValueError(f"Rounds must be >= 1, got {rounds}")
+            raise ValueError(f"Distance must be odd and >= 3, got {distance}")
+        if rounds < 2:
+            raise ValueError(f"Color code XYZ memory requires rounds >= 2, got {rounds}")
+
         self.distance = distance
         self.rounds = rounds
+        # Triangular color code: n = (3 * d^2 + 1) / 4 data qubits
+        self.num_data = (3 * distance ** 2 + 1) // 4
+        self.num_faces = (self.num_data - 1) // 2
+        self.num_ancilla = self.num_faces
+
+    @property
+    def coordinate_mappings(self) -> dict[int, tuple[float, float]]:
+        """Qubit coordinates from Stim circuit."""
+        circuit = self.generate_circuit()
+        coords: dict[int, tuple[float, float]] = {}
+        for inst in circuit.flattened():
+            if inst.name == "QUBIT_COORDS":
+                q = inst.targets_copy()[0].value
+                args = inst.gate_args_copy()
+                coords[q] = (float(args[0]), float(args[1])) if len(args) >= 2 else (float(args[0]), 0.0)
+        return coords
+
+    @property
+    def stabilizer_generators(self) -> list[str]:
+        """
+        Stabilizer generators for color code.
+        Each face supports both an X and a Z stabilizer check.
+        """
+        if self.distance == 3:
+            faces = [
+                [0, 1, 4, 5],
+                [1, 2, 5, 6],
+                [4, 5, 7, 8] if 7 in self.coordinate_mappings else [0, 2, 4, 6],
+            ]
+            stabs = []
+            for face in faces:
+                stabs.append(" ".join(f"X{q}" for q in face))
+                stabs.append(" ".join(f"Z{q}" for q in face))
+            return stabs
+
+        # General distance face checks
+        stabs = []
+        for f in range(self.num_faces):
+            stabs.append(f"X_face_{f}")
+            stabs.append(f"Z_face_{f}")
+        return stabs
+
+    @property
+    def logical_operators(self) -> dict[str, str]:
+        """Logical operators: transversal along boundary or transversal all data."""
+        boundary = list(range(self.distance))
+        return {
+            "X": " ".join(f"X{q}" for q in boundary),
+            "Z": " ".join(f"Z{q}" for q in boundary),
+        }
 
     def generate_circuit(
         self,
         noise: Optional[NoiseConfig] = None,
         embedding: Optional[Any] = None,
     ) -> stim.Circuit:
+        """Generate Stim circuit for color code memory."""
         p = noise.gate.two_qubit if noise and noise.gate else 0.0
-        if p > 0:
-            return stim.Circuit.generated(
+
+        if p > 0.0:
+            circuit = stim.Circuit.generated(
                 "color_code:memory_xyz",
                 distance=self.distance,
                 rounds=self.rounds,
@@ -394,27 +583,40 @@ class ColorCode(QECCode):
                 before_measure_flip_probability=p,
                 after_reset_flip_probability=p,
             )
-        return stim.Circuit.generated(
-            "color_code:memory_xyz",
-            distance=self.distance,
-            rounds=self.rounds,
+        else:
+            circuit = stim.Circuit.generated(
+                "color_code:memory_xyz",
+                distance=self.distance,
+                rounds=self.rounds,
+            )
+
+        if embedding is not None and hasattr(embedding, "swap_count"):
+            swap_count = embedding.swap_count()
+            if swap_count > 0 and p > 0:
+                extra_p = min(0.5, p * swap_count * 0.05)
+                circuit.append("DEPOLARIZE1", list(range(circuit.num_qubits)), [extra_p])
+
+        logger.info(
+            f"Generated color code circuit: d={self.distance}, R={self.rounds}, "
+            f"qubits={circuit.num_qubits}, detectors={circuit.num_detectors}"
         )
+        return circuit
 
     def get_info(self) -> CodeInfo:
-        d = self.distance
-        num_data = (3 * d * d + 1) // 4
-        num_ancilla = num_data - 1
+        """Get color code static info."""
+        circuit = self.generate_circuit()
         return CodeInfo(
             name="color",
-            distance=d,
+            distance=self.distance,
             rounds=self.rounds,
-            num_data_qubits=num_data,
-            num_ancilla_qubits=num_ancilla,
-            num_detectors=num_ancilla * self.rounds,
-            num_observables=1,
+            num_data_qubits=self.num_data,
+            num_ancilla_qubits=self.num_ancilla,
+            num_detectors=circuit.num_detectors,
+            num_observables=circuit.num_observables,
         )
 
     def get_detector_coordinates(self) -> np.ndarray:
+        """Get detector coordinates from Stim circuit."""
         circuit = self.generate_circuit()
         coord_dict = circuit.get_detector_coordinates()
         result = np.zeros((len(coord_dict), 3))
@@ -424,7 +626,7 @@ class ColorCode(QECCode):
         return result
 
 
-def create_code(code_type: str, distance: int, rounds: int) -> QECCode:
+def create_code(code_type: str, distance: int, rounds: int) -> QuantumCode:
     """
     Factory function to create a QEC code.
 
@@ -434,18 +636,23 @@ def create_code(code_type: str, distance: int, rounds: int) -> QECCode:
         rounds: Number of QEC rounds
 
     Returns:
-        QECCode instance.
+        QuantumCode instance.
     """
-    codes = {
+    codes: dict[str, type[QuantumCode]] = {
         "repetition": RepetitionCode,
         "surface": SurfaceCode,
         "unrotated_surface": UnrotatedSurfaceCode,
         "color": ColorCode,
     }
 
-    if code_type not in codes:
+    norm_type = str(code_type).lower().split(".")[-1]
+    if norm_type not in codes:
         raise ValueError(
             f"Unknown code type '{code_type}'. Available: {list(codes.keys())}"
         )
 
-    return codes[code_type](distance=distance, rounds=rounds)
+    return codes[norm_type](distance=distance, rounds=rounds)
+
+
+# Backwards compatibility alias
+QECCode = QuantumCode

@@ -28,6 +28,46 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+HERON_133_NUM_QUBITS: int = 133
+
+
+def _build_heron_133_layout_and_edges() -> tuple[list[tuple[int, int]], dict[int, tuple[float, float]]]:
+    """
+    Construct canonical coupling edges and 2D heavy-hex lattice coordinates for IBM Heron 133.
+    Matches physical processors like ibm_torino.
+    """
+    row_qubit_starts = [0, 19, 38, 57, 76, 95, 114]
+    bridge_starts = [15, 34, 53, 72, 91, 110, 129]
+
+    edges: list[tuple[int, int]] = []
+    layout: dict[int, tuple[float, float]] = {}
+
+    for r_idx, q_start in enumerate(row_qubit_starts):
+        y = 2.0 * r_idx
+        for x in range(15):
+            q = q_start + x
+            layout[q] = (float(x), y)
+            if x < 14:
+                edges.append((q, q + 1))
+
+    for b_idx, q_start in enumerate(bridge_starts):
+        y = 2.0 * b_idx + 1.0
+        cols = [0, 4, 8, 12] if b_idx % 2 == 0 else [2, 6, 10, 14]
+        r_top = row_qubit_starts[b_idx]
+        for i, col in enumerate(cols):
+            b_q = q_start + i
+            layout[b_q] = (float(col), y)
+            edges.append((r_top + col, b_q))
+            if b_idx + 1 < len(row_qubit_starts):
+                r_bot = row_qubit_starts[b_idx + 1]
+                edges.append((b_q, r_bot + col))
+
+    return sorted(set(tuple(sorted(e)) for e in edges)), layout
+
+
+HERON_133_EDGES, HERON_133_LAYOUT = _build_heron_133_layout_and_edges()
+
+
 @dataclass
 class TopologyMetrics:
     """Metrics characterizing a qubit topology."""
@@ -72,6 +112,59 @@ class HeavyHexTopology:
         self.edges: list[tuple[int, int]] = []
         self.adjacency: dict[int, set[int]] = {}
         self._degree: dict[int, int] = {}
+        self.qubit_coordinates: dict[int, tuple[float, float]] = {}
+
+    @classmethod
+    def ibm_heron_133(cls) -> HeavyHexTopology:
+        """
+        Construct the heavy-hex topology corresponding to the IBM Heron 133-qubit processor
+        (e.g., ibm_torino).
+
+        Features:
+            - 133 physical qubits (0..132)
+            - 150 undirected coupling edges
+            - Heavy-hex degree distribution (degrees <= 3) with planar 2D lattice coordinates
+        """
+        topo = cls.from_coupling_map([[u, v] for u, v in HERON_133_EDGES], HERON_133_NUM_QUBITS)
+        topo.qubit_coordinates = dict(HERON_133_LAYOUT)
+        return topo
+
+    @classmethod
+    def heron_133(cls) -> HeavyHexTopology:
+        """Alias for ibm_heron_133."""
+        return cls.ibm_heron_133()
+
+    def validate_qubit_coordinate_mapping(
+        self,
+        coords: Optional[dict[int, tuple[float, float]]] = None,
+    ) -> dict[str, Any]:
+        """
+        Verify that 2D physical qubit coordinates match the coupling graph.
+
+        Checks:
+            1. All physical qubits have assigned coordinates.
+            2. Every edge connects geometrically adjacent qubits (Manhattan distance <= 1.01).
+        """
+        c_map = coords if coords is not None else self.qubit_coordinates
+        unmapped = [q for q in range(self.num_qubits) if q not in c_map]
+
+        bad_edges = []
+        for u, v in self.edges:
+            if u in c_map and v in c_map:
+                x1, y1 = c_map[u]
+                x2, y2 = c_map[v]
+                manhattan = abs(x1 - x2) + abs(y1 - y2)
+                if manhattan > 1.01:
+                    bad_edges.append((u, v, manhattan))
+
+        is_valid = (len(unmapped) == 0 and len(bad_edges) == 0)
+        return {
+            "valid": is_valid,
+            "num_qubits": self.num_qubits,
+            "num_coordinates": len(c_map),
+            "unmapped_qubits": unmapped,
+            "inconsistent_edges": bad_edges,
+        }
 
     @classmethod
     def from_coupling_map(cls, coupling_map: list[list[int]], num_qubits: int) -> HeavyHexTopology:

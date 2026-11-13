@@ -22,6 +22,147 @@ from adaptive_qec.qec.codes import QECCode, create_code
 logger = logging.getLogger(__name__)
 
 
+def build_repetition_code_memory(
+    distance: int,
+    rounds: int,
+    p_error: float = 0.0,
+    basis: str = "Z",
+) -> stim.Circuit:
+    """
+    Build a repetition code memory circuit in Stim with proper detector and observable annotations.
+
+    Args:
+        distance: Code distance (number of data qubits, odd integer >= 3).
+        rounds: Number of syndrome extraction rounds (>= 1).
+        p_error: Uniform physical error probability (Pauli / depolarizing).
+        basis: Logical memory basis ('Z' for bit-flip protection, 'X' for phase-flip).
+
+    Returns:
+        stim.Circuit annotated with detectors and logical observables.
+    """
+    if distance < 3:
+        raise ValueError(f"Distance must be >= 3, got {distance}")
+    if rounds < 1:
+        raise ValueError(f"Rounds must be >= 1, got {rounds}")
+
+    task = "repetition_code:memory"
+    if p_error > 0.0:
+        circuit = stim.Circuit.generated(
+            task,
+            distance=distance,
+            rounds=rounds,
+            after_clifford_depolarization=p_error,
+            before_round_data_depolarization=p_error,
+            before_measure_flip_probability=p_error,
+            after_reset_flip_probability=p_error,
+        )
+    else:
+        circuit = stim.Circuit.generated(
+            task,
+            distance=distance,
+            rounds=rounds,
+        )
+    return circuit
+
+
+def convert_stabilizer_schedule_to_cz(
+    circuit: stim.Circuit,
+    pipelined: bool = True,
+) -> stim.Circuit:
+    """
+    Convert CX-based stabilizer entangling gates to native CZ gates with basis changes.
+
+    On superconducting architectures (e.g. IBM Heron), CZ is often the native 2-qubit gate.
+    CX(c, t) is transformed into:
+        H(t) -> TICK -> CZ(c, t) -> TICK -> H(t)
+
+    Args:
+        circuit: Input Stim circuit with CX gates.
+        pipelined: If True, inserts TICK barriers between basis change layers and CZ layers
+            to pipeline concurrent multi-qubit interactions across the lattice.
+
+    Returns:
+        Converted stim.Circuit with CZ entangling gates.
+    """
+    new_circuit = stim.Circuit()
+    for instruction in circuit.flattened():
+        if instruction.name == "CX":
+            targets = instruction.targets_copy()
+            # targets list has [control0, target0, control1, target1, ...]
+            targs = [targets[i + 1] for i in range(0, len(targets), 2)]
+            new_circuit.append("H", targs)
+            if pipelined:
+                new_circuit.append("TICK")
+            new_circuit.append("CZ", targets)
+            if pipelined:
+                new_circuit.append("TICK")
+            new_circuit.append("H", targs)
+        else:
+            new_circuit.append(instruction)
+    return new_circuit
+
+
+def build_rotated_surface_code(
+    distance: int,
+    rounds: int,
+    p_error: float = 0.0,
+    schedule: str = "cx",
+    basis: str = "Z",
+) -> stim.Circuit:
+    """
+    Build a rotated surface code memory circuit with customizable stabilizer scheduling.
+
+    Supports standard CX schedules as well as pipelined CZ schedules suitable for
+    tunable-coupler superconducting QPUs (like IBM Heron).
+
+    Args:
+        distance: Code distance (odd integer >= 3).
+        rounds: Number of syndrome extraction rounds (>= 1).
+        p_error: Uniform physical error probability.
+        schedule: Stabilizer schedule:
+            - 'cx': standard CNOT-based syndrome extraction
+            - 'cz': native CZ-based syndrome extraction
+            - 'pipelined_cz': pipelined CZ layers with synchronized tick barriers
+        basis: Logical memory basis ('Z' or 'X').
+
+    Returns:
+        stim.Circuit with detector annotations and logical observable.
+    """
+    if distance < 3 or distance % 2 == 0:
+        raise ValueError(f"Distance must be odd and >= 3, got {distance}")
+    if rounds < 1:
+        raise ValueError(f"Rounds must be >= 1, got {rounds}")
+
+    valid_schedules = ("cx", "cz", "pipelined_cz")
+    if schedule.lower() not in valid_schedules:
+        raise ValueError(f"Unknown schedule '{schedule}'. Supported: {valid_schedules}")
+
+    task = "surface_code:rotated_memory_x" if basis.upper() == "X" else "surface_code:rotated_memory_z"
+
+    if p_error > 0.0:
+        base_circuit = stim.Circuit.generated(
+            task,
+            distance=distance,
+            rounds=rounds,
+            after_clifford_depolarization=p_error,
+            before_round_data_depolarization=p_error,
+            before_measure_flip_probability=p_error,
+            after_reset_flip_probability=p_error,
+        )
+    else:
+        base_circuit = stim.Circuit.generated(
+            task,
+            distance=distance,
+            rounds=rounds,
+        )
+
+    if schedule.lower() == "cz":
+        return convert_stabilizer_schedule_to_cz(base_circuit, pipelined=False)
+    elif schedule.lower() == "pipelined_cz":
+        return convert_stabilizer_schedule_to_cz(base_circuit, pipelined=True)
+    return base_circuit
+
+
 class CircuitGenerator:
     """
     Circuit generation engine.
@@ -30,10 +171,26 @@ class CircuitGenerator:
     circuits for real QPU execution.
     """
 
-    def __init__(self, qec_config: QECConfig, noise_config: Optional[NoiseConfig] = None) -> None:
+    def __init__(
+        self,
+        qec_config: QECConfig,
+        noise_config: Optional[NoiseConfig] = None,
+        schedule: str = "cx",
+    ) -> None:
         self._qec_config = qec_config
         self._noise_config = noise_config
+        self._schedule = schedule
         self._code: Optional[QECCode] = None
+
+    @property
+    def schedule(self) -> str:
+        return self._schedule
+
+    @schedule.setter
+    def schedule(self, value: str) -> None:
+        if value.lower() not in ("cx", "cz", "pipelined_cz"):
+            raise ValueError(f"Unknown schedule: {value}")
+        self._schedule = value
 
     @property
     def code(self) -> QECCode:
@@ -46,16 +203,27 @@ class CircuitGenerator:
             )
         return self._code
 
-    def generate_stim_circuit(self) -> stim.Circuit:
+    def generate_stim_circuit(self, schedule: Optional[str] = None) -> stim.Circuit:
         """
         Generate the Stim circuit for the configured QEC code.
+
+        Args:
+            schedule: Optional override for stabilizer schedule ('cx', 'cz', 'pipelined_cz').
 
         Returns:
             Stim circuit with detectors, observables, and noise.
         """
+        sched = (schedule or self._schedule).lower()
         circuit = self.code.generate_circuit(noise=self._noise_config)
+
+        if sched in ("cz", "pipelined_cz"):
+            circuit = convert_stabilizer_schedule_to_cz(
+                circuit,
+                pipelined=(sched == "pipelined_cz"),
+            )
+
         logger.info(
-            f"Generated Stim circuit: "
+            f"Generated Stim circuit (schedule={sched}): "
             f"{circuit.num_qubits} qubits, "
             f"{circuit.num_detectors} detectors, "
             f"{circuit.num_observables} observables"

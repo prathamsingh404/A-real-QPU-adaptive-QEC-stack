@@ -137,3 +137,48 @@ class TestConvenienceConstructors:
     def test_multi_phase_constructor(self):
         factory = multi_phase_scenario(total_steps=50)
         assert isinstance(factory, NoiseScenarioFactory)
+
+
+class TestAdditionalScenarioTypes:
+    def test_sinusoidal_drift_scenario(self):
+        """Sinusoidal drift oscillates with period and stays within realistic bounds."""
+        config = ScenarioConfig(
+            scenario_type=ScenarioType.SINUSOIDAL_DRIFT,
+            total_steps=100,
+            amplitude_p2q=0.002,
+            period_steps=50,
+        )
+        factory = NoiseScenarioFactory(config)
+        snapshots = [factory.get_noise(i) for i in range(100)]
+        p2q_vals = [s.gate_error_2q for s in snapshots]
+
+        assert min(p2q_vals) < max(p2q_vals)
+        # Period 50: step 0 and step 50 should have equal error rates
+        assert np.isclose(p2q_vals[0], p2q_vals[50], atol=1e-5)
+        # Peak at step 12-13 (quarter period), trough at step 37-38
+        assert p2q_vals[12] > p2q_vals[37]
+
+    @pytest.mark.parametrize("scenario_type", list(ScenarioType))
+    def test_all_scenario_types_produce_valid_snapshots(self, scenario_type):
+        """Every ScenarioType enum variant successfully generates valid NoiseSnapshots."""
+        config = ScenarioConfig(scenario_type=scenario_type, total_steps=20)
+        factory = NoiseScenarioFactory(config)
+
+        for step in range(10):
+            snap = factory.step()
+            assert isinstance(snap, NoiseSnapshot)
+            assert 0.0 < snap.gate_error_1q < 0.10
+            assert 0.0 < snap.gate_error_2q < 0.50
+            assert 0.0 < snap.readout_error < 0.50
+            assert snap.t1_us > 0.0
+            assert snap.t2_us > 0.0
+            assert snap.step == step
+
+    def test_factory_reset_and_bounds(self):
+        """Step advances internal step counter sequentially."""
+        factory = stationary_scenario(total_steps=20)
+        for expected in range(5):
+            snap = factory.step()
+            assert snap.step == expected
+        assert factory._current_step == 5
+

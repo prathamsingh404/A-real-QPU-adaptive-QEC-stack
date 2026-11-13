@@ -25,6 +25,10 @@ from adaptive_qec.controller.cg_ccads import (
     MultiTimescaleEstimator,
 )
 from adaptive_qec.controller.controller import DecoderChoice
+from adaptive_qec.controller.reweighting_gate import (
+    ConfidenceGatedReweightingController,
+    GateDecision,
+)
 
 
 def test_controller_state_vector_shape():
@@ -136,3 +140,121 @@ def test_adaptation_budget_prevents_thrashing():
     assert budget.record_step(switched=True)
     assert not budget.has_budget
     assert not budget.record_step(switched=True)  # Blocked by budget
+
+
+def test_gate1_false_positive_rate_across_100_stationary_windows():
+    """Gate 1 false positive rate across 100 stationary windows is bounded by alpha."""
+    import pymatching
+    import stim
+
+    circuit = stim.Circuit.generated(
+        "surface_code:rotated_memory_z",
+        distance=3,
+        rounds=3,
+        after_clifford_depolarization=0.005,
+    )
+    dem = circuit.detector_error_model(decompose_errors=True)
+    base_matching = pymatching.Matching.from_detector_error_model(dem)
+    sampler = circuit.compile_detector_sampler()
+
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        alpha_significance=0.05,
+        drift_z_threshold=2.0,
+    )
+
+    reweights = 0
+    total_windows = 100
+    for _ in range(total_windows):
+        syn, _ = sampler.sample(shots=300, separate_observables=True)
+        decision, _, _ = controller.evaluate_window(syn)
+        if decision == GateDecision.REWEIGHT:
+            reweights += 1
+
+    fpr = reweights / total_windows
+    assert fpr <= 0.08  # Bounded within empirical confidence interval for alpha=0.05
+
+
+def test_gate3_fires_on_severe_localized_drift():
+    """Gate 3 fires REWEIGHT on severe localized hotspot drift (d=3 hotspot at p=0.04)."""
+    import pymatching
+    import stim
+
+    circuit_base = stim.Circuit.generated(
+        "surface_code:rotated_memory_z",
+        distance=3,
+        rounds=3,
+        after_clifford_depolarization=0.004,
+    )
+    dem = circuit_base.detector_error_model(decompose_errors=True)
+    base_matching = pymatching.Matching.from_detector_error_model(dem)
+
+    lines = []
+    for line in str(circuit_base).splitlines():
+        lines.append(line)
+        if line.startswith("TICK"):
+            lines.append("DEPOLARIZE1(0.04) 10")
+    circuit_hotspot = stim.Circuit("\n".join(lines))
+    sampler_hotspot = circuit_hotspot.compile_detector_sampler()
+
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        drift_z_threshold=2.0,
+        adaptation_tax=0.003,
+        dead_zone_epsilon=0.001,
+        reference_defect_rate=0.04,
+    )
+    syn_hot, _ = sampler_hotspot.sample(shots=2500, separate_observables=True)
+    decision, _, stats = controller.evaluate_window(syn_hot)
+    assert decision == GateDecision.REWEIGHT
+    assert stats.decision == GateDecision.REWEIGHT
+    assert stats.max_edge_lcb > 0.004
+
+
+def test_controller_decisions_are_deterministic_given_same_seed():
+    """Controller decisions are fully deterministic when given identical hardware observations."""
+    c1 = CGCCADSController()
+    c2 = CGCCADSController()
+
+    rng = np.random.default_rng(123)
+    for _ in range(20):
+        dr = float(rng.uniform(0.02, 0.08))
+        leak = float(rng.uniform(0.0, 0.05))
+        s1 = HardwareState(defect_rate=dr, leakage_fraction=leak)
+        s2 = HardwareState(defect_rate=dr, leakage_fraction=leak)
+        a1 = c1.step(s1)
+        a2 = c2.step(s2)
+        assert a1.decoder == a2.decoder
+        assert a1.notes == a2.notes
+
+
+def test_all_decisions_enumerate_correctly_through_enums():
+    """Verify all decisions enumerate correctly through GateDecision and ControllerDecision enums."""
+    assert GateDecision.STAY == "stay"
+    assert GateDecision.REWEIGHT == "reweight"
+    assert GateDecision.RESET == "reset"
+    assert {d.value for d in GateDecision} == {"stay", "reweight", "reset"}
+
+    assert ControllerDecision.STAY == "stay"
+    assert ControllerDecision.PROBATION == "probation"
+    assert ControllerDecision.SWITCH == "switch"
+    assert ControllerDecision.ROLLBACK == "rollback"
+    assert {d.value for d in ControllerDecision} == {"stay", "probation", "switch", "rollback"}
+
+
+def test_controller_handles_zero_syndromes_in_window():
+    """Controller handles edge case: zero syndromes in window gracefully."""
+    import pymatching
+    import stim
+
+    circuit = stim.Circuit.generated("surface_code:rotated_memory_z", distance=3, rounds=3)
+    dem = circuit.detector_error_model(decompose_errors=True)
+    base_matching = pymatching.Matching.from_detector_error_model(dem)
+
+    controller = ConfidenceGatedReweightingController(base_matching=base_matching)
+    empty_syndromes = np.zeros((0, dem.num_detectors), dtype=np.uint8)
+
+    decision, matching, stats = controller.evaluate_window(empty_syndromes)
+    assert decision == GateDecision.STAY
+    assert stats.window_size == 0
+    assert matching is base_matching

@@ -142,3 +142,21 @@ def test_confirmatory_protocol_regimes():
     assert not ConfirmatoryProtocol.is_confirmatory("high_freq_jitter")
     assert not ConfirmatoryProtocol.is_confirmatory("switching_trap")
     assert not ConfirmatoryProtocol.is_confirmatory("recovery")
+
+
+def test_holm_bonferroni_fwer_control():
+    """Verify Holm-Bonferroni step-down multiple comparison correction."""
+    from adaptive_qec.analysis.significance import holm_bonferroni
+
+    p_vals = [0.005, 0.012, 0.045, 0.15, 0.80]
+    # m = 5, alpha = 0.05
+    # sorted:
+    # 0.005 <= 0.05 / 5 = 0.010 -> reject
+    # 0.012 <= 0.05 / 4 = 0.0125 -> reject
+    # 0.045 <= 0.05 / 3 = 0.0167 -> FAIL (stop)
+    rejected = holm_bonferroni(p_vals, alpha=0.05)
+    assert rejected == [True, True, False, False, False]
+
+    # Empty list edge case
+    assert holm_bonferroni([]) == []
+

@@ -347,6 +347,54 @@ class SignificanceTester:
 
         return result
 
+    @staticmethod
+    def holm_bonferroni(
+        p_values: list[float],
+        alpha: float = 0.05,
+    ) -> list[bool]:
+        """Holm-Bonferroni step-down procedure for family-wise error rate (FWER) control.
+
+        Controls FWER at level alpha under arbitrary dependence. Strictly more powerful
+        than standard Bonferroni correction.
+
+        Parameters
+        ----------
+        p_values : list[float]
+            List of unadjusted p-values.
+        alpha : float
+            Target family-wise significance level (default 0.05).
+
+        Returns
+        -------
+        list[bool]
+            Boolean mask in original input order: True = reject null hypothesis.
+        """
+        n = len(p_values)
+        if n == 0:
+            return []
+
+        sorted_indices = np.argsort(p_values)
+        sorted_p = np.array(p_values)[sorted_indices]
+
+        # Step-down testing
+        rejected_sorted = [False] * n
+        for k in range(n):
+            threshold = alpha / (n - k)
+            if sorted_p[k] <= threshold:
+                rejected_sorted[k] = True
+            else:
+                # Once one fails, all subsequent hypotheses are retained
+                break
+
+        # Map back to original order
+        result = [False] * n
+        for k, orig_idx in enumerate(sorted_indices):
+            result[orig_idx] = bool(rejected_sorted[k])
+
+        return result
+
 
 benjamini_hochberg = SignificanceTester.benjamini_hochberg
+holm_bonferroni = SignificanceTester.holm_bonferroni
+
 

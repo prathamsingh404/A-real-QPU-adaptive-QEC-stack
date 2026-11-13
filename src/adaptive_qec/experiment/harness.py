@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Sequence, Union
 
 import numpy as np
 import stim
@@ -43,6 +43,11 @@ from adaptive_qec.decoders.mwpm import MWPMDecoder
 from adaptive_qec.noise.drift import DriftStatus, EWMADriftDetector
 from adaptive_qec.provenance import DataProvenance, ProvenanceRegistry, ProvenanceTag
 from adaptive_qec.syndrome.extraction import SyndromeExtractor
+from adaptive_qec.experiment.reproducibility import (
+    CryptographicManifest,
+    generate_cryptographic_manifest,
+    verify_cryptographic_manifest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +95,10 @@ class ExperimentRunResult:
     start_time: str
     end_time: str
     total_windows: int
+    manifest: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "experiment_id": self.experiment_id,
             "config": self.config,
             "controller_summaries": self.controller_summaries,
@@ -103,6 +109,9 @@ class ExperimentRunResult:
             "end_time": self.end_time,
             "total_windows": self.total_windows,
         }
+        if self.manifest is not None:
+            d["manifest"] = self.manifest
+        return d
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +192,10 @@ def build_hardware_state(
     max_defect = float(np.max(defect_rates))
 
     # Feed the drift detector
-    drift_report = drift_detector.analyze(defect_rates)
+    if hasattr(drift_detector, "analyze"):
+        drift_report = drift_detector.analyze(defect_rates)
+    else:
+        drift_report = drift_detector.update(defect_rates)
 
     burst_active = max_defect > burst_threshold
 
@@ -229,6 +241,8 @@ class ExperimentHarness:
         controllers: list[BaseController],
         config: AQECConfig,
         output_dir: Optional[Path] = None,
+        config_path: Optional[Union[str, Path]] = None,
+        seeds: Optional[Union[int, Sequence[int]]] = None,
     ) -> None:
         if not controllers:
             raise ValueError("Must provide at least one controller")
@@ -236,6 +250,14 @@ class ExperimentHarness:
         self._controllers = controllers
         self._config = config
         self._output_dir = output_dir or Path(config.experiment.output_dir)
+        self._config_path = Path(config_path) if config_path else None
+        if seeds is None:
+            self._seeds: list[int] = [42]
+        elif isinstance(seeds, int):
+            self._seeds = [seeds]
+        else:
+            self._seeds = [int(s) for s in seeds]
+
         self._provenance = ProvenanceRegistry()
 
         # Build Stim circuit from calibration data
@@ -243,11 +265,10 @@ class ExperimentHarness:
         self._extractor: Optional[SyndromeExtractor] = None
         self._decoders: dict[str, Decoder] = {}
         self._drift_detector = EWMADriftDetector(
-            num_detectors=1,  # will be updated
             alpha=0.1,
-            z_warning=2.0,
-            z_drift=3.0,
-            z_severe=5.0,
+            warning_sigma=2.0,
+            alarm_sigma=3.0,
+            severe_sigma=5.0,
         )
 
         # Register provenance
@@ -263,10 +284,70 @@ class ExperimentHarness:
         ))
 
     @classmethod
-    def from_config(cls, config_path: str, controllers: list[BaseController]) -> ExperimentHarness:
-        """Create harness from a YAML config file."""
+    def from_config(
+        cls,
+        config_path: str,
+        controllers: list[BaseController],
+        output_dir: Optional[Path] = None,
+        seeds: Optional[Union[int, Sequence[int]]] = None,
+    ) -> ExperimentHarness:
+        """Create harness from a YAML config file with tracked cryptographic provenance."""
         config = load_config(config_path)
-        return cls(controllers=controllers, config=config)
+        return cls(
+            controllers=controllers,
+            config=config,
+            output_dir=output_dir,
+            config_path=config_path,
+            seeds=seeds,
+        )
+
+    def generate_manifest(
+        self,
+        experiment_id: str,
+        seeds: Optional[Union[int, Sequence[int]]] = None,
+        additional_configs: Optional[Sequence[Union[str, Path]]] = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> CryptographicManifest:
+        """Generate cryptographic manifest verifying SHA-256 digests of all config files and seeds."""
+        cfg_paths: list[Path] = []
+        if self._config_path and self._config_path.exists():
+            cfg_paths.append(self._config_path)
+        if additional_configs:
+            for ac in additional_configs:
+                p = Path(ac)
+                if p.exists() and p not in cfg_paths:
+                    cfg_paths.append(p)
+
+        target_seeds = seeds if seeds is not None else self._seeds
+        meta = {
+            "distance": self._config.qec.distance,
+            "rounds": self._config.qec.rounds,
+            "controllers": [c.name for c in self._controllers],
+        }
+        if metadata:
+            meta.update(metadata)
+
+        return generate_cryptographic_manifest(
+            experiment_id=experiment_id,
+            config_paths=cfg_paths,
+            seeds=target_seeds,
+            metadata=meta,
+        )
+
+    def verify_manifest(
+        self,
+        manifest: Union[CryptographicManifest, dict[str, Any]],
+        expected_seeds: Optional[Sequence[int]] = None,
+        raise_on_error: bool = False,
+    ) -> tuple[bool, list[str]]:
+        """Verify the cryptographic integrity of config file hashes and seeds."""
+        base_dir = self._output_dir.parent if self._output_dir else Path.cwd()
+        return verify_cryptographic_manifest(
+            manifest=manifest,
+            config_base_dir=base_dir,
+            expected_seeds=expected_seeds or self._seeds,
+            raise_on_error=raise_on_error,
+        )
 
     def _setup_circuit(self, calibration: dict[str, float]) -> None:
         """Build the Stim circuit using real calibration data."""
@@ -284,14 +365,12 @@ class ExperimentHarness:
 
         self._extractor = SyndromeExtractor(self._circuit)
 
-        # Reinitialize drift detector with correct detector count
-        num_det = self._circuit.num_detectors
+        # Reinitialize drift detector
         self._drift_detector = EWMADriftDetector(
-            num_detectors=num_det,
             alpha=0.1,
-            z_warning=2.0,
-            z_drift=3.0,
-            z_severe=5.0,
+            warning_sigma=2.0,
+            alarm_sigma=3.0,
+            severe_sigma=5.0,
         )
 
         # Setup decoder
@@ -348,6 +427,9 @@ class ExperimentHarness:
         num_windows: int = 100,
         shots_per_window: int = 1000,
         calibration: Optional[dict[str, float]] = None,
+        seed: Optional[int] = None,
+        seeds: Optional[Union[int, Sequence[int]]] = None,
+        record_manifest: bool = True,
     ) -> ExperimentRunResult:
         """Run the experiment for `num_windows` observation windows.
 
@@ -358,15 +440,28 @@ class ExperimentHarness:
         shots_per_window : int
             Number of syndrome shots per window.
         calibration : dict, optional
-            Hardware calibration data.  If None, uses config defaults.
+            Hardware calibration data. If None, uses config defaults.
+        seed : int, optional
+            Base seed for syndrome sampling.
+        seeds : int or Sequence[int], optional
+            Seed or list of seeds for cryptographic manifest provenance.
+        record_manifest : bool
+            Whether to generate and verify a cryptographic manifest for this run.
 
         Returns
         -------
         ExperimentRunResult
-            Complete results including per-window telemetry.
+            Complete results including per-window telemetry and verified manifest.
         """
         start_time = datetime.now(timezone.utc).isoformat()
         exp_id = f"exp_{int(time.time())}"
+
+        # Resolve seed sequence
+        active_seed = seed if seed is not None else self._seeds[0]
+        if seeds is not None:
+            active_seeds = [seeds] if isinstance(seeds, int) else list(seeds)
+        else:
+            active_seeds = [active_seed]
 
         # Use calibration or defaults
         cal = calibration or {
@@ -389,7 +484,8 @@ class ExperimentHarness:
             t_start = time.perf_counter()
 
             # 1. Sample syndromes from hardware/Stim
-            syndromes, obs_flips = self._sample_syndromes(shots_per_window)
+            window_seed = active_seed + window_idx
+            syndromes, obs_flips = self._sample_syndromes(shots_per_window, seed=window_seed)
 
             # 2. Compute defect rates for this window
             defect_rates = syndromes.mean(axis=0).astype(np.float64)
@@ -465,6 +561,19 @@ class ExperimentHarness:
                 "total_windows": len(ctrl_results),
             }
 
+        # Generate and verify cryptographic manifest if requested
+        manifest_dict: Optional[dict[str, Any]] = None
+        if record_manifest:
+            manifest_obj = self.generate_manifest(
+                experiment_id=exp_id,
+                seeds=active_seeds,
+            )
+            # Verify immediately before returning
+            is_valid, errors = self.verify_manifest(manifest_obj, expected_seeds=active_seeds)
+            if not is_valid:
+                logger.warning("Manifest verification failed: %s", errors)
+            manifest_dict = manifest_obj.to_dict()
+
         result = ExperimentRunResult(
             experiment_id=exp_id,
             config={
@@ -472,6 +581,7 @@ class ExperimentHarness:
                 "rounds": self._config.qec.rounds,
                 "shots_per_window": shots_per_window,
                 "num_windows": num_windows,
+                "seeds": active_seeds,
             },
             controller_summaries={
                 ctrl.name: ctrl.summary() for ctrl in self._controllers
@@ -482,6 +592,7 @@ class ExperimentHarness:
             start_time=start_time,
             end_time=end_time,
             total_windows=num_windows,
+            manifest=manifest_dict,
         )
 
         # Save results
@@ -490,9 +601,13 @@ class ExperimentHarness:
         return result
 
     def _save_results(self, result: ExperimentRunResult) -> None:
-        """Persist experiment results to disk."""
+        """Persist experiment results and cryptographic manifest to disk."""
         self._output_dir.mkdir(parents=True, exist_ok=True)
         out_path = self._output_dir / f"{result.experiment_id}.json"
-        with open(out_path, "w") as f:
+        with open(out_path, "w", encoding="utf-8") as f:
             json.dump(result.to_dict(), f, indent=2, default=str)
+        if result.manifest:
+            manifest_path = self._output_dir / f"{result.experiment_id}_manifest.json"
+            with open(manifest_path, "w", encoding="utf-8") as f:
+                json.dump(result.manifest, f, indent=2, default=str)
         logger.info(f"Results saved to {out_path}")

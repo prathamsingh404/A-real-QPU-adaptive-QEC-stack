@@ -400,3 +400,7 @@ def load_config_from_dict(data: dict[str, Any]) -> AdaptiveQECConfig:
 def default_config() -> AdaptiveQECConfig:
     """Return the default configuration."""
     return AdaptiveQECConfig()
+
+
+# Alias for backwards compatibility
+AQECConfig = AdaptiveQECConfig

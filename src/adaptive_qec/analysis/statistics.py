@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 from scipy import stats
@@ -205,9 +205,11 @@ def bootstrap_compare(
     ci_low = float(np.percentile(diffs, 100 * alpha / 2))
     ci_high = float(np.percentile(diffs, 100 * (1 - alpha / 2)))
 
-    # Bootstrap p-value (two-sided)
+    # Bootstrap p-value under H0: mean difference = 0
+    # Center bootstrap distribution at 0 under the null hypothesis (Efron & Tibshirani)
     observed_diff = outcomes_a.mean() - outcomes_b.mean()
-    p_value = float(np.mean(np.abs(diffs) >= abs(observed_diff)))
+    diffs_h0 = diffs - observed_diff
+    p_value = float(np.mean(np.abs(diffs_h0) >= abs(observed_diff)))
 
     return {
         "observed_difference": float(observed_diff),
@@ -216,3 +218,146 @@ def bootstrap_compare(
         "significant": p_value < alpha,
         "n_bootstrap": n_bootstrap,
     }
+
+
+def paired_ttest(
+    a: Sequence[float] | np.ndarray,
+    b: Optional[Sequence[float] | np.ndarray] = None,
+    alternative: str = "two-sided",
+) -> Tuple[float, float]:
+    """
+    Paired Student's t-test comparing two matched samples.
+
+    When variance of differences is zero (e.g. static and CG-CCADS have
+    identical errors), returns (0.0, 1.0) with a note rather than NaN.
+
+    Args:
+        a: First set of observations, or array of paired differences if b is None.
+        b: Second set of observations (paired with a), optional.
+        alternative: "two-sided", "less", or "greater".
+
+    Returns:
+        (t_statistic, p_value)
+    """
+    arr_a = np.asarray(a, dtype=np.float64)
+    if b is not None:
+        arr_b = np.asarray(b, dtype=np.float64)
+        if len(arr_a) != len(arr_b):
+            raise ValueError(f"Sample lengths must match: {len(arr_a)} vs {len(arr_b)}")
+        diff = arr_a - arr_b
+    else:
+        diff = arr_a
+
+    n = len(diff)
+    if n < 2:
+        logger.warning("Fewer than 2 pairs provided for paired t-test; returning (0.0, 1.0). Note: insufficient data.")
+        return (0.0, 1.0)
+
+    var = float(np.var(diff, ddof=1))
+    if np.isclose(var, 0.0) or np.isnan(var):
+        logger.info("Zero variance in paired differences (identical performance). Note: returning (0.0, 1.0).")
+        return (0.0, 1.0)
+
+    if b is not None:
+        res = stats.ttest_rel(arr_a, arr_b, alternative=alternative)
+    else:
+        res = stats.ttest_1samp(diff, popmean=0.0, alternative=alternative)
+
+    t_stat = float(res.statistic)
+    p_val = float(res.pvalue)
+    if np.isnan(t_stat) or np.isnan(p_val):
+        logger.info("Paired t-test produced NaN; returning (0.0, 1.0) with note.")
+        return (0.0, 1.0)
+
+    return (t_stat, p_val)
+
+
+def paired_wilcoxon_test(
+    a: Sequence[float] | np.ndarray,
+    b: Optional[Sequence[float] | np.ndarray] = None,
+    alternative: str = "two-sided",
+    zero_method: str = "pratt",
+) -> Tuple[float, float]:
+    """
+    Paired Wilcoxon signed-rank test.
+
+    Uses scipy.stats.wilcoxon with zero_method='pratt' or 'wilcox' as a robust
+    non-parametric fallback when normality is violated or variances are zero.
+
+    Args:
+        a: First set of observations, or array of paired differences if b is None.
+        b: Second set of observations (paired with a), optional.
+        alternative: "two-sided", "less", or "greater".
+        zero_method: Zero difference handling method: 'pratt' (default) or 'wilcox'.
+
+    Returns:
+        (statistic, p_value)
+    """
+    arr_a = np.asarray(a, dtype=np.float64)
+    if b is not None:
+        arr_b = np.asarray(b, dtype=np.float64)
+        if len(arr_a) != len(arr_b):
+            raise ValueError(f"Sample lengths must match: {len(arr_a)} vs {len(arr_b)}")
+        diff = arr_a - arr_b
+    else:
+        diff = arr_a
+
+    n = len(diff)
+    if n < 2:
+        logger.warning("Fewer than 2 pairs provided for Wilcoxon test; returning (0.0, 1.0). Note: insufficient data.")
+        return (0.0, 1.0)
+
+    if np.allclose(diff, 0.0) or np.all(diff == diff[0]):
+        logger.info("All paired differences identical/zero; Wilcoxon test returning (0.0, 1.0) with note.")
+        return (0.0, 1.0)
+
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            res = stats.wilcoxon(diff, alternative=alternative, zero_method=zero_method)
+        stat = float(res.statistic)
+        pval = float(res.pvalue)
+        if np.isnan(stat) or np.isnan(pval):
+            return (0.0, 1.0)
+        return (stat, pval)
+    except Exception as exc:
+        logger.info(f"Wilcoxon test encountered '{exc}'; returning (0.0, 1.0) with note.")
+        return (0.0, 1.0)
+
+
+def cohen_d_paired(
+    a: Sequence[float] | np.ndarray,
+    b: Optional[Sequence[float] | np.ndarray] = None,
+) -> float:
+    """
+    Compute Cohen's d for paired samples (Cohen's d_z effect size).
+
+    d_z = mean(diff) / std(diff, ddof=1)
+
+    Args:
+        a: First set of observations, or array of paired differences if b is None.
+        b: Second set of observations (paired with a), optional.
+
+    Returns:
+        Cohen's d_z effect size. Returns 0.0 if variance is zero or n < 2.
+    """
+    arr_a = np.asarray(a, dtype=np.float64)
+    if b is not None:
+        arr_b = np.asarray(b, dtype=np.float64)
+        if len(arr_a) != len(arr_b):
+            raise ValueError(f"Sample lengths must match: {len(arr_a)} vs {len(arr_b)}")
+        diff = arr_a - arr_b
+    else:
+        diff = arr_a
+
+    n = len(diff)
+    if n < 2:
+        return 0.0
+
+    std_diff = float(np.std(diff, ddof=1))
+    if std_diff < 1e-15 or np.isnan(std_diff):
+        return 0.0
+
+    mean_diff = float(np.mean(diff))
+    return float(mean_diff / std_diff)

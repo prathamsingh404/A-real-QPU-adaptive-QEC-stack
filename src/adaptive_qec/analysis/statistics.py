@@ -120,6 +120,17 @@ def compare_error_rates(
     """
     alpha = 1 - confidence
 
+    if np.isnan(n_errors_a) or np.isnan(n_errors_b) or np.isnan(n_total_a) or np.isnan(n_total_b):
+        return HypothesisTestResult(
+            test_name="two_proportion_z_test",
+            p_value=1.0,
+            test_statistic=0.0,
+            significant=False,
+            confidence=confidence,
+            effect_size=0.0,
+            details={"error": "NaN encountered in inputs"},
+        )
+
     p_a = n_errors_a / n_total_a if n_total_a > 0 else 0
     p_b = n_errors_b / n_total_b if n_total_b > 0 else 0
 
@@ -193,12 +204,25 @@ def bootstrap_compare(
     Returns:
         Dict with bootstrap CI, p-value, and effect size.
     """
+    a = np.asarray(outcomes_a, dtype=np.float64)
+    b = np.asarray(outcomes_b, dtype=np.float64)
+    a = a[np.isfinite(a)]
+    b = b[np.isfinite(b)]
+    if len(a) == 0 or len(b) == 0:
+        return {
+            "observed_difference": 0.0,
+            "bootstrap_ci": [0.0, 0.0],
+            "bootstrap_p_value": 1.0,
+            "significant": False,
+            "n_bootstrap": n_bootstrap,
+        }
+
     rng = np.random.default_rng(42)
 
     diffs = np.zeros(n_bootstrap)
     for i in range(n_bootstrap):
-        sample_a = rng.choice(outcomes_a, size=len(outcomes_a), replace=True)
-        sample_b = rng.choice(outcomes_b, size=len(outcomes_b), replace=True)
+        sample_a = rng.choice(a, size=len(a), replace=True)
+        sample_b = rng.choice(b, size=len(b), replace=True)
         diffs[i] = sample_a.mean() - sample_b.mean()
 
     alpha = 1 - confidence
@@ -206,7 +230,7 @@ def bootstrap_compare(
     ci_high = float(np.percentile(diffs, 100 * (1 - alpha / 2)))
 
     # Bootstrap p-value (two-sided)
-    observed_diff = outcomes_a.mean() - outcomes_b.mean()
+    observed_diff = a.mean() - b.mean()
     p_value = float(np.mean(np.abs(diffs) >= abs(observed_diff)))
 
     return {
@@ -216,3 +240,59 @@ def bootstrap_compare(
         "significant": p_value < alpha,
         "n_bootstrap": n_bootstrap,
     }
+
+
+def wilcoxon_signed_rank_test(
+    outcomes_a: np.ndarray,
+    outcomes_b: np.ndarray,
+    confidence: float = 0.95,
+    alternative: str = "two-sided",
+) -> HypothesisTestResult:
+    """Wilcoxon signed-rank test for paired observations with NaN filtering.
+
+    Args:
+        outcomes_a: Array of paired observations from method A.
+        outcomes_b: Array of paired observations from method B.
+        confidence: Confidence level.
+        alternative: "two-sided", "greater", or "less".
+
+    Returns:
+        HypothesisTestResult with Wilcoxon statistic and p-value.
+    """
+    a = np.asarray(outcomes_a, dtype=np.float64)
+    b = np.asarray(outcomes_b, dtype=np.float64)
+
+    # Filter NaNs and Infs
+    mask = np.isfinite(a) & np.isfinite(b)
+    a_clean = a[mask]
+    b_clean = b[mask]
+
+    diff = a_clean - b_clean
+    nonzero_diff = diff[diff != 0.0]
+
+    alpha = 1.0 - confidence
+    if len(nonzero_diff) == 0:
+        return HypothesisTestResult(
+            test_name="wilcoxon_signed_rank_test",
+            p_value=1.0,
+            test_statistic=0.0,
+            significant=False,
+            confidence=confidence,
+            effect_size=0.0,
+            details={"n_pairs": len(a_clean), "n_nonzero_diff": 0, "alternative": alternative},
+        )
+
+    res = stats.wilcoxon(diff, alternative=alternative)
+    stat = float(res.statistic)
+    p_val = float(res.pvalue)
+
+    return HypothesisTestResult(
+        test_name="wilcoxon_signed_rank_test",
+        p_value=p_val,
+        test_statistic=stat,
+        significant=bool(p_val < alpha),
+        confidence=confidence,
+        effect_size=float(np.median(diff)),
+        details={"n_pairs": len(a_clean), "n_nonzero_diff": len(nonzero_diff), "alternative": alternative},
+    )
+

@@ -49,6 +49,134 @@ class ScenarioType(str, Enum):
     DECEPTIVE_NOISE = "deceptive_noise"
 
 
+@dataclass
+class IBMHeronCalibrationMetadata:
+    """Physical relaxation and decoherence calibration metadata from IBM Heron QPU.
+
+    Based on empirical characterizations and published calibration reports of
+    IBM Heron 133-qubit superconducting processors (tunable transmon architecture).
+    """
+    regime: str                             # "pristine", "nominal", "moderate_drift", "severe_drift", "burst"
+    t1_min_us: float
+    t1_max_us: float
+    t1_median_us: float
+    t2_min_us: float
+    t2_max_us: float
+    t2_median_us: float
+    gate_error_2q_typical: float
+    readout_error_typical: float
+    processor_family: str = "IBM Heron r1/r2"
+    dielectric_loss_tangent: float = 2.5e-6  # Typical transmon capacitor TLS loss tangent
+    coupling_architecture: str = "heavy-hex"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "processor_family": self.processor_family,
+            "regime": self.regime,
+            "t1_us": {"min": self.t1_min_us, "max": self.t1_max_us, "median": self.t1_median_us},
+            "t2_us": {"min": self.t2_min_us, "max": self.t2_max_us, "median": self.t2_median_us},
+            "gate_error_2q_typical": self.gate_error_2q_typical,
+            "readout_error_typical": self.readout_error_typical,
+            "dielectric_loss_tangent": self.dielectric_loss_tangent,
+            "coupling_architecture": self.coupling_architecture,
+        }
+
+
+IBM_HERON_CALIBRATION_SPECS: dict[str, IBMHeronCalibrationMetadata] = {
+    "pristine": IBMHeronCalibrationMetadata(
+        regime="pristine",
+        t1_min_us=200.0,
+        t1_max_us=300.0,
+        t1_median_us=240.0,
+        t2_min_us=140.0,
+        t2_max_us=200.0,
+        t2_median_us=160.0,
+        gate_error_2q_typical=0.0025,
+        readout_error_typical=0.008,
+    ),
+    "nominal": IBMHeronCalibrationMetadata(
+        regime="nominal",
+        t1_min_us=150.0,
+        t1_max_us=240.0,
+        t1_median_us=180.0,
+        t2_min_us=90.0,
+        t2_max_us=160.0,
+        t2_median_us=120.0,
+        gate_error_2q_typical=0.0030,
+        readout_error_typical=0.012,
+    ),
+    "moderate_drift": IBMHeronCalibrationMetadata(
+        regime="moderate_drift",
+        t1_min_us=110.0,
+        t1_max_us=160.0,
+        t1_median_us=130.0,
+        t2_min_us=60.0,
+        t2_max_us=100.0,
+        t2_median_us=80.0,
+        gate_error_2q_typical=0.0065,
+        readout_error_typical=0.018,
+    ),
+    "severe_drift": IBMHeronCalibrationMetadata(
+        regime="severe_drift",
+        t1_min_us=75.0,
+        t1_max_us=110.0,
+        t1_median_us=90.0,
+        t2_min_us=40.0,
+        t2_max_us=70.0,
+        t2_median_us=55.0,
+        gate_error_2q_typical=0.012,
+        readout_error_typical=0.025,
+    ),
+    "burst": IBMHeronCalibrationMetadata(
+        regime="burst",
+        t1_min_us=30.0,
+        t1_max_us=70.0,
+        t1_median_us=50.0,
+        t2_min_us=20.0,
+        t2_max_us=40.0,
+        t2_median_us=30.0,
+        gate_error_2q_typical=0.025,
+        readout_error_typical=0.045,
+    ),
+}
+
+
+def get_scenario_calibration_metadata(
+    scenario_type: ScenarioType,
+    t1_us: Optional[float] = None,
+) -> IBMHeronCalibrationMetadata:
+    """Retrieve IBM Heron physical calibration metadata corresponding to scenario and drift level."""
+    if t1_us is not None:
+        if t1_us >= 200.0:
+            return IBM_HERON_CALIBRATION_SPECS["pristine"]
+        elif t1_us >= 150.0:
+            return IBM_HERON_CALIBRATION_SPECS["nominal"]
+        elif t1_us >= 100.0:
+            return IBM_HERON_CALIBRATION_SPECS["moderate_drift"]
+        elif t1_us >= 70.0:
+            return IBM_HERON_CALIBRATION_SPECS["severe_drift"]
+        else:
+            return IBM_HERON_CALIBRATION_SPECS["burst"]
+
+    mapping = {
+        ScenarioType.STATIONARY: "nominal",
+        ScenarioType.DO_NOTHING: "pristine",
+        ScenarioType.LINEAR_DRIFT: "moderate_drift",
+        ScenarioType.SINUSOIDAL_DRIFT: "nominal",
+        ScenarioType.BURST: "burst",
+        ScenarioType.MULTI_PHASE: "moderate_drift",
+        ScenarioType.OBVIOUS_ADAPTATION: "severe_drift",
+        ScenarioType.TOO_FAST_TO_ADAPT: "moderate_drift",
+        ScenarioType.SWITCHING_TRAP: "moderate_drift",
+        ScenarioType.HIDDEN_TRANSITION: "nominal",
+        ScenarioType.RECOVERY: "nominal",
+        ScenarioType.PERSISTENT_LEAKAGE: "moderate_drift",
+        ScenarioType.DECEPTIVE_NOISE: "nominal",
+    }
+    key = mapping.get(scenario_type, "nominal")
+    return IBM_HERON_CALIBRATION_SPECS[key]
+
+
 class NoiseSnapshot:
     """Instantaneous noise parameters at time step t.
 
@@ -69,6 +197,7 @@ class NoiseSnapshot:
         readout_error: Optional[float] = None,
         t1_us: Optional[float] = None,
         t2_us: Optional[float] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> None:
         self.step = step
         self.p_1q = gate_error_1q if gate_error_1q is not None else p_1q
@@ -78,6 +207,12 @@ class NoiseSnapshot:
         self.t2_mean_us = t2_us if t2_us is not None else t2_mean_us
         self.burst_active = burst_active
         self.scenario_label = scenario_label
+        self.metadata = metadata if metadata is not None else {}
+
+    @property
+    def physical_calibration(self) -> IBMHeronCalibrationMetadata:
+        """Physical calibration metadata corresponding to instantaneous T1/T2."""
+        return get_scenario_calibration_metadata(ScenarioType.STATIONARY, self.t1_mean_us)
 
     @property
     def gate_error_1q(self) -> float:
@@ -99,8 +234,8 @@ class NoiseSnapshot:
     def t2_us(self) -> float:
         return self.t2_mean_us
 
-    def to_calibration_dict(self) -> dict[str, float]:
-        return {
+    def to_calibration_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
             "p_1q": self.p_1q,
             "p_2q": self.p_2q,
             "p_ro": self.p_ro,
@@ -112,6 +247,9 @@ class NoiseSnapshot:
             "t1_us": self.t1_mean_us,
             "t2_us": self.t2_mean_us,
         }
+        if self.metadata:
+            d["metadata"] = self.metadata
+        return d
 
 
 @dataclass
@@ -146,6 +284,11 @@ class ScenarioConfig:
 
     # Multi-phase timing
     phase_durations: list[int] = field(default_factory=lambda: [30, 30, 10, 30])
+
+    @property
+    def physical_calibration(self) -> IBMHeronCalibrationMetadata:
+        """Physical calibration parameters based on IBM Heron processor measurements."""
+        return get_scenario_calibration_metadata(self.scenario_type, self.baseline_t1_us)
 
     def validate(self) -> None:
         """Validate that parameters are in realistic ranges."""
@@ -205,6 +348,28 @@ class NoiseScenarioFactory:
     def reset(self) -> None:
         """Reset the sequential step counter."""
         self._current_step = 0
+
+    @property
+    def calibration_metadata(self) -> IBMHeronCalibrationMetadata:
+        """Physical calibration parameters based on IBM Heron processor measurements."""
+        return self._config.physical_calibration
+
+    def get_metadata(self) -> dict[str, Any]:
+        """Return comprehensive scenario metadata including physical relaxation times."""
+        cal = self.calibration_metadata
+        return {
+            "scenario_type": self._config.scenario_type.value,
+            "total_steps": self._config.total_steps,
+            "ibm_heron_calibration": cal.to_dict(),
+            "relaxation_times": {
+                "t1_baseline_us": self._config.baseline_t1_us,
+                "t2_baseline_us": self._config.baseline_t2_us,
+                "t1_range_us": [cal.t1_min_us, cal.t1_max_us],
+                "t2_range_us": [cal.t2_min_us, cal.t2_max_us],
+                "t1_median_us": cal.t1_median_us,
+                "t2_median_us": cal.t2_median_us,
+            },
+        }
 
     def get_noise(self, step: int) -> NoiseSnapshot:
         """Get the noise snapshot for the given step."""

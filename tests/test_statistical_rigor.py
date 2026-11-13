@@ -159,4 +159,67 @@ def test_holm_bonferroni_fwer_control():
 
     # Empty list edge case
     assert holm_bonferroni([]) == []
+def test_paired_trajectory_analysis_degenerate_zero_variance():
+    """Verify degenerate case where all trajectories have identical zero delta (zero variance)."""
+    trajectories = [
+        TrajectoryResult(
+            trajectory_id=f"traj_{i}",
+            scenario_name="static_const",
+            seed=20 + i,
+            split="test",
+            static_ler=0.05,
+            adaptive_ler=0.05,
+            delta_ler=0.0,
+            adaptation_count=0,
+            stay_count=10,
+            rollback_count=0,
+            total_shots=1000,
+        )
+        for i in range(10)
+    ]
+    summary = PairedTrajectoryAnalysis.analyze_trajectories(trajectories)
+    assert summary.num_trajectories == 10
+    assert summary.mean_delta_ler == 0.0
+    assert summary.t_p_value == 1.0
+    assert summary.cohens_d == 0.0
+    assert summary.direction == "INCONCLUSIVE"
+
+
+def test_paired_trajectory_analysis_insufficient_samples_raises():
+    """Analysis must raise ValueError when fewer than 2 trajectories are provided."""
+    single_traj = [
+        TrajectoryResult(
+            trajectory_id="single",
+            scenario_name="test",
+            seed=42,
+            split="test",
+            static_ler=0.05,
+            adaptive_ler=0.04,
+            delta_ler=-0.01,
+            adaptation_count=1,
+            stay_count=5,
+            rollback_count=0,
+            total_shots=500,
+        )
+    ]
+    with pytest.raises(ValueError, match="at least 2 trajectories"):
+        PairedTrajectoryAnalysis.analyze_trajectories(single_traj)
+
+
+def test_power_analysis_boundary_and_degenerate():
+    """PowerAnalysis handles extreme effect sizes and calculates proper boundaries."""
+    # Zero or negative effect size returns 0.0 power
+    p_zero = PowerAnalysis.compute_power(effect_size_d=0.0, n_samples=30)
+    assert p_zero == 0.0
+
+    p_neg = PowerAnalysis.compute_power(effect_size_d=-0.5, n_samples=30)
+    assert p_neg == 0.0
+
+    # Massive effect size produces power near 1.0
+    p_huge = PowerAnalysis.compute_power(effect_size_d=3.0, n_samples=30)
+    assert p_huge > 0.999
+
+    # Minimum sample size bound
+    n_min = PowerAnalysis.sample_size_for_power(effect_size_d=10.0, target_power=0.80)
+    assert n_min >= 2
 

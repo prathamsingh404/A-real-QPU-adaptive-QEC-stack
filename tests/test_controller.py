@@ -314,3 +314,47 @@ class TestAdaptiveController:
 
         # Should have had some mode switches
         assert ctrl.metrics.total_windows == 20
+
+    def test_extreme_leakage_state_boundary(self):
+        """High leakage (>5%) favors Union-Find clustering over standard MWPM."""
+        low_leak = _make_state(leakage_fraction=0.001, p_2q=0.008)
+        high_leak = _make_state(leakage_fraction=0.15, p_2q=0.008)
+
+        act_mwpm = ControlAction(decoder=DecoderChoice.MWPM, dd_policy=DDSequenceType.NONE)
+        act_uf = ControlAction(decoder=DecoderChoice.UNION_FIND, dd_policy=DDSequenceType.NONE)
+        weights = CostWeights()
+
+        # At low leakage, MWPM is superior (lower cost)
+        cost_mwpm_low = compute_cost(low_leak, act_mwpm, None, weights)
+        cost_uf_low = compute_cost(low_leak, act_uf, None, weights)
+        assert cost_mwpm_low < cost_uf_low
+
+        # At high leakage, UF cluster bounding suppresses p_eff by 30%
+        cost_mwpm_high = compute_cost(high_leak, act_mwpm, None, weights)
+        cost_uf_high = compute_cost(high_leak, act_uf, None, weights)
+        assert cost_uf_high < cost_mwpm_high
+
+    def test_zero_noise_state_boundary(self):
+        """Zero noise boundary state produces non-negative, finite cost without NaN."""
+        zero_state = _make_state(p_1q=0.0, p_2q=0.0, p_ro=0.0, defect_rate=0.0, leakage_fraction=0.0)
+        action = ControlAction(decoder=DecoderChoice.MWPM, dd_policy=DDSequenceType.NONE)
+        cost = compute_cost(zero_state, action, None, CostWeights())
+
+        assert np.isfinite(cost)
+        assert cost >= 0.0
+
+    def test_hysteresis_boundary_margin_deadzone(self):
+        """Cost delta smaller than hysteresis margin is blocked by hysteresis deadzone."""
+        tracker = HysteresisTracker(margin=0.05, patience=2)
+
+        # Candidate improvement is only 2% (< margin 5%)
+        assert not tracker.should_switch("mwpm", "union_find", current_cost=1.00, candidate_cost=0.98)
+        assert tracker._consecutive_wins.get("union_find", 0) == 0
+
+        # Candidate improvement is 10% (> margin 5%): first step increments, does not switch yet
+        assert not tracker.should_switch("mwpm", "union_find", current_cost=1.00, candidate_cost=0.90)
+        assert tracker._consecutive_wins["union_find"] == 1
+
+        # Second step reaches patience=2, commits switch
+        assert tracker.should_switch("mwpm", "union_find", current_cost=1.00, candidate_cost=0.90)
+

@@ -349,3 +349,71 @@ class TestTLSFluctuator:
         # Some variation over time
         assert np.std(traj) > 0.0
 
+
+class TestOUProcess:
+    """Tests for Ornstein-Uhlenbeck (OU) mean-reverting drift dynamics."""
+
+    @staticmethod
+    def simulate_ou(
+        theta: float = 0.1,
+        mu: float = 0.02,
+        sigma: float = 0.005,
+        dt: float = 1.0,
+        n_steps: int = 500,
+        x0: float = 0.08,
+        seed: int = 42,
+    ) -> np.ndarray:
+        """Simulate Ornstein-Uhlenbeck process dX_t = theta*(mu - X_t)*dt + sigma*dW_t."""
+        rng = np.random.default_rng(seed)
+        x = np.zeros(n_steps)
+        x[0] = x0
+        for t in range(1, n_steps):
+            dx = theta * (mu - x[t - 1]) * dt + sigma * np.sqrt(dt) * rng.normal()
+            x[t] = x[t - 1] + dx
+        return x
+
+    def test_ou_mean_reversion(self):
+        """OU process starting away from mu mean-reverts toward mu."""
+        mu = 0.02
+        traj = self.simulate_ou(theta=0.15, mu=mu, x0=0.08, n_steps=600)
+        # Early values right after x0 = 0.08 are elevated
+        assert np.mean(traj[:5]) > 0.05
+        # Late values fluctuate around mu = 0.02
+        assert abs(np.mean(traj[-200:]) - mu) < 0.004
+
+    def test_ou_stationary_variance_bound(self):
+        """Stationary variance of OU process converges near sigma^2 / (2 * theta)."""
+        theta = 0.2
+        sigma = 0.004
+        mu = 0.015
+        expected_var = (sigma ** 2) / (2.0 * theta)
+
+        trajs = [self.simulate_ou(theta=theta, mu=mu, sigma=sigma, n_steps=1000, seed=s) for s in range(30)]
+        late_points = [tr[-1] for tr in trajs]
+        empirical_var = float(np.var(late_points))
+
+        # Empirical variance is close to theoretical stationary variance
+        assert abs(empirical_var - expected_var) / expected_var < 0.40
+
+
+class TestBurstDetectorIntegration:
+    """Tests integrating BurstDetector with noisy syndrome streams."""
+
+    def test_burst_detection_on_spikes(self):
+        """BurstDetector flags severe multi-detector defect spikes."""
+        from adaptive_qec.noise.burst_detector import BurstDetector
+
+        detector = BurstDetector(window_size=5, significance=0.001, min_defects_for_burst=15)
+        rng = np.random.default_rng(42)
+
+        # Baseline quiet syndromes (rounds x detectors)
+        quiet = rng.binomial(1, 0.01, size=(50, 16)).astype(np.uint8)
+        bursts_quiet = detector.analyze(quiet, num_detectors_per_round=16)
+        assert len(bursts_quiet.bursts_detected) == 0
+
+        # Inject massive cosmic-ray burst across all detectors
+        spike = np.ones((5, 16), dtype=np.uint8)
+        stream = np.vstack([quiet, spike, quiet])
+        bursts_loud = detector.analyze(stream, num_detectors_per_round=16)
+        assert len(bursts_loud.bursts_detected) > 0
+

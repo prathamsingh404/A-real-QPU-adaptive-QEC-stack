@@ -73,6 +73,26 @@ class OnlineReweightedMWPM(Decoder):
     def name(self) -> str:
         return "reweighted_mwpm"
 
+    @property
+    def is_configured(self) -> bool:
+        """Whether the decoder is configured with a valid matching graph."""
+        return self._current_matching is not None
+
+    def __repr__(self) -> str:
+        return (
+            f"OnlineReweightedMWPM(configured={self.is_configured}, "
+            f"window_size={self.window_size}, update_interval={self.update_interval}, "
+            f"reweights={self.total_reweights})"
+        )
+
+    def reset(self) -> None:
+        """Reset syndrome buffer and restore base matching graph."""
+        self._syndrome_buffer.clear()
+        self._shots_since_update = 0
+        self.total_reweights = 0
+        if self._base_dem is not None:
+            self._current_matching = pymatching.Matching.from_detector_error_model(self._base_dem)
+
     def configure(self, **kwargs: Any) -> None:
         """Configure decoder with circuit or DEM."""
         circuit = kwargs.get("circuit")
@@ -109,19 +129,33 @@ class OnlineReweightedMWPM(Decoder):
         """Trigger graph reweighting from an explicit syndrome window."""
         if self._calibrator is None:
             return
-        calibrated: CalibratedDEM = self._calibrator.calibrate_from_syndromes(
-            syndromes=window_syndromes,
-            smoothing=self.smoothing,
-        )
-        self._current_matching = calibrated.to_matching()
-        self.total_reweights += 1
+        if window_syndromes is None or window_syndromes.size == 0 or window_syndromes.shape[0] == 0:
+            return
+        if self._num_detectors <= 1:
+            return
+
+        try:
+            calibrated: CalibratedDEM = self._calibrator.calibrate_from_syndromes(
+                syndromes=window_syndromes,
+                smoothing=self.smoothing,
+            )
+            self._current_matching = calibrated.to_matching()
+            self.total_reweights += 1
+        except Exception as exc:
+            logger.warning("OnlineReweightedMWPM calibration failed: %s; keeping existing weights", exc)
 
     def decode(self, syndrome: np.ndarray) -> Correction:
         """Decode single shot or batch while streaming into the sliding window."""
-        if self._current_matching is None:
+        if not self.is_configured:
             raise RuntimeError("Decoder not configured. Call configure() first.")
 
         syndrome = np.asarray(syndrome, dtype=np.uint8)
+
+        # Handle degenerate 0-detector graph
+        if self._num_detectors == 0:
+            if syndrome.ndim == 1:
+                return Correction(observable_corrections=np.zeros(self._num_observables, dtype=np.uint8))
+            return Correction(observable_corrections=np.zeros((syndrome.shape[0], self._num_observables), dtype=np.uint8))
 
         if syndrome.ndim == 1:
             self._syndrome_buffer.append(syndrome)
@@ -137,6 +171,9 @@ class OnlineReweightedMWPM(Decoder):
 
         # Batch decode with sliding window updates
         shots = syndrome.shape[0]
+        if shots == 0:
+            return Correction(observable_corrections=np.empty((0, self._num_observables), dtype=np.uint8))
+
         corrections = np.zeros((shots, self._num_observables), dtype=np.uint8)
 
         for i in range(shots):

@@ -211,3 +211,42 @@ def test_component_ablation_study():
     md = ComponentAblationStudy.format_markdown_table(rows)
     assert "| **Full (CG-CCADS)** |" in md
     assert "Mean LER" in md
+
+
+def test_real_suite_results_integration():
+    """Integration test verifying real data/suite_results.json exists, parses, and matches schema."""
+    import json
+    from pathlib import Path
+
+    json_path = Path("data/suite_results.json")
+    assert json_path.exists(), "data/suite_results.json must exist in repository"
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert "metadata" in data
+    assert "distance_scaling_lambda" in data
+    assert "aggregates" in data
+    assert "trajectories" in data
+
+    # Verify trajectories structure
+    trajectories = data["trajectories"]
+    assert len(trajectories) > 0
+
+    for traj in trajectories[:10]:
+        assert "seed" in traj
+        assert "scenario_id" in traj
+        assert "distance" in traj
+        assert "arms" in traj
+        arms = traj["arms"]
+        assert "static_mwpm" in arms
+        assert "cg_ccads" in arms
+        assert "naive_reweighted_mwpm" in arms
+        assert 0.0 <= arms["static_mwpm"]["ler"] <= 1.0
+        assert 0.0 <= arms["cg_ccads"]["ler"] <= 1.0
+
+    # Verify aggregates contain distance keys and scenarios
+    aggregates = data["aggregates"]
+    assert "d3" in aggregates
+    assert "d5" in aggregates
+    assert len(aggregates["d3"]) >= 4

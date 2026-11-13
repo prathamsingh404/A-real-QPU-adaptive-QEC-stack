@@ -178,4 +178,30 @@ class TestIBMHeron133TopologyAndDetectorMapping:
         assert report["valid"] is False
         assert len(report["out_of_bounds_detectors"]) > 0
         assert corrupt_emb.verify_detector_mapping(circuit, topology=topo) is False
+    def test_heavy_hex_heron_scale_layout(self):
+        """Heron-scale heavy-hex topology (11x11 grid) satisfies degree <= 3 constraint."""
+        topo = HeavyHexTopology.synthetic(rows=11, cols=11)
+        assert topo.num_qubits == 121
+        metrics = topo.compute_metrics()
+        assert metrics.max_degree <= 3
+        assert 1.5 <= metrics.avg_degree <= 2.8
+        assert metrics.diameter > 0
+
+    def test_disconnected_qubits_shortest_path(self):
+        """Shortest path between disconnected components returns empty path."""
+        topo = HeavyHexTopology.from_coupling_map([[0, 1], [2, 3]], num_qubits=4)
+        path = topo.find_shortest_path(0, 3)
+        assert path == []
+
+    def test_embedding_d3_vs_d5_scaling(self):
+        """Distance 5 embedding maps strictly more data qubits than distance 3."""
+        topo = HeavyHexTopology.synthetic(rows=11, cols=11)
+        finder = EmbeddingFinder(topo)
+
+        emb3 = finder.find_embedding(distance=3)
+        emb5 = finder.find_embedding(distance=5)
+
+        assert len(emb3.data_map) == 9
+        assert len(emb5.data_map) == 25
+        assert len(emb5.all_physical_qubits()) > len(emb3.all_physical_qubits())
 

@@ -107,6 +107,29 @@ class TestSurfaceCode:
         dem = circuit.detector_error_model(decompose_errors=True)
         assert dem.num_detectors == circuit.num_detectors
 
+    def test_surface_code_geometry(self):
+        """Surface code geometry satisfies d^2 data qubits and d^2 - 1 ancilla qubits."""
+        for d in [3, 5]:
+            code = SurfaceCode(distance=d, rounds=d)
+            info = code.get_info()
+            assert info.num_data_qubits == d * d
+            assert info.num_ancilla_qubits == d * d - 1
+            assert info.num_observables == 1
+            assert info.distance == d
+            assert info.rounds == d
+
+    def test_surface_code_detector_coordinates(self):
+        """Detector coordinates in generated Stim circuit lie within expected 2D spatial bounds."""
+        code = SurfaceCode(distance=3, rounds=3)
+        circuit = code.generate_circuit()
+        coords = circuit.get_detector_coordinates()
+        assert len(coords) == circuit.num_detectors
+        for det_idx, pt in coords.items():
+            # In rotated surface code, spatial coordinates lie within [0, 2*d]
+            assert 0.0 <= pt[0] <= 10.0
+            assert 0.0 <= pt[1] <= 10.0
+
+
 
 class TestCodeFactory:
     """Test the create_code factory function."""

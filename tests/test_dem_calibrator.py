@@ -177,3 +177,60 @@ class TestDEMCalibrator:
             assert e.probability < 0.5
             assert e.weight > 0.0
 
+    def test_spitz_estimator_on_known_circuit(self):
+        """Build a simple circuit with known error rate, run Spitz, verify estimate within 20% of truth."""
+        import pymatching
+        import stim
+        from adaptive_qec.decoders.dem_calibration import calibrate_spitz_matching
+
+        c_simple = stim.Circuit(
+            "X_ERROR(0.04) 0\n"
+            "M 0\n"
+            "DETECTOR(0, 0) rec[-1]\n"
+            "X_ERROR(0.04) 0\n"
+            "M 0\n"
+            "DETECTOR(1, 0) rec[-1] rec[-2]\n"
+        )
+        dem_simple = c_simple.detector_error_model(decompose_errors=True)
+        m_simple = pymatching.Matching.from_detector_error_model(dem_simple)
+        syn_simple = c_simple.compile_detector_sampler().sample(shots=20000)
+        m_cal = calibrate_spitz_matching(m_simple, syn_simple)
+        edge_probs = [d["error_probability"] for _, _, d in m_cal.edges()]
+        for p_est in edge_probs:
+            assert abs(p_est - 0.04) / 0.04 < 0.20
+
+    def test_spitz_estimator_empty_syndromes_fallback(self):
+        """0 shots fallback returns base DEM."""
+        calibrator = DEMCalibrator()
+        empty_syndromes = np.zeros((0, 24), dtype=np.uint8)
+        calibrated = calibrator.calibrate_from_syndromes(empty_syndromes)
+        assert calibrated.source == "empty_syndromes_fallback"
+        assert len(calibrated.edges) == len(calibrator._base_edges)
+        assert calibrated.num_detectors == calibrator._base_dem.num_detectors
+
+    def test_proportional_calibration_clamps_to_threshold(self):
+        """Large measured error ratio clamps probability to max_probability < 0.5."""
+        calibrator = DEMCalibrator(max_probability=0.48)
+        calibrated = calibrator.calibrate(measured_p_2q=0.45, measured_p_ro=0.45)
+        for edge in calibrated.edges:
+            assert edge.probability <= 0.48
+            assert edge.probability < 0.5
+            assert edge.weight > 0.0
+
+    def test_weight_uncertainty_decreases_with_shots(self):
+        """Higher shot count yields lower finite-sample uncertainty in estimated edge weights."""
+        import stim
+        circuit = stim.Circuit.generated("surface_code:rotated_memory_z", distance=3, rounds=3, after_clifford_depolarization=0.01)
+        calibrator = DEMCalibrator(circuit=circuit)
+        sampler = circuit.compile_detector_sampler()
+
+        syn_small = sampler.sample(shots=150)
+        syn_large = sampler.sample(shots=3000)
+
+        unc_small_dict = calibrator.estimate_weight_uncertainty(syn_small, n_bootstraps=8)
+        unc_large_dict = calibrator.estimate_weight_uncertainty(syn_large, n_bootstraps=8)
+
+        mean_ci_width_small = np.mean([v["ci_high"] - v["ci_low"] for v in unc_small_dict.values()])
+        mean_ci_width_large = np.mean([v["ci_high"] - v["ci_low"] for v in unc_large_dict.values()])
+
+        assert mean_ci_width_large < mean_ci_width_small

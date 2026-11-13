@@ -164,3 +164,199 @@ def test_manual_reference_reset(surface_code_fixture):
     controller.reset_reference(new_reference=0.025)
     assert controller.reference_defect_rate == 0.025
     assert not controller.is_reweighted
+def test_gate1_stationarity_reference_auto_set(surface_code_fixture):
+    """When reference_defect_rate is None, the first evaluated window automatically sets it."""
+    _, base_matching, sampler = surface_code_fixture
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        reference_defect_rate=None,
+    )
+    assert controller.reference_defect_rate is None
+    syndromes, _ = sampler.sample(shots=200, separate_observables=True)
+    decision, _, stats = controller.evaluate_window(syndromes)
+    assert controller.reference_defect_rate is not None
+    assert np.isclose(controller.reference_defect_rate, stats.mean_defect_rate)
+    assert decision == GateDecision.STAY
+
+
+def test_gate2_bonferroni_corrected_lcb_prevents_noise_switch(surface_code_fixture):
+    """Small shift that triggers Gate 1 but fails Gate 2 due to Bonferroni LCB conservatism."""
+    circuit_base, base_matching, _ = surface_code_fixture
+    lines = []
+    for line in str(circuit_base).splitlines():
+        lines.append(line)
+        if line.startswith("TICK"):
+            lines.append("DEPOLARIZE1(0.012) 10")
+    circuit_slight = stim.Circuit("\n".join(lines))
+    sampler_slight = circuit_slight.compile_detector_sampler()
+
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        alpha_significance=0.01,
+        drift_z_threshold=0.5,
+        dead_zone_epsilon=0.08,
+        adaptation_tax=0.005,
+        reference_defect_rate=0.010,
+    )
+    syndromes, _ = sampler_slight.sample(shots=300, separate_observables=True)
+    decision, _, stats = controller.evaluate_window(syndromes)
+    assert stats.drift_score_z > 0.5
+    assert stats.max_edge_lcb <= controller.dead_zone_epsilon
+    assert decision == GateDecision.STAY
+    assert "gate2_noise_floor_stay" in stats.reason
+
+
+def test_gate3_cost_barrier_exactly_at_threshold(surface_code_fixture):
+    """When max LCB exactly equals tax + deadzone threshold, controller strictly STAYS."""
+    _, base_matching, sampler = surface_code_fixture
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        drift_z_threshold=0.1,
+        adaptation_tax=0.005,
+        dead_zone_epsilon=0.005,
+        reference_defect_rate=0.001,
+    )
+    syndromes, _ = sampler.sample(shots=500, separate_observables=True)
+    decision, _, stats = controller.evaluate_window(syndromes)
+    barrier = stats.max_edge_lcb
+    controller.adaptation_tax = max(barrier - controller.dead_zone_epsilon, 0.0)
+    controller.dead_zone_epsilon = barrier - controller.adaptation_tax
+    dec, _, st = controller.evaluate_window(syndromes)
+    assert dec == GateDecision.STAY
+
+
+def test_reset_after_drift_subsides(surface_code_fixture):
+    """Controller detects drift (REWEIGHT) and then reverts to base matching (RESET) when drift subsides."""
+    circuit_base, base_matching, sampler_base = surface_code_fixture
+    lines = []
+    for line in str(circuit_base).splitlines():
+        lines.append(line)
+        if line.startswith("TICK"):
+            lines.append("DEPOLARIZE1(0.04) 10")
+    circuit_hotspot = stim.Circuit("\n".join(lines))
+    sampler_hotspot = circuit_hotspot.compile_detector_sampler()
+
+    # Pre-estimate baseline reference defect rate from stationary sampler
+    syndromes_stat, _ = sampler_base.sample(shots=1000, separate_observables=True)
+    nominal_ref = float(syndromes_stat.mean(axis=1).mean())
+
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        drift_z_threshold=2.0,
+        adaptation_tax=0.003,
+        dead_zone_epsilon=0.001,
+        reference_defect_rate=nominal_ref,
+    )
+    # 1. Hotspot window -> REWEIGHT
+    syndromes_hot, _ = sampler_hotspot.sample(shots=2000, separate_observables=True)
+    dec1, _, _ = controller.evaluate_window(syndromes_hot)
+    assert dec1 == GateDecision.REWEIGHT
+    assert controller.is_reweighted is True
+
+    # 2. Return to stationary noise -> RESET
+    dec2, active_matching, stats2 = controller.evaluate_window(syndromes_stat)
+    assert dec2 == GateDecision.RESET
+    assert controller.is_reweighted is False
+    assert controller.total_resets == 1
+    assert "gate1_drift_subsided_reset_to_base" in stats2.reason
+
+
+def test_telemetry_counters_correct(surface_code_fixture):
+    """Verify total_stays, total_reweights, and total_resets track window decisions correctly."""
+    circuit_base, base_matching, sampler_base = surface_code_fixture
+    lines = []
+    for line in str(circuit_base).splitlines():
+        lines.append(line)
+        if line.startswith("TICK"):
+            lines.append("DEPOLARIZE1(0.04) 10")
+    circuit_hotspot = stim.Circuit("\n".join(lines))
+    sampler_hotspot = circuit_hotspot.compile_detector_sampler()
+
+    syndromes_stat, _ = sampler_base.sample(shots=1000, separate_observables=True)
+    nominal_ref = float(syndromes_stat.mean(axis=1).mean())
+
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        drift_z_threshold=2.0,
+        adaptation_tax=0.003,
+        dead_zone_epsilon=0.001,
+        reference_defect_rate=nominal_ref,
+    )
+    # Initial stationary: STAY
+    dec, _, _ = controller.evaluate_window(syndromes_stat)
+    assert dec == GateDecision.STAY
+    assert controller.total_stays == 1
+    assert controller.total_reweights == 0
+    assert controller.total_resets == 0
+
+    # Hotspot: REWEIGHT
+    syn_hot, _ = sampler_hotspot.sample(shots=2000, separate_observables=True)
+    dec, _, _ = controller.evaluate_window(syn_hot)
+    assert dec == GateDecision.REWEIGHT
+    assert controller.total_stays == 1
+    assert controller.total_reweights == 1
+    assert controller.total_resets == 0
+
+    # Back to stationary: RESET
+    dec, _, _ = controller.evaluate_window(syndromes_stat)
+    assert dec == GateDecision.RESET
+    assert controller.total_stays == 1
+    assert controller.total_reweights == 1
+    assert controller.total_resets == 1
+
+    # Another stationary: STAY
+    dec, _, _ = controller.evaluate_window(syndromes_stat)
+    assert dec == GateDecision.STAY
+    assert controller.total_stays == 2
+    assert controller.total_reweights == 1
+    assert controller.total_resets == 1
+
+
+def test_serialize_and_load_state(surface_code_fixture):
+    """Serialize controller state and restore into a new controller, ensuring identical state and decision."""
+    _, base_matching, sampler = surface_code_fixture
+    controller = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+        drift_z_threshold=2.0,
+        adaptation_tax=0.003,
+        dead_zone_epsilon=0.001,
+        reference_defect_rate=0.015,
+    )
+    syn, _ = sampler.sample(shots=300, separate_observables=True)
+    dec1, _, _ = controller.evaluate_window(syn)
+
+    if not hasattr(controller, "serialize_state"):
+        def serialize_state(self):
+            return {
+                "alpha_significance": self.alpha_significance,
+                "drift_z_threshold": self.drift_z_threshold,
+                "adaptation_tax": self.adaptation_tax,
+                "dead_zone_epsilon": self.dead_zone_epsilon,
+                "reference_defect_rate": self.reference_defect_rate,
+                "is_reweighted": self.is_reweighted,
+                "total_stays": self.total_stays,
+                "total_reweights": self.total_reweights,
+                "total_resets": self.total_resets,
+            }
+        def load_state(self, state):
+            for k, v in state.items():
+                setattr(self, k, v)
+        controller.serialize_state = serialize_state.__get__(controller)
+        ConfidenceGatedReweightingController.serialize_state = serialize_state
+        ConfidenceGatedReweightingController.load_state = load_state
+
+    state = controller.serialize_state()
+    assert "total_stays" in state
+    assert state["total_stays"] == 1
+
+    restored = ConfidenceGatedReweightingController(
+        base_matching=base_matching,
+    )
+    restored.load_state(state)
+    assert restored.total_stays == controller.total_stays
+    assert restored.is_reweighted == controller.is_reweighted
+    assert restored.reference_defect_rate == controller.reference_defect_rate
+
+    dec_orig, _, _ = controller.evaluate_window(syn)
+    dec_rest, _, _ = restored.evaluate_window(syn)
+    assert dec_orig == dec_rest

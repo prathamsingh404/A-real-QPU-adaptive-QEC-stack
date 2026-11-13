@@ -93,6 +93,14 @@ class EWMADriftDetector:
         self._sample_count = 0
         self._history: list[np.ndarray] = []
 
+    def reset(self) -> None:
+        """Reset EWMA state and clear historical accumulation."""
+        self._ewma = None
+        self._baseline_mean = None
+        self._baseline_var = None
+        self._sample_count = 0
+        self._history.clear()
+
     def update(self, detection_rates: np.ndarray) -> DriftReport:
         """
         Update the drift detector with new detection rates.
@@ -225,10 +233,23 @@ class CUSUMDriftDetector:
         # State
         self._s_plus: Optional[np.ndarray] = None   # upper CUSUM
         self._s_minus: Optional[np.ndarray] = None   # lower CUSUM
+        self._tau_plus: Optional[np.ndarray] = None  # change-point candidate steps
+        self._tau_minus: Optional[np.ndarray] = None
         self._baseline_mean: Optional[np.ndarray] = None
         self._baseline_std: Optional[np.ndarray] = None
         self._sample_count = 0
         self._history: list[np.ndarray] = []
+
+    def reset(self) -> None:
+        """Reset CUSUM state and cumulative counters."""
+        self._s_plus = None
+        self._s_minus = None
+        self._tau_plus = None
+        self._tau_minus = None
+        self._baseline_mean = None
+        self._baseline_std = None
+        self._sample_count = 0
+        self._history.clear()
 
     def update(self, detection_rates: np.ndarray) -> DriftReport:
         """
@@ -272,6 +293,8 @@ class CUSUMDriftDetector:
                 self._baseline_std = b_std
                 self._s_plus = np.zeros(num_detectors)
                 self._s_minus = np.zeros(num_detectors)
+                self._tau_plus = np.full(num_detectors, self._sample_count, dtype=int)
+                self._tau_minus = np.full(num_detectors, self._sample_count, dtype=int)
 
             return DriftReport(
                 status=DriftStatus.STABLE,
@@ -280,26 +303,49 @@ class CUSUMDriftDetector:
             )
 
         assert self._baseline_std is not None and self._s_plus is not None and self._s_minus is not None
+        if self._tau_plus is None:
+            self._tau_plus = np.full(num_detectors, self._sample_count, dtype=int)
+            self._tau_minus = np.full(num_detectors, self._sample_count, dtype=int)
 
         # Normalized deviation
         z = (detection_rates - self._baseline_mean) / self._baseline_std
 
-        # Update CUSUM statistics
+        # Update CUSUM statistics with change-point tracking
         k = self._allowance
+        old_s_plus = self._s_plus.copy()
+        old_s_minus = self._s_minus.copy()
+
         self._s_plus = np.maximum(0, self._s_plus + z - k)
         self._s_minus = np.maximum(0, self._s_minus - z - k)
+
+        for i in range(num_detectors):
+            if old_s_plus[i] == 0.0 and self._s_plus[i] > 0.0:
+                self._tau_plus[i] = self._sample_count
+            elif self._s_plus[i] == 0.0:
+                self._tau_plus[i] = self._sample_count
+
+            if old_s_minus[i] == 0.0 and self._s_minus[i] > 0.0:
+                self._tau_minus[i] = self._sample_count
+            elif self._s_minus[i] == 0.0:
+                self._tau_minus[i] = self._sample_count
 
         # Check for threshold crossings
         cusum_values = np.maximum(self._s_plus, self._s_minus)
         max_cusum = float(cusum_values.max())
 
         alarm_dets = list(np.where(cusum_values > self._threshold)[0])
+        change_points = []
 
         if len(alarm_dets) > 0:
             status = DriftStatus.DRIFT_DETECTED
+            for d in alarm_dets:
+                tau = int(self._tau_plus[d] if self._s_plus[d] > self._threshold else self._tau_minus[d])
+                change_points.append(tau)
             # Reset CUSUM for alarmed detectors
             self._s_plus[alarm_dets] = 0
             self._s_minus[alarm_dets] = 0
+            self._tau_plus[alarm_dets] = self._sample_count
+            self._tau_minus[alarm_dets] = self._sample_count
         else:
             status = DriftStatus.STABLE
 
@@ -307,6 +353,7 @@ class CUSUMDriftDetector:
             status=status,
             magnitude=max_cusum,
             affected_detectors=alarm_dets,
+            change_points=change_points,
             detector_drift_values=cusum_values,
             details={
                 "max_cusum": max_cusum,

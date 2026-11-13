@@ -141,3 +141,20 @@ class TestMWPMBurstAware:
         assert burst_metrics.total_shots == 100
         assert "burst_shots" in summary
         assert "ler_reduction" in summary
+
+    def test_burst_detector_evaluate_sensitivity(self):
+        clean = np.zeros((30, 8), dtype=np.uint8)
+        detector = BurstDetector(window_size=3, significance=0.01)
+        res = detector.evaluate_sensitivity(
+            base_syndromes=clean,
+            num_detectors_per_round=8,
+            injected_multipliers=[5.0, 20.0, 50.0],
+            trials_per_level=5,
+            seed=42,
+        )
+        assert "multipliers" in res
+        assert "detection_probabilities" in res
+        assert len(res["detection_probabilities"]) == 3
+        # High multiplier should be detected reliably
+        assert res["detection_probabilities"][-1] >= res["detection_probabilities"][0]
+

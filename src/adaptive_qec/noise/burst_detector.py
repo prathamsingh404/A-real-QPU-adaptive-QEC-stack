@@ -293,6 +293,62 @@ class BurstDetector:
 
         return BurstType.UNKNOWN, 0.3
 
+    def evaluate_sensitivity(
+        self,
+        base_syndromes: np.ndarray,
+        num_detectors_per_round: int,
+        injected_multipliers: Sequence[float] = (2.0, 5.0, 10.0, 20.0),
+        trials_per_level: int = 10,
+        seed: int = 42,
+    ) -> dict[str, Any]:
+        """Perform sensitivity analysis across burst injection amplitudes.
+
+        Measures the empirical detection rate (power) as a function of burst excess defect rate.
+
+        Args:
+            base_syndromes: Baseline clean syndrome tensor (rounds, detectors_per_round).
+            num_detectors_per_round: Number of detectors per stabilizer round.
+            injected_multipliers: Multipliers on the baseline defect rate to test.
+            trials_per_level: Number of random burst injection trials per amplitude.
+            seed: RNG seed for reproducible injections.
+
+        Returns:
+            Dict containing 'multipliers', 'detection_probabilities', and 'false_positive_rate'.
+        """
+        from typing import Sequence
+        rng = np.random.default_rng(seed)
+        rounds = base_syndromes.shape[0]
+        dets = num_detectors_per_round
+
+        # 1. Measure false positive rate on uncorrupted baseline
+        clean_analysis = self.analyze(base_syndromes, num_detectors_per_round)
+        fp_rate = float(len(clean_analysis.bursts_detected) > 0)
+        base_rate = float(base_syndromes.mean()) if base_syndromes.mean() > 0 else 0.01
+
+        # 2. Measure detection rate across multipliers
+        det_probs: list[float] = []
+        for mult in injected_multipliers:
+            detected = 0
+            for _ in range(trials_per_level):
+                corrupted = base_syndromes.copy()
+                start_r = int(rng.integers(0, max(rounds - self.window_size, 1)))
+                end_r = min(rounds, start_r + 2)
+                elevated_rate = min(0.9, max(base_rate * mult, 0.05))
+                corrupted[start_r:end_r, :] = (rng.random((end_r - start_r, dets)) < elevated_rate).astype(np.uint8)
+
+                res = self.analyze(corrupted, num_detectors_per_round)
+                if len(res.bursts_detected) > 0:
+                    detected += 1
+            det_probs.append(float(detected / trials_per_level))
+
+        return {
+            "multipliers": list(injected_multipliers),
+            "detection_probabilities": det_probs,
+            "false_positive_rate": fp_rate,
+            "trials_per_level": trials_per_level,
+        }
+
+
 
 def reshape_syndromes_to_tensor(
     flat_syndromes: np.ndarray,

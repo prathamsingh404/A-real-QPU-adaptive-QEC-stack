@@ -1,0 +1,24 @@
+{
+  "commit_before_simulation_and_willow": "c2f80afb8709bf54c15f671beea76c8c1e8af191",
+  "commit_before_ordered_replay": "ad9beb6fbaf2ae587b214466a4befa9286c838d0",
+  "source_sha256": {
+    "reports/correlated_protocol.md": "735d8e62be211016cbcc8e0fa45d62ad4e35ff3870dd0def75c22fae09404f18",
+    "src/adaptive_qec/decoders/correlated_updates.py": "927ad90f03d08fecded89964682e917782e9b9f5d7fe40ac08c777a0bbb511b4",
+    "src/adaptive_qec/decoders/fault_library.py": "f72f42dd8739290ad43a87c9cf01d799005c7f1374e7860a2830d431edfe8187",
+    "scripts/study_correlated_updates.py": "cce472f0ae4bb86f6900e0fe15371a6ecaad439c982fc0daad71321a38a48989",
+    "data/correlated_study/development.json": "b8961f1c003949911ecb1f45d1733f6108b7136dee940908c7d2eeefa5209b1c",
+    "src/adaptive_qec/experiments/causal_reweighting.py": "44699440a6b872b4508672411c2b041044c50682e1ec1923c87ed494bd228b8f",
+    "scripts/replay_public_memory.py": "1889e57802c0ea21bb5e67a3c4e98ad68d3bd5138d11d8bd106d6f3ff9b1cfea",
+    "reports/ordered_acquisition_protocol.md": "d57c652dd645781daf2c276db8343138be8823fbbfcea14bd5410cf4cf50879a"
+  },
+  "python": "3.11.16",
+  "packages": {
+    "stim": "1.16.0",
+    "pymatching": "2.4.0",
+    "scipy": "1.17.1",
+    "numpy": "2.4.6"
+  },
+  "clock": "perf_counter_ns, single Windows host, raw times in milliseconds",
+  "platform": "Windows-10-10.0.29708-SP0",
+  "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD"
+}

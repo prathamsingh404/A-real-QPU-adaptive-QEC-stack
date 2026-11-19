@@ -1,0 +1,3 @@
+# Google 72-qubit acquisition data
+
+Google Quantum AI, *Data for Quantum error correction below the surface code threshold*, Zenodo record 13273331. These are unmodified members of google_72Q_surface_code_d3_d5_set1.zip, with the archive's top directory omitted. Each retained member's ZIP CRC and size were verified during selective download. Identifiers and observable conventions follow the publisher. The replay uses every shot in samples 13–20 of the distance-three layout d3_at_q3_5, both bases at ten rounds. The two prediction streams are the publisher's Harmony outputs with SI1000 and RL-optimized priors. Redistribution is under CC BY 4.0. [Source dataset](https://zenodo.org/records/13273331) · [License](https://creativecommons.org/licenses/by/4.0/)

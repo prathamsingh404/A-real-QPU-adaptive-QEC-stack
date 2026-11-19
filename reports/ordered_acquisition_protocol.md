@@ -1,0 +1,7 @@
+# Exploratory transfer across ordered acquisitions
+
+We specified this extension after learning the Willow results and before decoding the Google 72-qubit records. Use set 1, first listed d=3 layout d3_at_q3_5, X and Z, ten rounds, acquisition samples 13–20 in the order documented in Hoyt et al., Appendix A. Each acquisition contains 50,000 complete memory shots. Form 50 disjoint streams by taking every fiftieth shot from each sample at the same offset, so each stream has eight windows of 1,000 shots. Every decision uses a previous acquisition. All shots contribute once. The interleaved streams share acquisition conditions and cannot count as 50 independent hardware replicates. No hypothesis test on these streams.
+
+Use the circuit in sample 13 per basis as the common factory model and check that detector and observable definitions agree across the remaining samples. Apply all seven simulation-frozen policies, thresholds, schedules and caps directly. Report errors by basis, actions and errors by acquisition and the distributor's fixed and optimized Harmony predictions on the same shots. No development on these 16 physical inputs, tuning by basis, or selection of favorable samples. Acquisition order allows a forward test without absolute timestamps. The public data do not label the simulator's specific hotspot family, its onset or recovery.
+
+[Google dataset](https://zenodo.org/records/13273331) · [Use of the acquisition sequence in previous work](https://arxiv.org/html/2609.29018v1)

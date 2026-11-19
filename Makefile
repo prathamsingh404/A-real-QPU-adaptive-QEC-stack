@@ -1,9 +1,14 @@
 .PHONY: reproduce test claims-check smoke paper
 reproduce:
 	python scripts/reproduce.py
+	python scripts/reproduce_correlated_study.py
+	python scripts/replay_ordered_acquisitions.py --check
+	python scripts/replay_ordered_acquisitions.py --diagnostic --check
+	python scripts/analyze_correlated_study.py --check
 
 claims-check:
 	python scripts/make_claims.py --check
+	python scripts/analyze_correlated_study.py --check
 	python scripts/verify_lock.py
 
 test:

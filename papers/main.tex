@@ -8,7 +8,7 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-We test whether syndrome-triggered reweighting improves memory decoding when the decoder may rebuild its graph at most twice. Seven causal policies and a privileged diagnostic reference score the same simulated observations. Across 30 independently seeded distance-three Z-memory hotspot trajectories, selective updating made 6,406 errors versus 6,460 for periodic updating in 360,000 shots. The paired difference was $-0.015$ percentage points (95\% CI $[-0.034,0.004]$; Holm-adjusted $p=0.337$). It fell below our predefined minimum useful improvement of 0.060 percentage points. The selective policy used 30 rebuilds versus 60. A separately frozen, one-fit follow-up on 90 fresh distance-three seeds found a smaller-than-target benefit against a trained calendar ($-0.0129$ percentage points, $p=0.00460$). On two public experimental memory records the publisher's correlated decoder outperformed every policy tested here. These results quantify a cost and accuracy tradeoff and leave the superiority hypothesis unresolved.
+We test whether syndrome-triggered reweighting improves memory decoding when the decoder may rebuild its graph at most twice. Seven causal policies and a privileged diagnostic reference score the same simulated observations. Across 30 independently seeded distance-three Z-memory hotspot trajectories, selective updating made 6,406 errors versus 6,460 for periodic updating in 360,000 shots. The paired difference was $-0.015$ percentage points (95\% CI $[-0.034,0.004]$; Holm-adjusted $p=0.337$). It fell below our predefined minimum useful improvement of 0.060 percentage points. The selective policy used 30 rebuilds versus 60. A separately frozen, one-fit follow-up on 90 fresh distance-three seeds found a smaller-than-target benefit against a trained calendar ($-0.0129$ percentage points, $p=0.00460$). A correlated-matching follow-up tested a library of known local faults. Flexible selection saved 190 errors in 768,000 simulated shots relative to a trained calendar, with a gain below the same practical threshold. It tied factory decoding on 384,000 measured Willow shots and added 1,855 errors across 800,000 shots in a separate ordered acquisition series. These experiments identify when simulated gains fail to transfer.
 \end{abstract}
 
 \section{Question and relation to previous work}
@@ -28,7 +28,7 @@ Seventeen hotspot trajectories favored selective updating, six tied, and seven f
 
 \input{tables/table_5}
 \begin{center}
-\includegraphics[width=.80\linewidth]{figures/paired_comparison.pdf}\\
+\includegraphics[width=.72\linewidth]{figures/paired_comparison.pdf}\\
 \small Seed-paired LER differences and pointwise 95\% intervals. Negative values favor selective updating.
 \end{center}
 \subsection*{Independent test of update timing}
@@ -46,12 +46,23 @@ The publisher's correlated matching predictions beat all seven study arms on bot
 \input{tables/table_4}
 The host benchmark measures decoding, monitoring and the actual fit or reset after warmup. Reset restores a cached graph. Times exclude shot acquisition, device transport and feedback. Published IBM aggregate summaries lack the shot records needed to verify the logical observable; they contribute no result here.
 
+\section{Correlated matching and transfer across acquisitions}
+A third internally frozen design retained decomposition and logical labels when changing detector-error-model priors. One policy selected factory, locally adjusted, or globally adjusted priors using held-out detector marginals from within the preceding window. Another selected from a library consisting of factory and one graph per data qubit, each modeling a two-percent depolarizing channel at every circuit tick. The library therefore knows the family used to generate simulated hotspots. Both policies were capped at two active next windows. Each comparator used the same model family with two calendar opportunities selected on development data. Window size was 1,000 complete memory shots. Each trajectory comprised eight windows. The primary panel pooled 24 independent trajectories per stationary, abrupt, gradual and recurring condition at distance three. Distance five and uniform and biased shifts were transfer checks. The development-only hindsight maximum among the enumerated two-use empirical updates was 103 fewer errors than factory in 256,000 shots.
+
+The empirical policy made 11,849 errors against 11,878 for its calendar (Holm $p=0.303$). The library made 11,386 errors versus 11,576 for its calendar. The difference was $-0.02474$ percentage points (95\% CI $[-0.03801,-0.01146]$, Holm $p=0.000723$). It used a nonfactory model for 144 windows versus 65 for its calendar. This contrast measures scheduling flexibility under a common cap. Aggregate online CPU times were 1.428 and 1.461 seconds, excluding setup and transport. Neither policy met all three specified criteria for accuracy, statistical evidence and time. The budgeted library also increased errors relative to factory for uniform and biased shifts at both distances.
+
+On four ten-cycle Willow records from two patches and both bases \cite{willowdata}, the library selected factory at every opportunity. It made 26,346 errors in 384,000 scored physical shots. The released sparse-blossom, SI1000 Tesseract, frequency-calibrated Tesseract and AlphaQubit~2 predictions gave 23,408, 21,138, 20,094 and 18,632. The fixed-SI1000 Tesseract alone shows a substantial gap. These are file-order comparisons without acquisition timestamps.
+
+An exploratory forward test used acquisition samples 13--20 from the 72-qubit set~1 release \cite{google,hoyt}. For each of two bases at one distance-three patch, interleaving divided each 50,000-shot acquisition into 50 disjoint batches of 1,000. A decision trained on acquisition $j$ was applied to its corresponding batch in $j+1$. The batches share device conditions. The budgeted library made 27,779 X and 24,777 Z errors versus 26,819 and 23,882 under factory; the same-library calendar stayed at factory. Released SI1000 Harmony predictions made 23,808 and 20,865 errors. The empirical selective policy made 26,870 and 23,832. A post hoc check found lower or equal marginal composite likelihood than factory on 96 of 115 active library windows in the deployment acquisition. Those windows accounted for 1,532 excess errors. The other 19 accounted for another 323 despite higher marginal likelihood. The evidence points to both poor persistence and limitations of the selection objective.
+
+Prior work already estimates drifting noise and adapts decoding. Darmawan quantified the importance of characterizing local noise \cite{darmawan}; Schwartzman-Nowik et al.\ learned additional correlated fault mechanisms and evaluated them on physical data \cite{augment}. Our evidence concerns a specific decision under constrained update opportunities and the conditions under which its gains disappear.
+
 \section{Interpretation and limitations}
 Selective updating used fewer rebuilds than periodic updating in the primary panel. Equal caps permit unequal realized work, and an always-on monitor has its own cost. The primary interval includes zero and excludes an improvement as large as the specified minimum. This experiment gives no evidence of generic superiority, a threshold shift or closed-loop hardware performance. The noise model omits leakage and realistic temporal correlations within shots; the secondary panels have few independent seeds. Reference-window contamination and realistic accelerator deadlines deserve separate tests. The most informative follow-up would hold the method fixed and compare with independently implemented drift-tracking decoders on timestamped, repeated acquisitions.
 
 \section*{Data and reproducibility}
 The repository contains the frozen protocol, individual window errors and actions, measured runtime samples, public input files with attribution, analysis and figure generators, and a file digest manifest. The simulation result reproduced byte-for-byte across two local worker counts. The public replay uses data released under CC BY 4.0.
-\begin{thebibliography}{9}
+\begin{thebibliography}{99}
 \bibitem{spitz} S. Spitz et al., \href{https://arxiv.org/abs/1712.02360}{Adaptive weight estimator for quantum error correction}.
 \bibitem{dgr} \href{https://arxiv.org/abs/2311.16214}{Wang et al., DGR: Tackling Drifted and Correlated Noise in Quantum Error Correction via Decoding Graph Re-weighting}.
 \bibitem{bhardwaj} \href{https://doi.org/10.1103/z1hc-nqw5}{Bhardwaj et al., Adaptive Estimation of Drifting Noise in Quantum Error Correction}, PRX Quantum.
@@ -61,6 +72,10 @@ The repository contains the frozen protocol, individual window errors and action
 \bibitem{googlecontrol} \href{https://doi.org/10.1038/s41586-026-10759-2}{Reinforcement learning control of quantum error correction}, Nature (2026).
 \bibitem{qadapt} R. Miao et al., \href{https://arxiv.org/abs/2607.28422v3}{QAdapt: Noise-Adaptive Neural Pre-Decoding for Surface-Code Quantum Error Correction} (2026).
 \bibitem{relay} T. M\"uller et al., \href{https://arxiv.org/abs/2506.01779}{Improved belief propagation is sufficient for real-time decoding of quantum memory}.
+\bibitem{willowdata} Google Quantum AI, \href{https://zenodo.org/records/18896801}{Data for Reinforcement Learning Control of Quantum Error Correction}, v2.
+\bibitem{hoyt} A. C. Hoyt et al., \href{https://arxiv.org/abs/2609.29018}{Decoder model compatibility provides information beyond the logical gap under drifting and correlated quantum noise}.
+\bibitem{darmawan} A. S. Darmawan, \href{https://arxiv.org/abs/2403.08706}{Optimal adaptation of surface-code decoders to local noise}.
+\bibitem{augment} Z. Schwartzman-Nowik et al., \href{https://arxiv.org/abs/2611.06605}{Discovering correlated error mechanisms: data-driven augmentation of detector error models improving decoding}.
 \end{thebibliography}
 \section*{Supplement: separating rebuild timing from graph retention}
 A reviewer could reasonably ask whether the comparison changes if every trajectory does exactly the same number of rebuilds. All 30 selective hotspot trajectories in the primary panel used one fit. After examining that result, we replayed those streams with one fixed midpoint fit. We verified the factory error count in every regenerated window before scoring the alternatives. The estimator, reference graph and memory shots were identical. Two retention rules tested whether an update could remain useful after recovery. Every variant used precisely one fit per trajectory.

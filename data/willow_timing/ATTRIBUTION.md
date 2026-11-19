@@ -1,0 +1,3 @@
+# Google Willow surface-code records
+
+Unmodified selected archive members from Google Quantum AI, *Data for Reinforcement Learning Control of Quantum Error Correction*, version 2.0.0, Zenodo record 18896801. Original directory prefix: surface_code_distance_3_5_7/traditional_calibration/. Retained physical detection events, observable flips, SI1000 circuits and metadata for d3_0+0j and d3_0+4j, X and Z, r010. Zip member CRCs were checked on extraction. Archive MD5 published by Zenodo is ca54323082fcd0e3671d5b90ce45d85c. The repository software license applies separately. [Source and license](https://zenodo.org/records/18896801)

@@ -28,6 +28,13 @@ def paper_files():
                   "data/timing_development.json", "data/timing_confirmation.json", "scripts/confirm_update_timing.py",
                   "reports/REBUILD_REPORT.md", "scripts/inspect_public_ibm.py", "data/external_ibm_majority.json", "scripts/check_ising_sample_format.py", "docs/implementation_review.md", "scripts/compare_public_decoders.py", "data/public_decoder_comparison.json"})
     fixed.update(f"papers/tables/table_{i}.tex" for i in range(1,6))
+    fixed.update({"Makefile", "src/adaptive_qec/decoders/correlated_updates.py", "src/adaptive_qec/decoders/fault_library.py",
+                  "scripts/study_correlated_updates.py", "scripts/analyze_correlated_study.py",
+                  "scripts/reproduce_correlated_study.py", "scripts/replay_ordered_acquisitions.py",
+                  "tests/test_correlated_updates.py", "reports/CORRELATED_STUDY.md",
+                  "reports/correlated_protocol.md", "reports/ordered_acquisition_protocol.md"})
+    for folder in ("correlated_study", "ordered_acquisitions", "willow_timing"):
+        fixed.update(p.relative_to(ROOT).as_posix() for p in (ROOT / "data" / folder).rglob("*") if p.is_file())
     fixed.update(p.relative_to(ROOT).as_posix() for p in (ROOT / "data/public_replay").rglob("*") if p.is_file())
     return sorted(fixed)
 
@@ -38,6 +45,8 @@ def check_manifest():
                "data/suite_results.json":manifest["results_file"]["sha256"]}
     follow = json.loads((ROOT / "data/timing_manifest.json").read_text())
     targets.update(follow["source_sha256"])
+    correlated = json.loads((ROOT / "data/correlated_study/manifest.json").read_text())
+    targets.update(correlated["source_sha256"])
     targets["data/timing_confirmation.json"] = follow["result_sha256"]
     for name, expected in targets.items():
         if compute_sha256(ROOT / name) != expected:

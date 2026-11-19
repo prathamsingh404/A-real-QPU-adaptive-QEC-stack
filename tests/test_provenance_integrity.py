@@ -29,7 +29,7 @@ def test_paper_lock_exists_and_valid_schema():
     assert "files" in data
 
     meta = data["metadata"]
-    assert meta.get("provenance") == "simulation", "provenance must strictly be 'simulation'"
+    assert set(meta["provenance"].split(", ")) == {"simulation", "public physical replay", "host profiling"}
     assert meta.get("hash_algorithm") == "SHA-256"
     assert "version" in meta
     assert "git_commit" in meta
@@ -70,7 +70,8 @@ def test_manifest_json_provenance_and_system_metadata():
     assert "pymatching_version" in system
 
     results = manifest.get("results_file", {})
-    assert results.get("total_records") == 720
+    records = json.loads((get_repo_root() / "data/suite_results.json").read_text())["trajectories"]
+    assert results.get("total_records") == len(records) > 0
     assert "sha256" in results
     assert len(results["sha256"]) == 64
 

@@ -70,9 +70,6 @@ ALLOWED_FLOAT_WHITELIST = {
     12.0,
     13.0,
     14.0,
-    # Small timing profile synthetic sleeps
-    0.00003,
-    0.00001,
 }
 
 
@@ -111,3 +108,10 @@ def test_missing_results_file_raises_error():
     non_existent = Path("data/definitely_missing_results_12345.json")
     with pytest.raises(FileNotFoundError):
         ComponentAblationStudy.run_ablation(results_path=non_existent)
+
+
+def test_timing_trace_executes_without_synthetic_sleep():
+    path = Path("scripts/profile_reweighting.py")
+    tree = ast.parse(path.read_text())
+    calls = [n.func for n in ast.walk(tree) if isinstance(n, ast.Call)]
+    assert all(getattr(f, "attr", getattr(f, "id", "")) != "sleep" for f in calls)

@@ -82,7 +82,7 @@ def verify_gate_b() -> bool:
     syn = sampler.sample(shots=500)
     decision, _, stats = controller.evaluate_window(syn)
     assert decision == GateDecision.STAY
-    logger.info("  [x] Stationary noise null hypothesis enforced: deliberate zero-cost STAY.")
+    logger.info("  [x] Stationary noise null hypothesis enforced: factory graph retained.")
 
     return True
 
@@ -110,17 +110,11 @@ def verify_gate_c() -> bool:
     with open(suite_path, "r", encoding="utf-8") as f:
         suite_data = json.load(f)
 
-    assert "aggregates" in suite_data
-    assert "distance_scaling_lambda" in suite_data
-    assert suite_data["metadata"]["provenance"] == "simulation"
-    logger.info("  [x] Empirical suite results artifact verified (total runs: %d).", len(suite_data["trajectories"]))
-
-    # 3. Verify genuine hardware baseline characterizations on ibm_marrakesh
-    hw_qec = Path("data/hardware_results/ibm_marrakesh_qec_results.json")
-    hw_dynamic = Path("data/hardware_results/ibm_marrakesh_true_quantum_and_dynamic_results.json")
-    assert hw_qec.exists(), "Missing ibm_marrakesh_qec_results.json"
-    assert hw_dynamic.exists(), "Missing ibm_marrakesh_true_quantum_and_dynamic_results.json"
-    logger.info("  [x] Real IBM Marrakesh hardware execution baseline verified.")
+    from adaptive_qec.analysis.causal_results import summarize
+    import yaml
+    assert suite_data["metadata"] == {"schema": 3, "provenance": "simulation", "pilot": False}
+    summarize(suite_data, yaml.safe_load(Path("configs/suite.yaml").read_text()))
+    logger.info("Validated the complete causal simulation grid and action budgets.")
 
     return True
 

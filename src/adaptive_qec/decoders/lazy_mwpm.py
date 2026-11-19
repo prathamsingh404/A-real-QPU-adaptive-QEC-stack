@@ -107,5 +107,5 @@ class LazyMWPMDecoder(Decoder):
             latency_p999_us=float(np.percentile(latency_us, 99.9)) if len(latency_us) > 0 else 0.0,
             throughput_shots_per_s=shots / t_total if t_total > 0 else 0.0,
             peak_memory_mb=0.0,
-            extra={"mwpm_fraction": float(np.mean(mwpm_mask))},
+            extra={"mwpm_fraction": float(np.mean(mwpm_mask)) if len(mwpm_mask) else 0.0},
         )

@@ -1,0 +1,104 @@
+Audit run, 19 November 2026. Current commit 77861b1.
+Python 3.11.16; Stim 1.16.0; PyMatching 2.4.0; NumPy 2.4.6; SciPy 1.17.1.
+====================== 513 passed, 2 warnings in 17.65s =======================
+Archived and fresh suites are shown in sequence. Rates are fractions per memory shot.
+
+distance scenario W | mean LER (static, gated, ungated, matched) | paired t p | decisions
+3 localized_hotspot 200 [0.0255333 0.0257367 0.04157   0.0178467] 0.07400391676015919 {'switches': 94, 'stays': 1343, 'rollbacks': 63}
+3 localized_hotspot 1000 [0.0255333 0.0254033 0.02469   0.0178467] 0.21824307117915098 {'switches': 27, 'stays': 254, 'rollbacks': 19}
+3 localized_hotspot 2000 [0.0255333 0.0251033 0.0214867 0.0178467] 0.014526954968617245 {'switches': 13, 'stays': 130, 'rollbacks': 7}
+3 stationary_noise 200 [0.0115467 0.0115467 0.0303333 0.0115467] nan {'switches': 0, 'stays': 1500, 'rollbacks': 0}
+3 stationary_noise 1000 [0.0115467 0.01157   0.01521   0.0115467] 0.32558198801619365 {'switches': 1, 'stays': 298, 'rollbacks': 1}
+3 stationary_noise 2000 [0.0115467 0.0116033 0.0127133 0.0115467] 0.32558198801619365 {'switches': 1, 'stays': 149, 'rollbacks': 0}
+3 structural_anisotropy 200 [0.0113167 0.0113167 0.0300367 0.0113167] nan {'switches': 0, 'stays': 1500, 'rollbacks': 0}
+3 structural_anisotropy 1000 [0.0113167 0.0113367 0.0156467 0.0113167] 0.3255819880161935 {'switches': 1, 'stays': 298, 'rollbacks': 1}
+3 structural_anisotropy 2000 [0.0113167 0.0113367 0.01274   0.0113167] 0.3255819880161935 {'switches': 1, 'stays': 148, 'rollbacks': 1}
+3 uniform_drift 200 [0.0319767 0.0320067 0.0623267 0.0319733] 0.22213613054809098 {'switches': 3, 'stays': 1494, 'rollbacks': 3}
+3 uniform_drift 1000 [0.0319767 0.03208   0.0392167 0.0319733] 0.0682398692133311 {'switches': 7, 'stays': 287, 'rollbacks': 6}
+3 uniform_drift 2000 [0.0319767 0.0321333 0.0339533 0.0319733] 0.1051795087871477 {'switches': 14, 'stays': 129, 'rollbacks': 7}
+5 localized_hotspot 200 [0.0104833 0.0107733 0.02777   0.0091533] 0.0005225396197518724 {'switches': 45, 'stays': 1413, 'rollbacks': 42}
+5 localized_hotspot 1000 [0.0104833 0.01061   0.0125867 0.0091533] 0.05198686097544554 {'switches': 12, 'stays': 277, 'rollbacks': 11}
+5 localized_hotspot 2000 [0.0104833 0.01044   0.01074   0.0091533] 0.09075863631876319 {'switches': 10, 'stays': 131, 'rollbacks': 9}
+5 stationary_noise 200 [0.00749   0.00749   0.0239367 0.00749  ] nan {'switches': 0, 'stays': 1500, 'rollbacks': 0}
+5 stationary_noise 1000 [0.00749   0.00752   0.0103367 0.00749  ] 0.13032542545386233 {'switches': 3, 'stays': 295, 'rollbacks': 2}
+5 stationary_noise 2000 [0.00749 0.00752 0.00868 0.00749] 0.09508880708028752 {'switches': 3, 'stays': 146, 'rollbacks': 1}
+5 structural_anisotropy 200 [0.0078233 0.0078233 0.0237667 0.0078233] nan {'switches': 0, 'stays': 1500, 'rollbacks': 0}
+5 structural_anisotropy 1000 [0.0078233 0.00788   0.0104333 0.0078233] 0.026845987363974092 {'switches': 8, 'stays': 287, 'rollbacks': 5}
+5 structural_anisotropy 2000 [0.0078233 0.0078533 0.0086267 0.0078233] 0.2931319693200375 {'switches': 6, 'stays': 139, 'rollbacks': 5}
+5 uniform_drift 200 [0.03375   0.0337767 0.0768    0.0344033] 0.17410256557669138 {'switches': 2, 'stays': 1496, 'rollbacks': 2}
+5 uniform_drift 1000 [0.03375   0.0343567 0.04316   0.0344033] 0.0006968773700422815 {'switches': 26, 'stays': 255, 'rollbacks': 19}
+5 uniform_drift 2000 [0.03375   0.03406   0.03754   0.0344033] 0.007060578870811929 {'switches': 15, 'stays': 127, 'rollbacks': 8}
+same trajectory keys True
+identical trajectory records 592 / 720
+fresh suite
+distance scenario W | mean LER (static, gated, ungated, matched) | paired t p | decisions
+3 localized_hotspot 200 [0.0255333 0.0256133 0.04157   0.0178467] 0.051363109853039046 {'switches': 11, 'stays': 1480, 'rollbacks': 9}
+3 localized_hotspot 1000 [0.0255333 0.0255167 0.02469   0.0178467] 0.537835939473046 {'switches': 6, 'stays': 288, 'rollbacks': 6}
+3 localized_hotspot 2000 [0.0255333 0.0254167 0.0214867 0.0178467] 0.16936210287102269 {'switches': 4, 'stays': 145, 'rollbacks': 1}
+3 stationary_noise 200 [0.0115467 0.0115467 0.0303333 0.0115467] nan {'switches': 0, 'stays': 1500, 'rollbacks': 0}
+3 stationary_noise 1000 [0.0115467 0.01154   0.01521   0.0115467] 0.3255819880161937 {'switches': 1, 'stays': 298, 'rollbacks': 1}
+3 stationary_noise 2000 [0.0115467 0.0115467 0.0127133 0.0115467] nan {'switches': 0, 'stays': 150, 'rollbacks': 0}
+3 structural_anisotropy 200 [0.0113167 0.0113167 0.0300367 0.0113167] nan {'switches': 0, 'stays': 1500, 'rollbacks': 0}
+3 structural_anisotropy 1000 [0.0113167 0.0113167 0.0156467 0.0113167] nan {'switches': 0, 'stays': 300, 'rollbacks': 0}
+3 structural_anisotropy 2000 [0.0113167 0.0113367 0.01274   0.0113167] 0.3255819880161935 {'switches': 1, 'stays': 148, 'rollbacks': 1}
+3 uniform_drift 200 [0.0319767 0.0319767 0.0623267 0.0319733] nan {'switches': 0, 'stays': 1500, 'rollbacks': 0}
+3 uniform_drift 1000 [0.0319767 0.0319767 0.0392167 0.0319733] nan {'switches': 0, 'stays': 300, 'rollbacks': 0}
+3 uniform_drift 2000 [0.0319767 0.0320133 0.0339533 0.0319733] 0.3087373841464313 {'switches': 4, 'stays': 144, 'rollbacks': 2}
+5 localized_hotspot 200 [0.0104833 0.0105233 0.02777   0.0091533] 0.1165818872448148 {'switches': 6, 'stays': 1488, 'rollbacks': 6}
+5 localized_hotspot 1000 [0.0104833 0.0104933 0.0125867 0.0091533] 0.47621308371163845 {'switches': 2, 'stays': 296, 'rollbacks': 2}
+5 localized_hotspot 2000 [0.0104833 0.0104633 0.01074   0.0091533] 0.10996852212800996 {'switches': 3, 'stays': 144, 'rollbacks': 3}
+5 stationary_noise 200 [0.00749   0.00749   0.0239367 0.00749  ] nan {'switches': 0, 'stays': 1500, 'rollbacks': 0}
+5 stationary_noise 1000 [0.00749   0.0075033 0.0103367 0.00749  ] 0.3255819880161937 {'switches': 1, 'stays': 298, 'rollbacks': 1}
+5 stationary_noise 2000 [0.00749 0.00749 0.00868 0.00749] nan {'switches': 0, 'stays': 150, 'rollbacks': 0}
+5 structural_anisotropy 200 [0.0078233 0.0078233 0.0237667 0.0078233] nan {'switches': 0, 'stays': 1500, 'rollbacks': 0}
+5 structural_anisotropy 1000 [0.0078233 0.0078367 0.0104333 0.0078233] 0.3255819880161937 {'switches': 1, 'stays': 298, 'rollbacks': 1}
+5 structural_anisotropy 2000 [0.0078233 0.0078433 0.0086267 0.0078233] 0.3255819880161935 {'switches': 1, 'stays': 149, 'rollbacks': 0}
+5 uniform_drift 200 [0.03375   0.03375   0.0768    0.0344033] nan {'switches': 0, 'stays': 1500, 'rollbacks': 0}
+5 uniform_drift 1000 [0.03375   0.03379   0.04316   0.0344033] 0.3544737695796935 {'switches': 3, 'stays': 295, 'rollbacks': 2}
+5 uniform_drift 2000 [0.03375   0.03384   0.03754   0.0344033] 0.12393518281089899 {'switches': 3, 'stays': 144, 'rollbacks': 3}
+anisotropy DEM equals stationary 3 True
+hotspot d 3 order: static, same-window gate, next-window gate, next-window ungated
+total errors / 300000 [7660 7625 7662 6446]
+mean delta, unadjusted paired t p, counts by delta sign -0.00011666666666666665 0.16936210287102269 Counter({np.float64(0.0): 28, np.float64(-1.0): 2})
+mean delta, unadjusted paired t p, counts by delta sign 6.66666666666667e-06 0.9217550865793289 Counter({np.float64(0.0): 28, np.float64(1.0): 1, np.float64(-1.0): 1})
+mean delta, unadjusted paired t p, counts by delta sign -0.004046666666666666 2.0216956585568506e-14 Counter({np.float64(-1.0): 30})
+anisotropy DEM equals stationary 5 True
+hotspot d 5 order: static, same-window gate, next-window gate, next-window ungated
+total errors / 300000 [3145 3139 3146 3222]
+mean delta, unadjusted paired t p, counts by delta sign -2e-05 0.10996852212800927 Counter({np.float64(0.0): 27, np.float64(-1.0): 3})
+mean delta, unadjusted paired t p, counts by delta sign 3.333333333333335e-06 0.9037552318660658 Counter({np.float64(0.0): 27, np.float64(1.0): 2, np.float64(-1.0): 1})
+mean delta, unadjusted paired t p, counts by delta sign 0.00025666666666666665 0.21051350345571898 Counter({np.float64(1.0): 15, np.float64(-1.0): 12, np.float64(0.0): 3})
+half-prior shrinkage stationary_noise 200 3591 0.01197
+half-prior shrinkage stationary_noise 2000 3472 0.011573333333333333
+half-prior shrinkage uniform_drift 200 10093 0.03364333333333333
+half-prior shrinkage uniform_drift 2000 9558 0.03186
+half-prior shrinkage localized_hotspot 200 5772 0.01924
+half-prior shrinkage localized_hotspot 2000 5996 0.019986666666666666
+half-prior shrinkage structural_anisotropy 200 3545 0.011816666666666666
+half-prior shrinkage structural_anisotropy 2000 3409 0.011363333333333333
+lock matches raw Git blob configs/suite.yaml False
+lock matches raw Git blob data/suite_results.json False
+lock matches raw Git blob data/manifest.json False
+lock matches raw Git blob papers/tables/table_1.tex False
+lock matches raw Git blob papers/tables/table_2.tex False
+lock matches raw Git blob papers/tables/table_3.tex False
+lock matches raw Git blob papers/tables/table_4.tex False
+lock matches raw Git blob papers/figures/fig_1_window_variance_tradeoff.pdf True
+lock matches raw Git blob papers/figures/fig_2_architecture_diagram.pdf True
+lock matches raw Git blob papers/figures/fig_4_distance_scaling.pdf True
+lock matches raw Git blob papers/figures/fig_5_paired_deltas.pdf True
+
+Historical commit c5a7a71: all 720 of 720 trajectory records equal the archived records on main.
+Historical hotspot timing sensitivity, same streams and audit conventions:
+anisotropy DEM equals stationary 3 True
+hotspot d 3 order: static, same-window gate, next-window gate, next-window ungated
+total errors / 300000 [7660 7531 7624 6446]
+mean delta, unadjusted paired t p, counts by delta sign -0.00042999999999999994 0.014526954968617271 Counter({np.float64(0.0): 22, np.float64(-1.0): 8})
+mean delta, unadjusted paired t p, counts by delta sign -0.00012 0.3090803165122107 Counter({np.float64(0.0): 22, np.float64(-1.0): 6, np.float64(1.0): 2})
+mean delta, unadjusted paired t p, counts by delta sign -0.004046666666666666 2.0216956585568506e-14 Counter({np.float64(-1.0): 30})
+anisotropy DEM equals stationary 5 True
+hotspot d 5 order: static, same-window gate, next-window gate, next-window ungated
+total errors / 300000 [3145 3132 3160 3222]
+mean delta, unadjusted paired t p, counts by delta sign -4.3333333333333334e-05 0.09075863631876271 Counter({np.float64(0.0): 22, np.float64(-1.0): 7, np.float64(1.0): 1})
+mean delta, unadjusted paired t p, counts by delta sign 5e-05 0.22816595017508157 Counter({np.float64(0.0): 24, np.float64(1.0): 5, np.float64(-1.0): 1})
+mean delta, unadjusted paired t p, counts by delta sign 0.00025666666666666665 0.21051350345571898 Counter({np.float64(1.0): 15, np.float64(-1.0): 12, np.float64(0.0): 3})

@@ -1,4 +1,3 @@
-# Phenomenological Threshold Shift Under Adaptive Control
-Ansatz for effective fault-tolerant threshold expansion.
+# Historical theory note
 
-$$P_L(p, d) = A \left( \frac{p}{p_{\text{th}}} \right)^{\frac{d+1}{2}}$$
+The original [exploratory discussion](../../archive/study_v2/docs/theory/07_threshold_shift_ansatz.md) is archived. For claims supported by the current study see [scope and assumptions](../THEORETICAL_PROOFS_AND_BOUNDS.md).

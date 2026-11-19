@@ -103,5 +103,6 @@
       "b2_true_union_find": 0.002,
       "b3_online_reweighted_mwpm": 0.0
     }
-  }
+  },
+  "provenance": "synthetic Stim sample, seed 101; copied hardware metadata is historical context only"
 }

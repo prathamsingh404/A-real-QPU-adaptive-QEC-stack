@@ -1,4 +1,3 @@
-# Sublinear Regret Bounds Under DASE
-Proof of bounded cumulative regret in non-stationary multi-armed bandit.
+# Historical theory note
 
-$$R(T) \le \mathcal{O}(\sqrt{K T \ln K} + S \cdot \Delta_0)$$
+The original [exploratory discussion](../../archive/study_v2/docs/theory/05_sublinear_regret_bounds.md) is archived. For claims supported by the current study see [scope and assumptions](../THEORETICAL_PROOFS_AND_BOUNDS.md).

@@ -1,4 +1,3 @@
-# Dimensionality Scaling from d=3 to d=7
-State space volume expansion in surface codes.
+# Historical theory note
 
-$$N_{\text{det}} = d^2 - 1$$
+The original [exploratory discussion](../../archive/study_v2/docs/theory/08_distance_scaling_analysis.md) is archived. For claims supported by the current study see [scope and assumptions](../THEORETICAL_PROOFS_AND_BOUNDS.md).

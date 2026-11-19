@@ -3,9 +3,8 @@ message: "If you use this software or benchmark suite, please cite it as below."
 authors:
   - family-names: Singh
     given-names: Pratham
-title: "When Does Online Decoder Reweighting Pay Off in Quantum Error Correction? A Confidence-Gated Framework"
-version: 2.0.0
-date-released: 2026-10-25
+title: "When should a surface-code decoder rebuild its matching graph? A paired benchmark under a fixed update cap"
+version: 3.0.0
 url: "https://github.com/prathamsingh404/A-real-QPU-adaptive-QEC-stack"
 repository-code: "https://github.com/prathamsingh404/A-real-QPU-adaptive-QEC-stack"
 keywords:

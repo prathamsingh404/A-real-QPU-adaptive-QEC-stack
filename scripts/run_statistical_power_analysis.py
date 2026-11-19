@@ -89,7 +89,7 @@ def run_power_analysis() -> dict:
         "power_curve": power_curve,
     }
 
-    out_path = Path("data/power_analysis_report.json")
+    out_path = Path("experiments/results/exploratory_power_curve.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)

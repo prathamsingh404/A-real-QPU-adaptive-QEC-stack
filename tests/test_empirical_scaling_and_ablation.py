@@ -218,7 +218,7 @@ def test_real_suite_results_integration():
     import json
     from pathlib import Path
 
-    json_path = Path("data/suite_results.json")
+    json_path = Path("archive/study_v2/data/suite_results.json")
     assert json_path.exists(), "data/suite_results.json must exist in repository"
 
     with open(json_path, "r", encoding="utf-8") as f:

@@ -1,4 +1,3 @@
-# Syndrome Autocorrelation Tensor Formulation
-Space-time syndrome correlation metrics.
+# Historical theory note
 
-$$C_{ij}(\tau) = \mathbb{E}[(s_i(t) - \bar{s}_i)(s_j(t+\tau) - \bar{s}_j)]$$
+The original [exploratory discussion](../../archive/study_v2/docs/theory/09_syndrome_autocorrelation.md) is archived. For claims supported by the current study see [scope and assumptions](../THEORETICAL_PROOFS_AND_BOUNDS.md).

@@ -1,14 +1,16 @@
-\begin{table}[t]
-\centering
-\small
-\caption{\textbf{Code Distance Scaling and Logical Error Suppression.} Error suppression factor $\Lambda_{3 \to 5} = \text{LER}(d=3) / \text{LER}(d=5)$ below threshold ($p=0.004 < p_{\text{th}}$). Provenance: simulation.}
-\label{tab:distance_scaling}
-\begin{tabular}{lcccc}
-\toprule
-\textbf{Metric} & \textbf{$d=3$ LER} & \textbf{$d=5$ LER} & \textbf{Suppression $\Lambda_{3 \to 5}$} & \textbf{Suppression Gain} \\
-\midrule
-Static Baseline (MWPM) & $0.01155$ & $0.00749$ & $1.542$ & $1.000$ \\
-CG-CCADS (This Work) & $0.01160$ & $0.00752$ & $1.543$ & $1.001$ \\
-\bottomrule
-\end{tabular}
-\end{table}
+\begin{center}\small
+\begin{tabular}{lrrrr}
+\hline
+Decoder & X, 200 & X, 2000 & Z, 200 & Z, 2000 \\
+\hline
+Factory MWPM & 4856 & 4856 & 4046 & 4046 \\
+Raw update & 7394 & 4736 & 7185 & 4260 \\
+50:50 shrinkage & 4777 & 4555 & 4090 & 3906 \\
+Two-window shrinkage & 4714 & 4589 & 4057 & 3892 \\
+Periodic, capped & 4783 & 4676 & 4140 & 3927 \\
+Selective, capped & 4850 & 4680 & 4046 & 4039 \\
+Historical gate, causal & 4944 & 4830 & 4046 & 4094 \\
+Published correlated matching & 4086 & 4086 & 3419 & 3419 \\
+\hline\end{tabular}
+\par\smallskip\parbox{0.93\linewidth}{\small Google memory data. Errors per 44,000 scored shots per basis. Columns with the same basis reuse the same shots.}
+\end{center}

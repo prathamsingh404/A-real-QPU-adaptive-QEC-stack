@@ -1,64 +1,11 @@
-# Comparative Prior Art Matrix & Literature Grounding
+# Prior work and contribution assessment
 
-**Manuscript Reference Document**  
-**Associated Target Publication**: *IEEE Transactions on Quantum Engineering* / *Quantum Science and Technology*  
-**Paper Title**: *"When Does Online Decoder Reweighting Pay Off in Quantum Error Correction? A Confidence-Gated Framework"*
+| Source | Method already demonstrated | Relationship to this study |
+|---|---|---|
+| Spitz et al. (2017 preprint, 2018 journal) | Infers matching weights from syndrome statistics in a changing environment | Our pairwise estimator follows this approach. Factory mixing and update schedules are separate choices. [Paper](https://arxiv.org/abs/1712.02360) |
+| Wang et al., DGR (2023–24) | Estimates weights from occurrences of decoded edges, then conditionally adjusts weights for correlations | Our additional public replay independently implements the occurrence-based alignment stage, clips extreme frequencies and updates the next window. The correlation stage and published hardware design are outside this comparison. [Methods, section IV](https://arxiv.org/html/2311.16214v3) |
+| Bhardwaj et al. (2026) | Derives sliding-window filtering behavior and tracks drift with iterative and relative-window estimators | Our two-window pool is a simple comparator. It does not reproduce their spectral or relative-window algorithm. A claim of first windowed adaptation would be indefensible. [Paper](https://journals.aps.org/prxquantum/abstract/10.1103/z1hc-nqw5) · [Authors' code](https://github.com/Dev-ph-quan-1203/Estimation-of-Drifting-Noise-in-QEC) |
+| Poster et al., ReloQate (2026 preprint) | Uses detector fire rates to predict logical performance and trigger tile remapping for recalibration | Our alarm changes decoder edge weights. Their intervention acts on a different resource. The general idea of triggering on detector telemetry is established. [Paper](https://arxiv.org/abs/2603.00837) |
+| Google Quantum AI | Published physical memories, observable flips and correlated-decoder predictions | We score the provided predictions on precisely the file rows scored by our policies. The experimental data and baseline predictions belong to their authors. [Release](https://zenodo.org/records/13273331) |
 
----
-
-## 1. Prior Art Comparison Matrix
-
-| Approach / Work | Primary Target | Adaptation Mechanism | Considers Switching / Latency Cost? | Has Explicit Abstention (`STAY`)? | Observation Boundary Enforced? | Regret / Theoretical Bounds? | Evaluation Modality |
-| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Static MWPM**<br>(Dennis et al. 2002; Fowler et al. 2012) | Stationary Pauli noise | None (fixed factory prior) | N/A | Always stays | Yes (syndromes only) | Static threshold proofs | Multi-platform QPU |
-| **Spitz et al.**<br>(*arXiv:1712.02360*, 2018) | Time-dependent noise | Unconditional covariance-parity edge estimator | ❌ No | ❌ No | Yes (label-free syndromes) | Estimator asymptotic variance | Numerical simulation |
-| **Bhardwaj et al.**<br>(*PRX Quantum*, 2026) | Drifting error channels | Sliding-window DEM reweighting | ❌ No | ❌ No | Yes (syndromes only) | Asymptotic threshold gain | Numerical simulation |
-| **Calibrated Decoders**<br>(Chen et al., *PRL* 2022) | Inhomogeneous device noise | Offline calibrated edge weights | ❌ No (offline) | N/A | Offline calibration | None reported | Superconducting QPU |
-| **AlphaQubit**<br>(Google DeepMind, *Nature* 2024) | Static processor instance | Deep recurrent transformer neural network | ❌ No | ❌ No | Soft/analog readouts + syndromes | Empirical neural scaling | 72-qubit Sycamore QPU |
-| **Willow RL Control**<br>(Google Quantum AI, *Nature* 2026) | Physical Hamiltonian drift | Reinforcement learning pulse/frequency tuning | ⚠️ Partial (loss reward) | ❌ No | Calibration + leakage telemetry | Empirical RL convergence | Willow QPU |
-| **Local Clustering Decoder**<br>(Riverlane, *arXiv:2411.10343*) | Sub-microsecond real-time decoding | Distributed local cluster growth on FPGA/ASIC | ⚠️ Real-time latency | ❌ No | Local syndrome windows | Hardware execution bounds | FPGA emulation |
-| **CG-CCADS (This Work)** | **Non-stationary QEC orchestration** | **3-Gate Confidence & Cost Constrained Selection** | **✅ Explicitly quantified** ($C_{\text{switch}} + C_{\text{latency}}$) | **✅ Core primitive** (Default is zero-cost `STAY`) | **✅ Strict label-free boundaries** (Zero oracle leakage) | **✅ FWER-controlled LCB & dynamic regret bounds** | **Held-out simulation suite & reproducible pipeline** |
-
----
-
-## 2. Complementary Positioning vs. Frontier Literature
-
-### 2.1 Spitz et al. (arXiv:1712.02360, 2018)
-- **Foundational Insight**: Derived the analytical single-fault parity-covariance equations enabling edge error probabilities in a matching graph to be estimated directly from syndrome measurement coincidences without requiring logical state labels.
-- **The Open Gap**: Unconditional periodic re-estimation was evaluated without considering finite-sample estimation variance in small sample windows ($W \le 1{,}000$), where coincidence noise severely corrupts Dijkstra graph weights.
-- **Our Positioning**: We adopt the Spitz covariance-parity equations as our candidate graph estimator, but embed it within a sequential 3-gate statistical filter that computes Bonferroni-corrected Lower Confidence Bounds (LCB) before accepting any weight recomputation.
-
-### 2.2 Bhardwaj et al. (PRX Quantum 7, 033024, 2026)
-- **Foundational Insight**: Demonstrated that updating MWPM edge weights in drifting superconducting channels reduces logical error under slow parameter variations.
-- **The Open Gap**: Assumed that sliding-window reweighting is universally beneficial, evaluating regimes where sample sizes were asymptotically favorable. Did not analyze small-window variance explosion, uniform drift invariance, or decision-theoretic abstention.
-- **Our Positioning**: We delineate the operational boundary: at $W=200$, naive unconditional reweighting degrades logical error by $+104.38\%$, and uniform global drift provides $<2\%$ headroom. CG-CCADS introduces the confidence-gated decision rule that enforces safe abstention (`STAY`) under null drift and small windows, updating only when localized drift provides statistically conclusive advantage.
-
-### 2.3 AlphaQubit (Google DeepMind, *Nature* 2024)
-- **Foundational Insight**: Achieved breakthrough decoding accuracy on 72-qubit Sycamore using transformer architectures trained on soft analog readout values and syndrome histories.
-- **The Open Gap**: AlphaQubit is an individual decoder primitive. It does not address supervisory orchestration: when should a system incur high-latency neural inference versus remaining with ultra-fast matching or static priors?
-- **Our Positioning**: CG-CCADS operates at the supervisory orchestration layer above individual decoding engines, regulating classical update dispatches on macro-timescales ($W$ syndrome rounds).
-
-### 2.4 Google Willow RL Control (*Nature* 2026)
-- **Foundational Insight**: Uses reinforcement learning to optimize microwave pulse parameters, frequencies, and physical gate calibrations at the physical device layer.
-- **Our Positioning**: Google Willow intervenes on the **physical quantum Hamiltonian** (pulse-level control). CG-CCADS operates on the **classical information layer** (deciding how syndrome graphs are weighted), avoiding physical state perturbation.
-
----
-
-## 3. Core Scientific Contributions
-
-1. **Phase Characterization of the Online Reweighting Tradeoff**:
-   First empirical and theoretical demonstration that naive sliding-window DEM reweighting suffers a severe finite-sample tax under small observation windows ($+104.38\%$ degradation at $W=200$), and that uniform global drift provides negligible adaptation headroom ($<2\%$).
-2. **The CG-CCADS 3-Gate Architecture**:
-   A decision-theoretic meta-control pipeline operating strictly on label-free syndrome streams:
-   - *Gate 1: Defect Rate CUSUM Test* ($|Z_{\text{drift}}| \le T_{\text{drift}} \implies \text{STAY}$)
-   - *Gate 2: FWER-Controlled LCB Test* ($\max_e \text{LCB}_e \le \epsilon_{\text{deadzone}} \implies \text{STAY}$)
-   - *Gate 3: Cost-Constrained Threshold* ($\max_e \text{LCB}_e > \tau_{\text{adapt}} + C_{\text{switch}} \implies \text{REWEIGHT}$)
-3. **Rigorous Analytical Bounds**:
-   - Family-wise error rate control: $P(\text{False Switch} \mid H_0) \le \alpha$.
-   - Average Run Length under null stationary noise: $\text{ARL}_0 \ge \frac{\exp(2\delta T) - 2\delta T - 1}{2\delta^2}$.
-   - Minimum detectable drift amplitude threshold $A_{\text{drift}}^*$.
-   - Piecewise-stationary dynamic regret bound: $\mathcal{O}(\sqrt{S \cdot |E| \cdot T \log T} + S \cdot C_{\text{switch}})$.
-4. **Reproducible Empirical Validation**:
-   - Evaluated across $N=30$ independent held-out trajectories (seeds 1000–1029) on rotated surface codes below threshold ($p=0.004 < p_{\text{th}}$, $d \in \{3, 5\}$).
-   - Below-threshold error suppression factor $\Lambda_{3 \to 5} = 1.543 > 1.0$.
-   - Bound to an automated pipeline verified by AST checks (zero hardcoded literals) and cryptographic SHA-256 provenance lock (`paper.lock`).
+The defensible contribution is testing an operational question with common shots, a common rebuild cap, strictly delayed updates, independent trajectories and measured host costs. No broad estimator, threshold, optimality or hardware feedback novelty follows. The closest prior methods overlap substantially. This search cannot establish worldwide priority for the exact design.

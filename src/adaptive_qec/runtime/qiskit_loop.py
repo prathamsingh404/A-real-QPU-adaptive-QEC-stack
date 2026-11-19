@@ -176,8 +176,11 @@ class QiskitRuntimeLoop:
         dem_calibrator: Any = None,
         scheduler: Any = None,
         budget_manager: Any = None,
+        result_parser: Any = None,
     ) -> None:
         config.validate()
+        self._result_parser = result_parser
+        self._last_provider_job_id = None
         self._config = config
         self._controller = controller
         self._dem_calibrator = dem_calibrator
@@ -444,11 +447,10 @@ class QiskitRuntimeLoop:
                 predictions = decoder.decode_batch(syndromes)
                 if observables is not None:
                     logical_errors = int(
-                        np.sum(predictions != observables)
+                        np.count_nonzero(np.asarray(predictions).reshape(observables.shape) != observables)
                     )
             except Exception as e:
-                logger.warning(f"Decoding failed: {e}")
-                logical_errors = 0
+                raise RuntimeError("Failed to score decoder predictions") from e
         elif observables is not None:
             # Fallback: count non-zero observables as errors
             logical_errors = int(np.sum(observables != 0))
@@ -499,7 +501,7 @@ class QiskitRuntimeLoop:
             controller_action=action_dict,
             execution_time_s=t_elapsed,
             timestamp=datetime.now(timezone.utc).isoformat(),
-            job_id=str(uuid.uuid4())[:12],
+            job_id=(str(uuid.uuid4())[:12] if self._config.dry_run else self._last_provider_job_id),
         )
 
     def _run_circuit(
@@ -529,31 +531,25 @@ class QiskitRuntimeLoop:
             from qiskit_ibm_runtime import SamplerV2
 
             circuit = circuit_builder()
-            sampler = SamplerV2(session=self._session)
+            from adaptive_qec.qpu.repetition_records import convert_registers, extract_registers
+            parser = self._result_parser
+            if parser is None:
+                names = {r.name for r in circuit.cregs}
+                rounds = len(names) - 1
+                if rounds < 1 or names != {"meas_data", *(f"syn{i}" for i in range(rounds))}:
+                    raise ValueError("Supply result_parser for this circuit's measurement layout")
+                def parser(data):
+                    _, detectors, observable = convert_registers(extract_registers(data, rounds))
+                    return detectors, observable
+            sampler = SamplerV2(mode=self._session if self._session is not None else self._backend)
             job = sampler.run([circuit], shots=shots)
             result = job.result()
 
-            # Extract bitstrings from result
-            pub_result = result[0]
-            bitstrings = pub_result.data.meas.get_bitstrings()
-
-            # Parse into syndrome and observable arrays
-            # (Implementation depends on circuit structure)
-            n_bits = len(bitstrings[0]) if bitstrings else 0
-            raw = np.array(
-                [[int(b) for b in bs] for bs in bitstrings],
-                dtype=np.uint8,
-            )
-
-            # Last column(s) are observables, rest are detectors
-            if n_bits > 1:
-                syndromes = raw[:, :-1]
-                observables = raw[:, -1:]
-            else:
-                syndromes = raw
-                observables = None
-
-            return syndromes, observables
+            self._last_provider_job_id = job.job_id()
+            detectors, observables = parser(result[0].data)
+            if len(detectors) != shots or observables is None or len(observables) != shots:
+                raise ValueError("Memory benchmark requires paired detection and logical records for each shot")
+            return detectors, observables
 
         except Exception as e:
             logger.error(f"Hardware execution failed: {e}")

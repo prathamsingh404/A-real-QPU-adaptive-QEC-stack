@@ -1,0 +1,16 @@
+\begin{table*}[t]
+\centering
+\small
+\caption{\textbf{Pre-Registered Confirmatory Endpoints Across Physical Noise Scenarios.} Trajectory-paired delta logical error rate ($\bar{\Delta} = \text{LER}_{\text{adaptive}} - \text{LER}_{\text{static}}$) evaluated over $N=30$ independent held-out test seeds (seeds 1000--1029) at primary window size $W=2{,}000$ and $d=3$. Negative $\bar{\Delta}$ indicates adaptive superiority. Provenance: simulation.}
+\label{tab:confirmatory_endpoints}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Scenario Regime} & \textbf{Static LER} & \textbf{CG-CCADS LER} & \textbf{Paired $\bar{\Delta}$ (95\% CI)} & \textbf{$t$-statistic} & \textbf{$p$-value} & \textbf{Decision} \\
+\midrule
+Stationary Baseline (Negative Control) & $0.0115 \pm 0.0011$ & $0.0116 \pm 0.0011$ & $+0.0001$ $[-0.0001, 0.0002]$ & $+1.00$ & $0.3256$ & STAY (Abstain) \\
+Uniform Global Drift (Negative Control) & $0.0320 \pm 0.0018$ & $0.0321 \pm 0.0017$ & $+0.0002$ $[-0.0000, 0.0003]$ & $+1.67$ & $0.1052$ & STAY (Abstain) \\
+Localized Hotspot (Qubit Drift) & $0.0255 \pm 0.0015$ & $0.0251 \pm 0.0015$ & $-0.0004$ $[-0.0008, -0.0001]$ & $-2.60$ & $0.0145$ & STAY (Abstain) \\
+Structural Anisotropy Shift & $0.0113 \pm 0.0009$ & $0.0113 \pm 0.0009$ & $+0.0000$ $[-0.0000, 0.0001]$ & $+1.00$ & $0.3256$ & STAY (Abstain) \\
+\bottomrule
+\end{tabular}
+\end{table*}

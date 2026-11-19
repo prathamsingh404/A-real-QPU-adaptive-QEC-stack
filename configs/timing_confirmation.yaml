@@ -1,0 +1,5 @@
+alpha: 0.05
+minimum_effect: 0.0006
+panels:
+  - {distance: 3, first_seed: 91000, count: 90}
+  - {distance: 5, first_seed: 92000, count: 45}

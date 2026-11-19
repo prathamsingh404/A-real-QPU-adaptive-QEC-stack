@@ -1,89 +1,48 @@
-"""
-Generate Cryptographic SHA-256 Provenance Lock (paper.lock).
-
-Computes real SHA-256 hashes for all empirical simulation data files,
-generated manuscript tables, and figures, binding them to the git commit.
-"""
-
-from __future__ import annotations
-
+"""Freeze the files used for the paper. Text digests use LF on every platform."""
 import hashlib
 import json
-import logging
-import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("MakeLock")
-
-TRACKED_FILES = [
-    Path("configs/suite.yaml"),
-    Path("data/suite_results.json"),
-    Path("data/manifest.json"),
-    Path("papers/tables/table_1.tex"),
-    Path("papers/tables/table_2.tex"),
-    Path("papers/tables/table_3.tex"),
-    Path("papers/tables/table_4.tex"),
-    Path("papers/figures/fig_1_window_variance_tradeoff.pdf"),
-    Path("papers/figures/fig_2_architecture_diagram.pdf"),
-    Path("papers/figures/fig_4_distance_scaling.pdf"),
-    Path("papers/figures/fig_5_paired_deltas.pdf"),
-]
+ROOT = Path(__file__).resolve().parents[1]
 
 
-def compute_sha256(path: Path) -> str:
-    """Compute the SHA-256 hex digest of a file."""
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        while chunk := f.read(65536):
-            h.update(chunk)
-    return h.hexdigest()
+def compute_sha256(path):
+    data = path.read_bytes()
+    if path.suffix.lower() not in {".b8", ".pdf", ".png"}:
+        data = data.replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
-def get_git_commit() -> str:
-    """Get current git commit hash."""
-    try:
-        res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
-        return res.stdout.strip()
-    except Exception:
-        return "UNKNOWN_COMMIT"
+def paper_files():
+    manifest = json.loads((ROOT / "data/manifest.json").read_text())
+    fixed = {*manifest["source_sha256"], "configs/suite.yaml", "data/manifest.json", "data/suite_results.json",
+             "data/analysis.json", "data/midpoint_results.json", "scripts/check_single_fit.py", "data/host_timings.json", "data/public_replay_results.json", "data/public_alignment_results.json",
+             "README.md", "VALIDATION.md", "papers/main.tex", "papers/main.pdf", "CITATION.cff", "uv.lock",
+             "scripts/make_claims.py", "scripts/make_lock.py", "scripts/verify_lock.py", "scripts/reproduce.py",
+             "scripts/profile_reweighting.py", "scripts/replay_public_memory.py", "scripts/replay_alignment.py",
+             "src/adaptive_qec/analysis/causal_results.py", "src/adaptive_qec/analysis/make_paper_tables.py",
+             "src/adaptive_qec/analysis/make_paper_figures.py", "docs/prior_art_matrix.md",
+             "papers/figures/paired_comparison.pdf", "papers/figures/paired_comparison.png"}
+    fixed.update(f"papers/tables/table_{i}.tex" for i in range(1,6))
+    fixed.update(p.relative_to(ROOT).as_posix() for p in (ROOT / "data/public_replay").rglob("*") if p.is_file())
+    return sorted(fixed)
 
 
-def generate_lock(lock_path: Path = Path("paper.lock")) -> None:
-    """Generate paper.lock with genuine SHA-256 digests."""
-    git_commit = get_git_commit()
-    file_hashes: Dict[str, str] = {}
-
-    missing_files = []
-    for f in TRACKED_FILES:
-        if not f.exists():
-            missing_files.append(str(f))
-        else:
-            file_hashes[str(f).replace("\\", "/")] = compute_sha256(f)
-
-    if missing_files:
-        logger.warning("Some tracked files do not exist yet: %s", missing_files)
-
-    lock_payload = {
-        "metadata": {
-            "version": "2.0.0",
-            "git_commit": git_commit,
-            "created_at_utc": datetime.now(timezone.utc).isoformat(),
-            "hash_algorithm": "SHA-256",
-            "provenance": "simulation",
-            "total_tracked_files": len(file_hashes),
-        },
-        "files": file_hashes,
-    }
-
-    with open(lock_path, "w", encoding="utf-8") as f:
-        json.dump(lock_payload, f, indent=2)
-
-    logger.info("Successfully generated %s with %d file hashes (commit: %s)", lock_path, len(file_hashes), git_commit[:8])
+def check_manifest():
+    manifest = json.loads((ROOT / "data/manifest.json").read_text())
+    targets = {**manifest["source_sha256"], "configs/suite.yaml":manifest["config_sha256"],
+               "data/suite_results.json":manifest["results_file"]["sha256"]}
+    for name, expected in targets.items():
+        if compute_sha256(ROOT / name) != expected:
+            raise ValueError(f"Frozen simulation digest changed: {name}")
+    return manifest
 
 
 if __name__ == "__main__":
-    generate_lock()
+    manifest = check_manifest()
+    hashes = {name:compute_sha256(ROOT / name) for name in paper_files()}
+    meta = dict(version=3, provenance="simulation, public physical replay, host profiling",
+                hash_algorithm="SHA-256", git_commit=manifest["git_commit"], git_commit_scope="pre-evaluation simulation",
+                created_at_utc=datetime.now(timezone.utc).isoformat(), total_tracked_files=len(hashes))
+    (ROOT / "paper.lock").write_text(json.dumps(dict(metadata=meta, files=hashes), indent=2)+"\n", encoding="utf8", newline="\n")

@@ -1,4 +1,3 @@
-# MWPM Failure Modes Under Persistent Defects
-Analysis of Minimum Weight Perfect Matching under repeated syndrome violations.
+# Historical theory note
 
-$$w(e) = \log \frac{1 - p_e}{p_e}$$
+The original [exploratory discussion](../../archive/study_v2/docs/theory/03_mwpm_failure_modes.md) is archived. For claims supported by the current study see [scope and assumptions](../THEORETICAL_PROOFS_AND_BOUNDS.md).

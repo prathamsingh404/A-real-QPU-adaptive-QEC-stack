@@ -1,4 +1,3 @@
-# Non-Markovian Noise Channel Formulation
-Theoretical model of non-Markovian noise processes in transmon architectures.
+# Historical theory note
 
-$$\mathcal{E}(\rho) = (1 - \gamma) \mathcal{E}_{\text{circ}}(\rho) + \gamma \mathcal{E}_{\text{corr}}(\rho)$$
+The original [exploratory discussion](../../archive/study_v2/docs/theory/01_non_markovian_noise.md) is archived. For claims supported by the current study see [scope and assumptions](../THEORETICAL_PROOFS_AND_BOUNDS.md).

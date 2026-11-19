@@ -1,4 +1,3 @@
-# Real-Time Latency Budgeting on FPGA Control Fabrics
-Analysis of decoding cycles relative to qubit coherence.
+# Historical theory note
 
-$$t_{\text{decode}} < t_{\text{cycle}} \approx 1 \,\mu\text{s}$$
+The original [exploratory discussion](../../archive/study_v2/docs/theory/06_latency_budgeting.md) is archived. For claims supported by the current study see [scope and assumptions](../THEORETICAL_PROOFS_AND_BOUNDS.md).

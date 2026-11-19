@@ -1,4 +1,3 @@
-# Topological Cluster Growth Dynamics
-Formulation of Union-Find cluster radius growth.
+# Historical theory note
 
-$$r(v, t) = r(v, 0) + \frac{1}{2} t$$
+The original [exploratory discussion](../../archive/study_v2/docs/theory/02_cluster_growth_dynamics.md) is archived. For claims supported by the current study see [scope and assumptions](../THEORETICAL_PROOFS_AND_BOUNDS.md).

@@ -1,0 +1,22 @@
+{
+  "provenance": "simulation",
+  "git_commit": "03090564d90ca2196da463497ca3d0c5117ef10e",
+  "timestamp_utc": "2026-10-25T16:57:30.644148+00:00",
+  "command_line": "experiments/run_suite.py --config configs/suite.yaml --seeds 1000:1030 --output data/suite_results.json --manifest data/manifest.json",
+  "execution_duration_sec": 259.39,
+  "system": {
+    "platform": "Windows-11-10.0.29695-SP0",
+    "python_version": "3.14.2",
+    "stim_version": "1.16.0",
+    "pymatching_version": "2.4.0"
+  },
+  "config": {
+    "path": "configs\\suite.yaml",
+    "sha256": "918e0b33ff9cf6bab0c44b09127759cbb0971ecbca2361f7786703d03b225e78"
+  },
+  "results_file": {
+    "path": "data\\suite_results.json",
+    "sha256": "b99374433fcd5511cd5ccd31fcb94c6f3e8050ef917bb06b06aedb8e8d63a85f",
+    "total_records": 720
+  }
+}

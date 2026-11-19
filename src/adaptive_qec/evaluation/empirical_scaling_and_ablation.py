@@ -125,7 +125,7 @@ def compute_distance_scaling(
     reporting 95% bootstrap confidence intervals for Lambda and suppression gain.
     A higher Lambda indicates stronger exponential suppression of logical errors.
     """
-    p = results_path or Path("data/suite_results.json")
+    p = results_path or Path("archive/study_v2/data/suite_results.json")
     suite_data: Optional[Dict[str, Any]] = None
     if p.exists():
         import json
@@ -547,7 +547,7 @@ class ComponentAblationStudy:
         4. Large Window Naive Reweighting (W=2000): Spitz re-estimation with sufficient samples.
         5. Oracle Upper Bound: Hindsight optimum without switching penalty.
         """
-        p = results_path or Path("data/suite_results.json")
+        p = results_path or Path("archive/study_v2/data/suite_results.json")
         if not p.exists():
             raise FileNotFoundError(f"Missing empirical results at {p}. Run experiments/run_suite.py first.")
 

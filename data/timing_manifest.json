@@ -1,0 +1,12 @@
+{
+  "freeze_commit": "bdfc293e9cdd5a48eea72d7d788d507dc3616a3b",
+  "source_sha256": {
+    "TIMING_PROTOCOL.md": "eeca4cd5ddf2182faedf81ebfb7c00670b7fbf1f6dcc0bf62b6610e1f36550cc",
+    "configs/timing_confirmation.yaml": "c223e19254085afcd7df2d6754edea1d346c99235bf9e8a5bfb5db7a1946f5dc",
+    "scripts/confirm_update_timing.py": "1391e9ccb29da3121b256458e6f50569fcf2bb281c3c59d53cbafdaa42a3c072",
+    "data/timing_development.json": "7d41c35fd61354c29df6783233aab3fe78bf8e3d929f9487c05d6be77634c8bc",
+    "src/adaptive_qec/analysis/causal_results.py": "9dbbe6ee9218658a7f568c6101f531b09a594e31d1d85cfd545604763ceef21b"
+  },
+  "base_simulation_manifest": "data/manifest.json",
+  "result_sha256": "30c5507aa5edaae6babff95ffecd2acb5ef95aba25707a7dcdc172018e1d8a34"
+}

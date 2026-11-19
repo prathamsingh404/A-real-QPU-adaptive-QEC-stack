@@ -1,0 +1,32 @@
+{
+  "records": [
+    {
+      "basis": "X",
+      "first_scored_row": 6000,
+      "shots": 44000,
+      "errors": {
+        "local_uncorrelated": 4856,
+        "local_correlated": 4205,
+        "correlated_matching_decoder_with_rl_optimized_prior": 3643,
+        "correlated_matching_decoder_with_si1000_prior": 4086,
+        "harmony_decoder_with_rl_optimized_prior": 3517,
+        "harmony_decoder_with_si1000_prior": 3889
+      }
+    },
+    {
+      "basis": "Z",
+      "first_scored_row": 6000,
+      "shots": 44000,
+      "errors": {
+        "local_uncorrelated": 4046,
+        "local_correlated": 3607,
+        "correlated_matching_decoder_with_rl_optimized_prior": 2960,
+        "correlated_matching_decoder_with_si1000_prior": 3419,
+        "harmony_decoder_with_rl_optimized_prior": 2899,
+        "harmony_decoder_with_si1000_prior": 3089
+      }
+    }
+  ],
+  "source": "https://zenodo.org/records/13273331",
+  "scope": "Offline replay. Publisher RL priors used 13-cycle calibration data; independence from these records is unverified."
+}

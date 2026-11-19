@@ -24,6 +24,9 @@ def paper_files():
              "src/adaptive_qec/analysis/causal_results.py", "src/adaptive_qec/analysis/make_paper_tables.py",
              "src/adaptive_qec/analysis/make_paper_figures.py", "docs/prior_art_matrix.md",
              "papers/figures/paired_comparison.pdf", "papers/figures/paired_comparison.png"}
+    fixed.update({"TIMING_PROTOCOL.md", "configs/timing_confirmation.yaml", "data/timing_manifest.json",
+                  "data/timing_development.json", "data/timing_confirmation.json", "scripts/confirm_update_timing.py",
+                  "reports/REBUILD_REPORT.md", "scripts/inspect_public_ibm.py", "data/external_ibm_majority.json", "scripts/check_ising_sample_format.py", "docs/implementation_review.md", "scripts/compare_public_decoders.py", "data/public_decoder_comparison.json"})
     fixed.update(f"papers/tables/table_{i}.tex" for i in range(1,6))
     fixed.update(p.relative_to(ROOT).as_posix() for p in (ROOT / "data/public_replay").rglob("*") if p.is_file())
     return sorted(fixed)
@@ -33,6 +36,9 @@ def check_manifest():
     manifest = json.loads((ROOT / "data/manifest.json").read_text())
     targets = {**manifest["source_sha256"], "configs/suite.yaml":manifest["config_sha256"],
                "data/suite_results.json":manifest["results_file"]["sha256"]}
+    follow = json.loads((ROOT / "data/timing_manifest.json").read_text())
+    targets.update(follow["source_sha256"])
+    targets["data/timing_confirmation.json"] = follow["result_sha256"]
     for name, expected in targets.items():
         if compute_sha256(ROOT / name) != expected:
             raise ValueError(f"Frozen simulation digest changed: {name}")

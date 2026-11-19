@@ -9,3 +9,5 @@
 | Google Quantum AI | Published physical memories, observable flips and correlated-decoder predictions | We score the provided predictions on precisely the file rows scored by our policies. The experimental data and baseline predictions belong to their authors. [Release](https://zenodo.org/records/13273331) |
 
 The defensible contribution is testing an operational question with common shots, a common rebuild cap, strictly delayed updates, independent trajectories and measured host costs. No broad estimator, threshold, optimality or hardware feedback novelty follows. The closest prior methods overlap substantially. This search cannot establish worldwide priority for the exact design.
+
+The [expanded implementation review](implementation_review.md) covers NVIDIA Ising, IBM Relay-BP and Pêlagos, Google and DeepMind, QAdapt v3, physical closed-loop control and recent learned priors.

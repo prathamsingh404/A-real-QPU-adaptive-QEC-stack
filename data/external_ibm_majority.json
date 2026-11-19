@@ -1,0 +1,85 @@
+{
+  "source": "https://zenodo.org/records/20768087/files/ibm_fez.tar.gz",
+  "archive_md5": "27ce2827dde0713a436179121bfd7173",
+  "device": "ibm_fez",
+  "archive_snapshots": 41,
+  "records": [
+    {
+      "snapshot": "ibm_fez/d3_r1/job_1/info.json",
+      "basis": "X",
+      "prepared_state": 0,
+      "device_shots": 2048,
+      "parallel_chains": 10,
+      "errors_per_chain": {
+        "c_data_60_61_76_81_80": 10,
+        "c_data_1_2_3_4_5": 8,
+        "c_data_33_34_35_19_15": 4,
+        "c_data_130_131_132_133_134": 1,
+        "c_data_140_141_142_143_144": 0,
+        "c_data_53_52_51_50_49": 7,
+        "c_data_117_105_106_107_108": 4,
+        "c_data_56_43_42_41_40": 1,
+        "c_data_79_93_92_91_98": 0,
+        "c_data_113_112_111_110_109": 14
+      }
+    },
+    {
+      "snapshot": "ibm_fez/d3_r1/job_1/info.json",
+      "basis": "X",
+      "prepared_state": 1,
+      "device_shots": 2048,
+      "parallel_chains": 10,
+      "errors_per_chain": {
+        "c_data_60_61_76_81_80": 18,
+        "c_data_1_2_3_4_5": 17,
+        "c_data_33_34_35_19_15": 22,
+        "c_data_130_131_132_133_134": 10,
+        "c_data_140_141_142_143_144": 5,
+        "c_data_53_52_51_50_49": 40,
+        "c_data_117_105_106_107_108": 9,
+        "c_data_56_43_42_41_40": 12,
+        "c_data_79_93_92_91_98": 8,
+        "c_data_113_112_111_110_109": 38
+      }
+    },
+    {
+      "snapshot": "ibm_fez/d3_r1/job_2/info.json",
+      "basis": "Z",
+      "prepared_state": 0,
+      "device_shots": 2048,
+      "parallel_chains": 10,
+      "errors_per_chain": {
+        "c_data_60_61_76_81_80": 5,
+        "c_data_22_23_16_3_4": 0,
+        "c_data_19_35_34_33_39": 2,
+        "c_data_134_133_132_131_130": 1,
+        "c_data_140_141_142_143_144": 0,
+        "c_data_49_50_51_52_53": 0,
+        "c_data_117_105_104_103_102": 0,
+        "c_data_20_21_36_41_40": 1,
+        "c_data_88_89_90_91_98": 0,
+        "c_data_106_107_108_109_110": 0
+      }
+    },
+    {
+      "snapshot": "ibm_fez/d3_r1/job_2/info.json",
+      "basis": "Z",
+      "prepared_state": 1,
+      "device_shots": 2048,
+      "parallel_chains": 10,
+      "errors_per_chain": {
+        "c_data_60_61_76_81_80": 14,
+        "c_data_22_23_16_3_4": 7,
+        "c_data_19_35_34_33_39": 7,
+        "c_data_134_133_132_131_130": 9,
+        "c_data_140_141_142_143_144": 7,
+        "c_data_49_50_51_52_53": 30,
+        "c_data_117_105_104_103_102": 9,
+        "c_data_20_21_36_41_40": 12,
+        "c_data_88_89_90_91_98": 3,
+        "c_data_106_107_108_109_110": 2
+      }
+    }
+  ],
+  "scope": "External data-format validation. Terminal majority compared with known preparation. Chains within a device shot share an acquisition."
+}

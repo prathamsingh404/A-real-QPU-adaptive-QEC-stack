@@ -55,6 +55,15 @@ These reuse the primary hotspot trajectories. Each arm rebuilds once per seed. T
 |alarm one window|6493|
 |alarm with observed clearance|6406|
 
+## Independent follow-up on one update
+
+Both methods fit exactly once, use the same estimator and retain its graph for one window. The fixed update time was learned on old trajectories and frozen before new seeds ran. Distance three is primary and distance five is descriptive. The minimum useful absolute improvement was 0.060 percentage points. The follow-up success rule returned **False**.
+
+|Distance|Seeds|Shots|Fixed errors|Alarm errors|Difference (pp)|95% CI (pp)|Paired p|
+|---:|---:|---:|---:|---:|---:|---|---:|
+|3|90|1,080,000|20164|20025|-0.01287|[-0.02167, -0.00407]|0.00460|
+|5|45|540,000|5313|5257|-0.01037|[-0.01869, -0.00205]|0.01579|
+
 ## Offline experimental replay
 
 Each basis contributes 44,000 held-out shots from one Google device placement. The acquisition timestamps are unknown. Alignment is a post hoc implementation of the first DGR stage. Publisher predictions are included in the released data.
@@ -65,5 +74,18 @@ Each basis contributes 44,000 held-out shots from one Google device placement. T
 |X|2000|4856|4555|4676|4680|4590|4086|
 |Z|200|4046|4090|4140|4046|11724|3419|
 |Z|2000|4046|3906|3927|4039|4143|3419|
+
+## Additional same-shot physical decoders
+
+|Implementation or released prediction|X errors|Z errors|
+|---|---:|---:|
+|local uncorrelated|4856|4046|
+|local correlated|4205|3607|
+|correlated matching decoder with rl optimized prior|3643|2960|
+|correlated matching decoder with si1000 prior|4086|3419|
+|harmony decoder with rl optimized prior|3517|2899|
+|harmony decoder with si1000 prior|3889|3089|
+
+The publisher reports tuning the optimized priors on 13-cycle calibration data. Their independence from these rows is unverified. Both local PyMatching modes were run directly.
 
 Per-window errors, fit and reset decisions, host timing samples, and scored public files are in data/. The paper tables include the host timing distribution. The historical IBM summaries lack raw registers. The active study draws no IBM logical performance or feedback latency conclusion.

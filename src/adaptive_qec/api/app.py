@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,13 +20,10 @@ from adaptive_qec.config import NoiseConfig
 from adaptive_qec.data.store import ExperimentStore
 from adaptive_qec.decoders.mwpm import MWPMDecoder
 from adaptive_qec.decoders.union_find import UnionFindDecoder
-from adaptive_qec.analysis.threshold import ThresholdAnalyzer
 from adaptive_qec.experiment.distance_sweep import DistanceSweep
-from adaptive_qec.noise.drift import CompositeDriftDetector, CUSUMDriftDetector, EWMADriftDetector
 from adaptive_qec.noise.statistics import (
     compute_detector_statistics,
     compute_spatial_correlation,
-    compute_temporal_correlation,
 )
 from adaptive_qec.qec.codes import create_code
 
@@ -39,10 +35,6 @@ STATIC_DIR = Path(__file__).parent / "static"
 # ---------------------------------------------------------------------------
 # API defaults (all from config or env — no magic numbers in endpoints)
 # ---------------------------------------------------------------------------
-_DEFAULT_BACKEND = os.environ.get("IBM_QUANTUM_BACKEND", "ibm_marrakesh")
-_DEFAULT_PROVIDER = "IBM Quantum"
-_DEFAULT_PROCESSOR_TYPE = "Heron r2"
-_DEFAULT_NUM_QUBITS = 156
 _DEFAULT_PHYSICAL_ERROR_RATE = 0.003021  # ECR gate error from calibration
 
 
@@ -333,7 +325,6 @@ async def get_noise_characterization() -> dict[str, Any]:
         return {"source":"no_data", "message":"Run a simulated memory first."}
 
     stats = compute_detector_statistics(detectors)
-    temp_corr = compute_temporal_correlation(detectors, num_rounds=3, max_lag=3)
     spatial_corr = compute_spatial_correlation(detectors)
 
     # Use real drift history from experiments
@@ -349,7 +340,7 @@ async def get_noise_characterization() -> dict[str, Any]:
         "mean_detection_rate": round(float(stats.mean_detection_rate), 4),
         "max_detection_rate": round(float(stats.max_detection_rate), 4),
         "hotspot_detectors": [int(h) for h in stats.hotspot_detectors],
-        "temporal_lag_correlations": [round(float(c), 4) for c in temp_corr.mean_autocorrelation],
+        "temporal_lag_correlations": None,  # Requires round and spatial detector alignment.
         "significant_correlated_pairs": [[int(i), int(j), round(float(v), 4)] for i, j, v in spatial_corr.significant_pairs[:6]],
         "drift_status": {
             "status": "DRIFT DETECTED" if is_alarm else "STABLE",
@@ -390,6 +381,16 @@ async def study():
 @app.get("/api/study/replay")
 async def replay_results():
     return json.loads((ROOT / "data/public_replay_results.json").read_text())
+
+
+@app.get("/api/study/follow-up")
+async def follow_up():
+    return json.loads((ROOT / "data/timing_confirmation.json").read_text())
+
+
+@app.get("/api/study/public-decoders")
+async def public_decoders():
+    return json.loads((ROOT / "data/public_decoder_comparison.json").read_text())
 
 
 @app.get("/api/study/paper")

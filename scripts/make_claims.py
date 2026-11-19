@@ -51,6 +51,19 @@ def build():
         lines.append(f"|{name.replace('_',' ')}|{count}|")
     count = sum(sum(r["selective_errors"]) for r in cases)
     lines.append(f"|alarm with observed clearance|{count}|")
+    follow = read("data/timing_confirmation.json")
+    lines += ["", "## Independent follow-up on one update", "",
+              "Both methods fit exactly once, use the same estimator and retain its graph for one window. "
+              "The fixed update time was learned on old trajectories and frozen before new seeds ran. "
+              "Distance three is primary and distance five is descriptive. The minimum useful absolute improvement "
+              f"was 0.060 percentage points. The follow-up success rule returned **{follow['primary_success']}**.", "",
+              "|Distance|Seeds|Shots|Fixed errors|Alarm errors|Difference (pp)|95% CI (pp)|Paired p|",
+              "|---:|---:|---:|---:|---:|---:|---|---:|"]
+    for d, panel in follow["panels"].items():
+        count = len(panel["records"])
+        c = panel["paired"]
+        lines.append(f"|{d}|{count}|{12000*count:,}|{panel['fixed_errors']}|{panel['selective_errors']}|"
+                     f"{100*c['mean']:+.5f}|[{100*c['ci95'][0]:+.5f}, {100*c['ci95'][1]:+.5f}]|{c['p']:.5f}|")
     lines += ["", "## Offline experimental replay", "",
               "Each basis contributes 44,000 held-out shots from one Google device placement. "
               "The acquisition timestamps are unknown. Alignment is a post hoc implementation of the first DGR stage. "
@@ -62,6 +75,13 @@ def build():
         cells = [r["basis"],r["window"],*[sum(r["errors"][a]) for a in ("static","shrink","periodic","selective")],
                  alignment[r["basis"],r["window"]],sum(r["errors"]["publisher_correlated"])]
         lines.append("|" + "|".join(map(str,cells)) + "|")
+    external = read("data/public_decoder_comparison.json")["records"]
+    lines += ["", "## Additional same-shot physical decoders", "",
+              "|Implementation or released prediction|X errors|Z errors|", "|---|---:|---:|"]
+    for name in external[0]["errors"]:
+        lines.append(f"|{name.replace('_',' ')}|{external[0]['errors'][name]}|{external[1]['errors'][name]}|")
+    lines += ["", "The publisher reports tuning the optimized priors on 13-cycle calibration data. "
+              "Their independence from these rows is unverified. Both local PyMatching modes were run directly."]
     lines += ["", "Per-window errors, fit and reset decisions, host timing samples, and scored public files are in data/. "
               "The paper tables include the host timing distribution. The historical IBM summaries lack raw registers. "
               "The active study draws no IBM logical performance or feedback latency conclusion.", ""]
@@ -70,14 +90,14 @@ def build():
 
 
 def matches(a, b):
+    if isinstance(a, float) and isinstance(b, float):
+        return math.isclose(a, b, rel_tol=1e-10, abs_tol=1e-12)
     if type(a) is not type(b):
         return False
     if isinstance(a, dict):
         return a.keys() == b.keys() and all(matches(a[k], b[k]) for k in a)
     if isinstance(a, list):
         return len(a) == len(b) and all(matches(x, y) for x, y in zip(a, b))
-    if isinstance(a, float):
-        return math.isclose(a, b, rel_tol=1e-10, abs_tol=1e-12)
     return a == b
 
 

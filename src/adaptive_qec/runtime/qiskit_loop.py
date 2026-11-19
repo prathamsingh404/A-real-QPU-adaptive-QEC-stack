@@ -134,6 +134,8 @@ class BatchResult:
     timestamp: str = ""
     job_id: str = ""
 
+    scoring: str = "unspecified"
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary (without large arrays)."""
         return {
@@ -142,6 +144,7 @@ class BatchResult:
             "logical_errors": self.logical_errors,
             "logical_error_rate": self.logical_error_rate,
             "controller_action": self.controller_action,
+            "scoring": self.scoring,
             "execution_time_s": round(self.execution_time_s, 3),
             "timestamp": self.timestamp,
             "job_id": self.job_id,
@@ -444,16 +447,18 @@ class QiskitRuntimeLoop:
         logical_errors = 0
         if decoder is not None and syndromes is not None:
             try:
-                predictions = decoder.decode_batch(syndromes)
+                from adaptive_qec.decoders.base import Decoder
+                predictions = (decoder.decode(syndromes).observable_corrections if isinstance(decoder, Decoder)
+                               else decoder.decode_batch(syndromes))
                 if observables is not None:
                     logical_errors = int(
-                        np.count_nonzero(np.asarray(predictions).reshape(observables.shape) != observables)
+                        np.count_nonzero(np.any((np.asarray(predictions).reshape(observables.shape) != observables).reshape(shots,-1), axis=1))
                     )
             except Exception as e:
                 raise RuntimeError("Failed to score decoder predictions") from e
         elif observables is not None:
-            # Fallback: count non-zero observables as errors
-            logical_errors = int(np.sum(observables != 0))
+            # An identity correction gives an explicit uncorrected memory baseline.
+            logical_errors = int(np.count_nonzero(np.any(np.asarray(observables).reshape(shots,-1),axis=1)))
 
         ler = logical_errors / shots if shots > 0 else 0.0
 
@@ -501,6 +506,7 @@ class QiskitRuntimeLoop:
             controller_action=action_dict,
             execution_time_s=t_elapsed,
             timestamp=datetime.now(timezone.utc).isoformat(),
+            scoring="decoded memory" if decoder is not None else "uncorrected memory",
             job_id=(str(uuid.uuid4())[:12] if self._config.dry_run else self._last_provider_job_id),
         )
 

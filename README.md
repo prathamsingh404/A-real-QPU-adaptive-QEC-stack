@@ -2,7 +2,9 @@
 
 We compared syndrome-triggered updates with periodic updates under the same two-rebuild cap. On the primary test, triggering saved half the rebuilds and made 54 fewer logical errors in 360,000 shots. The difference was smaller than the predefined useful improvement, and the adjusted p-value was 0.337. On measured Google memory data, ordinary shrinkage beat triggering in both bases at 2,000 shots per window. The contribution is a reproducible experiment measuring when finite-sample updates help and what they cost. The data support a negative primary result.
 
-[Manuscript](papers/main.pdf) · [All results](VALIDATION.md) · [Internal protocol](PREREG.md) · [Comparison with previous work](docs/prior_art_matrix.md)
+An independently frozen follow-up tested **exactly one fit and identical graph retention** against a calendar trained on prior trajectories. On 90 fresh distance-three hotspot seeds, the alarm made 20,025 errors versus 20,164 in 1,080,000 shots (paired p = 0.00460). The reduction of 0.01287 percentage points was smaller than our 0.060-point practical threshold. A descriptive distance-five panel agreed in direction. This is evidence of a small timing benefit in a specified simulation. [Follow-up protocol](TIMING_PROTOCOL.md) · [Rebuild report](reports/REBUILD_REPORT.md)
+
+[Manuscript](papers/main.pdf) · [All results](VALIDATION.md) · [Internal protocol](PREREG.md) · [Comparison with previous work](docs/prior_art_matrix.md) · [NVIDIA, IBM, Google and recent implementations](docs/implementation_review.md)
 
 ## What was compared
 
@@ -37,3 +39,5 @@ The last command independently runs the full simulation in a temporary directory
 | What happened to the earlier IBM and simulation claims? | [Original audit](reports/publication_audit_2026-11-19/REPORT.md), [superseded artifacts](archive/study_v2/NOTICE.md) |
 
 The IBM repetition-code acquisition and register decoder now support recoverable, block-randomized future jobs. Historical summary files lack the required shot-level registers. The research manuscript uses the public Google experiments as its only physical performance evidence.
+
+To repeat the optional external integration checks, run `python scripts/inspect_public_ibm.py PATH_TO_ibm_fez.tar.gz` on the [Fez archive](https://zenodo.org/records/20768087) and `python scripts/check_ising_sample_format.py PATH_TO_stim_sample_io.py` on [NVIDIA's pinned file](https://github.com/NVIDIA/Ising-Decoding/blob/26305d7e90428761bbe552caaa8676b9bdc44b3c/code/qec/surface_code/stim_sample_io.py). The scripts verify the input digest.

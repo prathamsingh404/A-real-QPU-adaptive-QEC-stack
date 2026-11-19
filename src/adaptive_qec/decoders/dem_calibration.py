@@ -6,7 +6,7 @@ calibration data rather than using static Stim-generated models.
 When hardware noise drifts, the DEM must be re-calibrated to maintain
 decoder optimality.
 
-The key insight: MWPM is optimal for the *true* noise channel.
+Matching minimizes the weight of the chosen graph correction.
 When using outdated DEM weights, MWPM degrades. By reweighting
 the DEM from fresh calibration, we recover near-optimal decoding
 without retraining the decoder.
@@ -22,7 +22,7 @@ changing the decoder algorithm itself.
 
 References:
     - Spitz et al., "Adaptive weight estimator for quantum error
-      correction in a time-dependent environment" (arXiv 2023)
+      correction in a time-dependent environment" (2018)
     - Roadmap: PROJECT_EVOLUTION_ROADMAP.md §Phase-4
 """
 

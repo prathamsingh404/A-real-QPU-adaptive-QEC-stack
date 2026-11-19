@@ -1,98 +1,22 @@
-# Confirmatory Simulation Benchmark Suite Specification
-# Governed by frozen Analysis Plan (docs/ANALYSIS_PLAN.md)
-experiment:
-  name: "adaptive_qec_confirmatory_suite"
-  version: "2.0.0"
-  provenance: "simulation"
-
-noise_regime:
-  base_physical_error: 0.004 # Below threshold (surface code threshold ~0.01)
-  distances: [3, 5]
-  # NOTE [Distance Scaling Tradeoffs and d=7 Configuration]:
-  # Distance d=7 surface code configuration is specified here for reference but intentionally
-  # excluded from default confirmatory suite execution:
-  #   - Physical qubit requirements: d=7 rotated surface code requires n = d^2 = 49 data qubits
-  #     plus 48 syndrome ancillas (total 97 qubits). On a heavy-hex lattice (e.g. IBM Heron 133),
-  #     embedding overhead requires ~125 physical qubits and >80 SWAP routing stages per syndrome round.
-  #   - Computational Complexity: MWPM decoding graph contains O(d^3) = ~343 detector nodes per
-  #     measurement round, and matching graph construction scales as O(|V|^3) or O(|E| * |V| log |V|).
-  #     Per-shot latency exceeds 2.5 ms, which breaches the sub-microsecond real-time decoding budget
-  #     and drastically increases simulator wall-clock runtime for 30 held-out trajectories.
-  #   - Empirical Regime: Distance d=3 and d=5 provide complete statistical observability to verify
-  #     the suppression factor Lambda = p_L(d=3) / p_L(d=5) and validate the 3-gate switching criteria
-  #     without incurring O(d^3) benchmark latency penalties.
-  #   - Optional d=7 snippet:
-  #       - distance: 7
-  #         rounds: 7
-  #         total_qubits: 97
-  #         matching_edge_count: ~1200
-
-scenarios:
-  - id: "stationary_noise"
-    label: "Stationary Baseline"
-    type: "confirmatory_control"
-    description: "Nominal physical noise (negative control, optimal policy is STAY)"
-    drift_type: "stationary"
-    p_base: 0.004
-    drift_p: 0.004
-    hotspot_qubit: null
-
-  - id: "uniform_drift"
-    label: "Uniform Global Drift"
-    type: "confirmatory_control"
-    description: "All error rates scale globally to 0.007 (negative control, delta <= 1.7%, optimal policy is STAY)"
-    drift_type: "uniform_ramp"
-    p_base: 0.004
-    drift_p: 0.007
-    hotspot_qubit: null
-
-  - id: "localized_hotspot"
-    label: "Localized Hotspot"
-    type: "confirmatory_drift"
-    description: "Central data transmon undergoes 10x localized drift to 0.040 (structural drift where reweighting pays off)"
-    drift_type: "localized_hotspot"
-    p_base: 0.004
-    drift_p: 0.040
-    hotspot_qubit_d3: 10
-    hotspot_qubit_d5: 27
-
-  - id: "structural_anisotropy"
-    label: "Structural Anisotropy Shift"
-    type: "confirmatory_drift"
-    description: "Asymmetric dephasing vs relaxation shift (p_X=0.002, p_Z=0.010)"
-    drift_type: "structural_anisotropy"
-    p_base: 0.004
-    drift_p: 0.010
-    hotspot_qubit: null
-
-window_regimes:
-  - window_size: 200
-    description: "Small window regime demonstrating sample variance penalty (+170% on stationary noise)"
-  - window_size: 1000
-    description: "Intermediate window regime"
-  - window_size: 2000
-    description: "Large window regime where localized drift reweighting pays off"
-
-trajectory:
-  total_shots: 10000
-
-seeds:
-  tuning: [0, 99]
-  held_out_evaluation: [1000, 1029] # N=30 independent seeds
-
-arms:
-  - id: "arm_static_mwpm"
-    label: "Static Factory MWPM"
-    description: "Fixed pre-calibrated baseline matching graph. Zero online update cost."
-
-  - id: "arm_naive_reweighted_mwpm"
-    label: "Naive Reweighted MWPM (Spitz et al.)"
-    description: "Unconditionally updates matching edge weights every window from empirical covariance."
-
-  - id: "arm_cg_ccads"
-    label: "Confidence-Gated Reweighting (CG-CCADS)"
-    description: "Label-free statistical gate: updates weights only when drift LCB exceeds estimation noise and adaptation tax."
-
-  - id: "arm_oracle_mwpm"
-    label: "Oracle Matched MWPM"
-    description: "Theoretical performance ceiling with exact knowledge of drifting noise parameters."
+schema: 3
+base: 0.004
+block_shots: 200
+blocks: 60
+reference_shots: 6000
+windows: [200, 2000]
+budget: 2
+alpha: 0.05
+prior_fraction: 0.5
+regimes: [stationary, uniform, hotspot, bias]
+amplitudes:
+  stationary: [0.0]
+  uniform: [0.006, 0.008]
+  hotspot: [0.02, 0.04]
+  bias: [0.002, 0.005]
+panels:
+  - {distance: 3, basis: Z, first_seed: 81000, count: 30}
+  - {distance: 5, basis: Z, first_seed: 82000, count: 12}
+  - {distance: 7, basis: Z, first_seed: 83000, count: 6}
+  - {distance: 3, basis: X, first_seed: 84000, count: 10}
+primary: {distance: 3, basis: Z, window: 2000, scenario: hotspot, comparator: periodic}
+safety_margin: 0.0006

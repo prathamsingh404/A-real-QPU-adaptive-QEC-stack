@@ -6,7 +6,7 @@ Operates strictly within deployable, online observation boundaries:
 - Ingests sliding-window detection events (syndromes).
 - Evaluates statistical evidence of localized physical drift using Spitz et al. (2018)
   covariance-parity estimators against finite-sample shot noise and adaptation taxes.
-- Applies Bonferroni family-wise error rate (FWER) correction across matching edges.
+- Uses a heuristic normal-quantile edge threshold. Coverage for nonlinear estimates is unvalidated.
 """
 
 from __future__ import annotations
@@ -49,13 +49,13 @@ class ConfidenceGatedReweightingController:
     """
     Confidence-Gated Cost-Constrained Reweighting Controller for MWPM.
     
-    Enforces a rigorous 3-gate statistical barrier before reweighting:
+    Historical heuristic with three decision reasons:
       Gate 1 (Stationarity): Rejects adaptation if overall detector firing rates
              are statistically consistent with the baseline stationary reference.
       Gate 2 (Deadzone / Noise Floor): Computes the Lower Confidence Bound (LCB)
              of edge probability shifts under finite sample size W with Bonferroni
              correction across all candidate edges. If LCB <= deadzone,
-             the apparent shift is consistent with finite-sample binomial variance -> STAY.
+             the heuristic abstains. Its standard error approximates the estimator variance.
       Gate 3 (Adaptation Tax): Reweights only if LCB exceeds the physical and
              computational switching tax (tau_adapt).
     """
@@ -107,6 +107,8 @@ class ConfidenceGatedReweightingController:
         new_reference_samples: Optional[np.ndarray] = None,
     ) -> None:
         """Reset the reference defect rate baseline and optional reference samples."""
+        self.active_matching = self.base_matching
+        self.is_reweighted = False
         rate = new_reference if new_reference is not None else new_reference_rate
         self.reference_defect_rate = rate
         self.reference_shot_defect_rates = (
@@ -131,6 +133,8 @@ class ConfidenceGatedReweightingController:
             "drift_z_threshold": self.drift_z_threshold,
             "adaptation_tax": self.adaptation_tax,
             "dead_zone_epsilon": self.dead_zone_epsilon,
+            "last_decision": self.last_stats.decision.value if self.last_stats else None,
+            "last_reason": self.last_stats.reason if self.last_stats else None,
             "last_stats": {
                 "window_size": self.last_stats.window_size,
                 "mean_defect_rate": self.last_stats.mean_defect_rate,
@@ -150,6 +154,8 @@ class ConfidenceGatedReweightingController:
             "adaptation_tax": self.adaptation_tax,
             "dead_zone_epsilon": self.dead_zone_epsilon,
             "reference_defect_rate": self.reference_defect_rate,
+            "active_edges": ([(u, v, sorted(a["fault_ids"]), a["weight"], a["error_probability"])
+                              for u, v, a in self.active_matching.edges()] if self.is_reweighted else None),
             "reference_shot_defect_rates": (
                 self.reference_shot_defect_rates.tolist()
                 if self.reference_shot_defect_rates is not None
@@ -177,8 +183,18 @@ class ConfidenceGatedReweightingController:
         self.total_resets = int(state.get("total_resets", 0))
         if "z_crit" in state:
             self.z_crit = float(state["z_crit"])
-        if not self.is_reweighted:
-            self.active_matching = self.base_matching
+        self.active_matching = self.base_matching
+        if self.is_reweighted:
+            if not state.get("active_edges"):
+                raise ValueError("Reweighted checkpoint has no saved matching graph")
+            graph = pymatching.Matching()
+            for u, v, faults, weight, probability in state["active_edges"]:
+                attrs = dict(fault_ids=set(faults), weight=weight, error_probability=probability)
+                if v is None:
+                    graph.add_boundary_edge(u, **attrs)
+                else:
+                    graph.add_edge(u, v, **attrs)
+            self.active_matching = graph
 
     @staticmethod
     def _extract_matching_probabilities(matching: pymatching.Matching) -> dict[tuple[int, int], float]:
@@ -315,54 +331,3 @@ class ConfidenceGatedReweightingController:
         )
         self.last_stats = stats_obj
         return GateDecision.STAY, self.active_matching, stats_obj
-
-    def get_telemetry(self) -> dict[str, Any]:
-        """Export controller telemetry counters and operational state."""
-        total_evals = self.total_stays + self.total_reweights + self.total_resets
-        abstention_rate = (self.total_stays / total_evals) if total_evals > 0 else 1.0
-        return {
-            "total_evaluations": total_evals,
-            "total_stays": self.total_stays,
-            "total_reweights": self.total_reweights,
-            "total_resets": self.total_resets,
-            "abstention_rate": float(abstention_rate),
-            "is_reweighted": self.is_reweighted,
-            "reference_defect_rate": self.reference_defect_rate,
-            "drift_z_threshold": self.drift_z_threshold,
-            "adaptation_tax": self.adaptation_tax,
-            "dead_zone_epsilon": self.dead_zone_epsilon,
-            "last_decision": self.last_stats.decision.value if self.last_stats else None,
-            "last_reason": self.last_stats.reason if self.last_stats else None,
-        }
-
-    def reset_reference(self, new_reference: Optional[float] = None) -> None:
-        """Manually re-anchor or reset the baseline reference defect rate."""
-        self.reference_defect_rate = new_reference
-        self.active_matching = self.base_matching
-        self.is_reweighted = False
-
-    def serialize_state(self) -> dict[str, Any]:
-        """Serialize configuration and internal telemetry to dictionary."""
-        return {
-            "alpha_significance": self.alpha_significance,
-            "drift_z_threshold": self.drift_z_threshold,
-            "adaptation_tax": self.adaptation_tax,
-            "dead_zone_epsilon": self.dead_zone_epsilon,
-            "reference_defect_rate": self.reference_defect_rate,
-            "total_stays": self.total_stays,
-            "total_reweights": self.total_reweights,
-            "total_resets": self.total_resets,
-            "is_reweighted": self.is_reweighted,
-        }
-
-    def load_state(self, state: dict[str, Any]) -> None:
-        """Restore controller counters and reference values from serialized dictionary."""
-        self.alpha_significance = float(state.get("alpha_significance", self.alpha_significance))
-        self.drift_z_threshold = float(state.get("drift_z_threshold", self.drift_z_threshold))
-        self.adaptation_tax = float(state.get("adaptation_tax", self.adaptation_tax))
-        self.dead_zone_epsilon = float(state.get("dead_zone_epsilon", self.dead_zone_epsilon))
-        self.reference_defect_rate = state.get("reference_defect_rate", self.reference_defect_rate)
-        self.total_stays = int(state.get("total_stays", self.total_stays))
-        self.total_reweights = int(state.get("total_reweights", self.total_reweights))
-        self.total_resets = int(state.get("total_resets", self.total_resets))
-        self.is_reweighted = bool(state.get("is_reweighted", self.is_reweighted))
